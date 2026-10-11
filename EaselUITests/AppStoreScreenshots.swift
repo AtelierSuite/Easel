@@ -150,7 +150,9 @@ final class AppStoreScreenshots: XCTestCase {
         case .mosaic:
             // The passport's details want the whole screen on an iPad too.
             if isPad { tap("toggleInspector") }
-            tap("tool.mosaic")
+            tap("tool.censor")
+            tap("censor.type")
+            tap("censor.type.mosaic")
         }
     }
 

@@ -25,7 +25,10 @@ struct ToolOptionsBar: View {
     @ViewBuilder
     private var options: some View {
         switch state.tool {
-        case .brush, .eraser, .smudge, .liquify, .blur, .mosaic, .heal: brushOptions
+        case .brush, .eraser, .liquify, .heal: brushOptions
+        case .censor:
+            censorOptions
+            brushOptions
         case .clone:
             brushOptions
             cloneOptions
@@ -40,6 +43,27 @@ struct ToolOptionsBar: View {
         case .shape: shapeOptions
         case .pen: penOptions
         case .nodes: nodeOptions
+        }
+    }
+
+    private var censorOptions: some View {
+        GlassGroup {
+            GlassMenuButton(symbol: state.censorKind.symbolName, label: "Censor.Type") {
+                Picker("Censor.Type", selection: $state.censorKind) {
+                    ForEach(CensorKind.allCases) { kind in
+                        Label(kind.label, systemImage: kind.symbolName).tag(kind)
+                            .accessibilityIdentifier("censor.type.\(kind.rawValue)")
+                    }
+                }
+            }
+            .accessibilityIdentifier("censor.type")
+            if state.censorKind == .motionBlur {
+                OptionSlider(
+                    value: $state.censorAngle, range: 0...180,
+                    label: "LayerFilters.Angle", valueText: "\(Int(state.censorAngle.rounded()))°"
+                )
+                .accessibilityIdentifier("censor.angle")
+            }
         }
     }
 
@@ -67,7 +91,7 @@ struct ToolOptionsBar: View {
                 }
                 .accessibilityIdentifier("symmetry")
             }
-            if state.tool.usesStrokes {
+            if state.tool.usesStrokes && !state.isSmudging {
                 GlassIconButton(symbol: "ruler", label: "Ruler.Title", isOn: state.ruler != nil) {
                     state.toggleRuler()
                 }
@@ -630,7 +654,7 @@ private struct BrushSettingsButton: View {
                         }
                     }
                 }
-                if state.tool != .smudge && state.tool != .liquify {
+                if !state.isSmudging && state.tool != .liquify {
                     Section {
                         Toggle("Options.PencilPressure", isOn: $state.currentBrush.usesPressure)
                         if state.currentBrush.tip.isStamped {

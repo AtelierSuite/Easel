@@ -27,6 +27,12 @@ enum RetouchEffect {
                 filter.inputImage = input.clampedToExtent()
                 filter.radius = Float(blurRadius(for: settings))
                 return filter.outputImage ?? input
+            case .motionBlur(let angle):
+                let filter = CIFilter.motionBlur()
+                filter.inputImage = input.clampedToExtent()
+                filter.radius = Float(blurRadius(for: settings))
+                filter.angle = Float(angle * .pi / 180)
+                return filter.outputImage ?? input
             case .paint, .erase, .heal, .clone, .mosaic:
                 return input
             }

@@ -29,10 +29,20 @@ final class EditorState {
     var eraser = BrushSettings(size: 60, softness: 0.3)
     /// For the retouching brushes, opacity is strength: how far a smear
     /// carries, how blurred or how coarse the tiles, how fully a spot heals.
-    var smudgeBrush = BrushSettings(size: 60, opacity: 0.7, softness: 0.5, usesPressure: false)
     var liquifyBrush = BrushSettings(size: 120, opacity: 0.6, softness: 0.5, usesPressure: false)
-    var blurBrush = BrushSettings(size: 80, opacity: 0.5, softness: 0.5, usesPressure: false)
-    var mosaicBrush = BrushSettings(size: 80, opacity: 0.6, usesPressure: false)
+    var censorBrush = BrushSettings(size: 80, opacity: 0.5, softness: 0.5, usesPressure: false)
+    var censorKind: CensorKind = .gaussianBlur {
+        didSet {
+            guard censorKind != oldValue else { return }
+            activeStroke = nil
+            smudge = nil
+            retouchEffect = nil
+            dockedEdge = nil
+        }
+    }
+    /// Motion blur direction in degrees.
+    var censorAngle = 0.0
+    var isSmudging: Bool { tool == .censor && censorKind == .smudge }
     var healBrush = BrushSettings(size: 40, softness: 0.3, usesPressure: false)
     var cloneBrush = BrushSettings(size: 60, softness: 0.4, usesPressure: false)
     /// Where the clone stamp copies from, in canvas pixels. It moves with
@@ -268,10 +278,8 @@ final class EditorState {
         }
         scaled(&brush)
         scaled(&eraser)
-        scaled(&smudgeBrush)
         scaled(&liquifyBrush)
-        scaled(&blurBrush)
-        scaled(&mosaicBrush)
+        scaled(&censorBrush)
         scaled(&healBrush)
         scaled(&cloneBrush)
         shapeLineWidth = (shapeLineWidth * factor).rounded()
@@ -462,10 +470,8 @@ final class EditorState {
         get {
             switch tool {
             case .eraser: return eraser
-            case .smudge: return smudgeBrush
             case .liquify: return liquifyBrush
-            case .blur: return blurBrush
-            case .mosaic: return mosaicBrush
+            case .censor: return censorBrush
             case .heal: return healBrush
             case .clone: return cloneBrush
             default: return brush
@@ -474,10 +480,8 @@ final class EditorState {
         set {
             switch tool {
             case .eraser: eraser = newValue
-            case .smudge: smudgeBrush = newValue
             case .liquify: liquifyBrush = newValue
-            case .blur: blurBrush = newValue
-            case .mosaic: mosaicBrush = newValue
+            case .censor: censorBrush = newValue
             case .heal: healBrush = newValue
             case .clone: cloneBrush = newValue
             default: brush = newValue
@@ -488,7 +492,7 @@ final class EditorState {
     /// The brush's outline under a hovering pencil or pointer, in canvas
     /// pixels, when the tool in hand paints with a brush.
     var brushOutline: (center: CGPoint, diameter: Double)? {
-        guard let hoverPoint, activeStroke == nil, tool.usesStrokes || tool == .smudge || tool == .liquify else {
+        guard let hoverPoint, activeStroke == nil, tool.usesStrokes || tool == .liquify else {
             return nil
         }
         return (hoverPoint, currentBrush.size)
@@ -498,8 +502,13 @@ final class EditorState {
     var strokeKind: Stroke.Kind {
         switch tool {
         case .eraser: return .erase
-        case .blur: return .blur
-        case .mosaic: return .mosaic
+        case .censor:
+            switch censorKind {
+            case .gaussianBlur: return .blur
+            case .mosaic: return .mosaic
+            case .motionBlur: return .motionBlur(angle: censorAngle)
+            case .smudge: return .paint
+            }
         case .heal: return .heal
         case .clone: return .clone(offset: cloneOffset ?? .zero)
         default: return .paint
@@ -546,8 +555,13 @@ final class EditorState {
         // An adjustment being tried stands in for the layer; painting under
         // it would be hidden, then lost when it is applied.
         guard layerPreview == nil else { return }
+        if isSmudging {
+            guard paintingBlocker() == nil else { return }
+            beginSmudge(at: point)
+            return
+        }
         switch tool {
-        case .brush, .eraser, .blur, .mosaic, .heal, .clone:
+        case .brush, .eraser, .censor, .heal, .clone:
             guard paintingBlocker() == nil else { return }
             // Started beside the ruler, the whole stroke runs along it.
             dockedEdge = rulerEdge(near: point)
@@ -568,7 +582,7 @@ final class EditorState {
                 )
                 return
             }
-            if tool == .blur || tool == .mosaic || tool == .clone { prepareRetouchEffect() }
+            if tool == .censor || tool == .clone { prepareRetouchEffect() }
             activeStroke = Stroke(
                 points: [StrokePoint(location: point, pressure: pressure, azimuth: azimuth, altitude: altitude, time: time)],
                 settings: currentBrush, kind: strokeKind, clip: selection
@@ -578,7 +592,7 @@ final class EditorState {
                 // Oil paint mixes with the layer as it is now.
                 activeStroke?.pickup = PaintSource(pixels: pixels)
             }
-        case .smudge, .liquify:
+        case .liquify:
             guard paintingBlocker() == nil else { return }
             beginSmudge(at: point)
         case .move:
@@ -624,8 +638,12 @@ final class EditorState {
 
     func toolMoved(to points: [StrokePoint]) {
         guard let last = points.last else { return }
+        if isSmudging {
+            continueSmudge(to: points.map(\.location))
+            return
+        }
         switch tool {
-        case .brush, .eraser, .blur, .mosaic, .heal, .clone:
+        case .brush, .eraser, .censor, .heal, .clone:
             guard let edge = dockedEdge else {
                 activeStroke?.points.append(contentsOf: points)
                 return
@@ -635,7 +653,7 @@ final class EditorState {
                 docked.location = edge.project(point.location)
                 return docked
             })
-        case .smudge, .liquify:
+        case .liquify:
             continueSmudge(to: points.map(\.location))
         case .move:
             if let guide = draggedGuide {
@@ -708,14 +726,22 @@ final class EditorState {
 
     /// The finger lifted. `isTap` when it barely moved.
     func toolEnded(isTap: Bool, at point: CGPoint) {
-        switch tool {
-        case .smudge, .liquify:
+        if isSmudging {
             if let blocker = paintingBlocker(), isTap {
                 errorMessage = blocker
                 return
             }
             finishSmudge()
-        case .brush, .eraser, .blur, .mosaic, .heal, .clone:
+            return
+        }
+        switch tool {
+        case .liquify:
+            if let blocker = paintingBlocker(), isTap {
+                errorMessage = blocker
+                return
+            }
+            finishSmudge()
+        case .brush, .eraser, .censor, .heal, .clone:
             dockedEdge = nil
             if let blocker = paintingBlocker(), isTap {
                 errorMessage = blocker
@@ -1086,7 +1112,7 @@ final class EditorState {
             switch stroke.kind {
             case .paint, .erase:
                 return Painter.paint(stroke, onto: image)
-            case .blur, .mosaic, .clone:
+            case .blur, .mosaic, .motionBlur, .clone:
                 let effect = prepared.flatMap { $0.matches(stroke, source: image) ? $0.image : nil }
                     ?? RetouchEffect.image(stroke.kind, settings: stroke.settings, of: image)
                 return Painter.apply(effect, onto: image, through: stroke)

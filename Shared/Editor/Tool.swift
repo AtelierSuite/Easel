@@ -6,7 +6,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     /// Bends the active layer: its corners in perspective, or as a sheet.
     case transform
     case brush, eraser, fill, gradient, eyedropper
-    case smudge, blur, mosaic, heal
+    case censor, heal
     /// Pushes the picture along a drag as if it were soft.
     case liquify
     /// Paints with pixels copied from another part of the layer.
@@ -24,7 +24,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     static let groups: [[Tool]] = [
         [.move, .transform, .select, .crop],
         [.brush, .eraser, .fill, .gradient, .eyedropper],
-        [.smudge, .liquify, .blur, .mosaic, .heal, .clone],
+        [.liquify, .censor, .heal, .clone],
         [.text, .shape, .pen, .nodes],
     ]
 
@@ -39,9 +39,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         case .fill: return "drop"
         case .gradient: return "circle.lefthalf.striped.horizontal"
         case .eyedropper: return "eyedropper"
-        case .smudge: return "hand.point.up.left"
-        case .blur: return "aqi.medium"
-        case .mosaic: return "square.grid.3x3.fill"
+        case .censor: return "square.grid.3x3.fill"
         case .heal: return "bandage"
         case .liquify: return "hand.draw"
         case .clone: return "square.on.square.dashed"
@@ -66,9 +64,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         case .fill: return "Tool.Fill"
         case .gradient: return "Tool.Gradient"
         case .eyedropper: return "Tool.Eyedropper"
-        case .smudge: return "Tool.Smudge"
-        case .blur: return "Tool.Blur"
-        case .mosaic: return "Tool.Mosaic"
+        case .censor: return "Tool.Censor"
         case .heal: return "Tool.Heal"
         case .liquify: return "Tool.Liquify"
         case .clone: return "Tool.Clone"
@@ -92,9 +88,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         case .fill: return "g"
         case .gradient: return "d"
         case .eyedropper: return "i"
-        case .smudge: return "s"
-        case .blur: return "r"
-        case .mosaic: return "o"
+        case .censor: return "r"
         case .heal: return "j"
         case .liquify: return "l"
         case .clone: return "k"
@@ -109,7 +103,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     /// visible and unlocked.
     var paintsPixels: Bool {
         switch self {
-        case .brush, .eraser, .fill, .gradient, .smudge, .liquify, .blur, .mosaic, .heal, .clone: return true
+        case .brush, .eraser, .fill, .gradient, .liquify, .censor, .heal, .clone: return true
         default: return false
         }
     }
@@ -117,7 +111,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     /// Brushes that change what is already there rather than adding colour.
     var isRetouch: Bool {
         switch self {
-        case .smudge, .liquify, .blur, .mosaic, .heal, .clone: return true
+        case .liquify, .censor, .heal, .clone: return true
         default: return false
         }
     }
@@ -125,7 +119,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     /// Tools that are dragged like a brush and leave a stroke.
     var usesStrokes: Bool {
         switch self {
-        case .brush, .eraser, .blur, .mosaic, .heal, .clone: return true
+        case .brush, .eraser, .censor, .heal, .clone: return true
         default: return false
         }
     }
@@ -248,6 +242,31 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
         switch self {
         case .layers, .adjustments, .filters, .looks, .text, .history: return true
         case .imageSize: return false
+        }
+    }
+}
+
+/// The effects painted by the Censor tool.
+enum CensorKind: String, CaseIterable, Identifiable, Sendable {
+    case gaussianBlur, mosaic, motionBlur, smudge
+
+    var id: String { rawValue }
+
+    var label: LocalizedStringKey {
+        switch self {
+        case .gaussianBlur: return "LayerFilter.GaussianBlur"
+        case .mosaic: return "LayerFilter.Mosaic"
+        case .motionBlur: return "LayerFilter.MotionBlur"
+        case .smudge: return "Tool.Smudge"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .gaussianBlur: return "aqi.medium"
+        case .mosaic: return "square.grid.3x3.fill"
+        case .motionBlur: return "wind"
+        case .smudge: return "hand.point.up.left"
         }
     }
 }

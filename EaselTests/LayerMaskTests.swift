@@ -151,7 +151,8 @@ struct MaskCommandTests {
     @Test func otherToolsCannotPaintAMask() {
         let (state, _) = host()
         state.addMask()
-        state.tool = .smudge
+        state.tool = .censor
+        state.censorKind = .smudge
         #expect(state.paintingBlocker() != nil)
         state.tool = .eraser
         #expect(state.paintingBlocker() == nil)

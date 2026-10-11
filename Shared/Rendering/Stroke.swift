@@ -110,6 +110,7 @@ struct Stroke: Equatable, Sendable {
         case paint, erase
         /// Retouching: the stroke is a mask the tool's effect shows through.
         case blur, mosaic, heal
+        case motionBlur(angle: Double)
         /// The layer's own pixels, from `offset` away, painted through.
         case clone(offset: CGVector)
 
@@ -158,7 +159,7 @@ struct Stroke: Equatable, Sendable {
         mask.kind = .paint
         mask.settings.color = .white
         switch kind {
-        case .blur, .mosaic, .heal: mask.settings.opacity = 1
+        case .blur, .mosaic, .motionBlur, .heal: mask.settings.opacity = 1
         case .paint, .erase, .clone: break
         }
         return mask

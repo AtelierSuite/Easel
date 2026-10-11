@@ -26,6 +26,46 @@ struct RetouchTests {
         #expect(TestImages.isBlue(result, x: 38, y: 10))
     }
 
+    @Test func motionBlurRespectsDirectionAndStrokeBounds() {
+        let stroke = line(.motionBlur(angle: 0), size: 16,
+                          from: CGPoint(x: 20, y: 2), to: CGPoint(x: 20, y: 18))
+        let horizontal = RetouchEffect.image(stroke.kind, settings: stroke.settings, of: halves)
+        let vertical = RetouchEffect.image(.motionBlur(angle: 90), settings: stroke.settings, of: halves)
+        let seam = TestImages.pixel(horizontal, x: 20, y: 10)
+        #expect(seam.red > 40 && seam.blue > 40)
+        #expect(TestImages.isBlue(vertical, x: 20, y: 10))
+        let result = Painter.apply(horizontal, onto: halves, through: stroke)
+        #expect(TestImages.isRed(result, x: 2, y: 10))
+        #expect(TestImages.isBlue(result, x: 38, y: 10))
+        #expect(stroke.asMask.settings.opacity == 1)
+    }
+
+    @MainActor
+    @Test func censorTypesShareSettingsAndCaptureMotionDirection() {
+        let state = EditorState()
+        state.tool = .censor
+        state.currentBrush.size = 18
+        state.censorKind = .mosaic
+        #expect(state.strokeKind == .mosaic)
+        #expect(state.currentBrush.size == 18)
+        state.censorKind = .motionBlur
+        state.censorAngle = 45
+        var composition = Composition.blank(size: CGSize(width: 40, height: 20))
+        composition.layers[0].image = LayerImage(halves)
+        state.attach(to: composition) { _ in }
+        state.toolBegan(at: CGPoint(x: 20, y: 4), pressure: 1)
+        #expect(state.activeStroke?.kind == .motionBlur(angle: 45))
+        state.censorAngle = 90
+        #expect(state.activeStroke?.kind == .motionBlur(angle: 45))
+        state.censorKind = .smudge
+        #expect(state.activeStroke == nil)
+        state.toolBegan(at: CGPoint(x: 10, y: 10), pressure: 1)
+        state.toolMoved(to: [StrokePoint(location: CGPoint(x: 30, y: 10))])
+        #expect(state.smudge?.patches.isEmpty == false)
+        state.censorKind = .gaussianBlur
+        #expect(state.smudge == nil)
+    }
+
     @Test func cloneCopiesFromTheOffsetThroughTheStroke() {
         // Paint the right (blue) half with what is 20 pixels to its left.
         let offset = CGVector(dx: -20, dy: 0)
@@ -207,7 +247,8 @@ struct RetouchToolTests {
         var published = composition
         state.attach(to: published) { published = $0 }
         state.addFilter(.sepia)
-        state.tool = .smudge
+        state.tool = .censor
+        state.censorKind = .smudge
         state.toolBegan(at: CGPoint(x: 10, y: 10), pressure: 1)
         state.toolMoved(to: [StrokePoint(location: CGPoint(x: 30, y: 10))])
         #expect(state.smudge?.patches.isEmpty == false)
@@ -277,11 +318,11 @@ struct RetouchToolTests {
 
     @Test func retouchToolsKeepTheirOwnSettings() {
         let state = EditorState()
-        state.tool = .blur
+        state.tool = .censor
         state.currentBrush.size = 123
         state.tool = .brush
         #expect(state.currentBrush.size != 123)
-        state.tool = .blur
+        state.tool = .censor
         #expect(state.currentBrush.size == 123)
         #expect(state.strokeKind == .blur)
     }
