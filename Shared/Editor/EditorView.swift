@@ -154,12 +154,14 @@ struct EditorView<Actions: View>: View {
     // MARK: - Pieces
 
     private var layersButton: some View {
-        GlassGroup {
-            GlassIconButton(
-                symbol: EditorPanel.layers.symbolName, label: EditorPanel.layers.title,
-                isOn: state.presentedPanel == .layers
-            ) {
-                state.presentedPanel = .layers
+        GlassEffectContainer {
+            GlassGroup {
+                GlassIconButton(
+                    symbol: EditorPanel.layers.symbolName, label: EditorPanel.layers.title,
+                    isOn: state.presentedPanel == .layers
+                ) {
+                    state.presentedPanel = .layers
+                }
             }
         }
         .matchedTransitionSource(id: EditorPanel.layers, in: panelTransition)

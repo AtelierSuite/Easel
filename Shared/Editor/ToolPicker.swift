@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// Matches the standard navigation toolbar's control size.
+enum EditorToolbarMetrics {
+    static let controlSize: CGFloat = 44
+    static let rowHeight: CGFloat = 60
+}
+
 /// The tools, as a Liquid Glass carousel along the bottom of an iPhone and
 /// a rail down the side of an iPad. Grouped the same way in both: arranging,
 /// painting, adding, then the panels that change the whole layer.
@@ -37,7 +43,7 @@ struct ToolPicker: View {
                     withAnimation(.snappy(duration: 0.3)) { proxy.scrollTo(tool, anchor: .center) }
                 }
             }
-            .frame(height: 56)
+            .frame(height: EditorToolbarMetrics.rowHeight)
         case .rail:
             // Centred beside the canvas while it fits; on a short window it
             // scrolls instead of running under the toolbar.
@@ -51,7 +57,7 @@ struct ToolPicker: View {
                     .scrollIndicators(.hidden)
                     .scrollClipDisabled()
             }
-            .frame(width: 56)
+            .frame(width: EditorToolbarMetrics.rowHeight)
         }
     }
 
@@ -102,16 +108,28 @@ private struct ToolShortcut: ViewModifier {
 /// A capsule of Liquid Glass holding a few related buttons.
 struct GlassGroup<Content: View>: View {
     var axis: Axis = .horizontal
+    var scrollsHorizontally = false
     @ViewBuilder var content: Content
 
     var body: some View {
-        Group {
+        Group(subviews: content) { subviews in
             if axis == .horizontal {
-                HStack(spacing: 2) { content }
-                    .padding(.horizontal, 4)
+                if scrollsHorizontally {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) { ForEach(subviews) { $0 } }
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 8) { ForEach(subviews) { $0 } }
+                        }
+                        .scrollIndicators(.hidden)
+                        .scrollBounceBehavior(.basedOnSize)
+                        .frame(height: EditorToolbarMetrics.controlSize)
+                    }
+                    .frame(minWidth: EditorToolbarMetrics.controlSize)
+                } else {
+                    HStack(spacing: 8) { ForEach(subviews) { $0 } }
+                }
             } else {
-                VStack(spacing: 2) { content }
-                    .padding(.vertical, 4)
+                VStack(spacing: 8) { ForEach(subviews) { $0 } }
             }
         }
         .glassEffect(.regular.interactive(), in: .capsule)
@@ -144,8 +162,8 @@ struct GlassIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
-                .frame(width: 40, height: 40)
+                .font(.system(size: 17))
+                .frame(width: EditorToolbarMetrics.controlSize, height: EditorToolbarMetrics.controlSize)
                 .foregroundStyle(isOn ? Color.accentColor : .primary)
                 .background(isOn ? Color.accentColor.opacity(0.2) : .clear, in: .circle)
                 .contentShape(.circle)
@@ -167,8 +185,8 @@ struct GlassMenuButton<Content: View>: View {
             content
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .medium))
-                .frame(width: 40, height: 40)
+                .font(.system(size: 17))
+                .frame(width: EditorToolbarMetrics.controlSize, height: EditorToolbarMetrics.controlSize)
                 .foregroundStyle(Color.primary)
                 .contentShape(.circle)
         }

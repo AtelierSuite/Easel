@@ -7,19 +7,14 @@ struct ToolOptionsBar: View {
     @Bindable var state: EditorState
 
     var body: some View {
-        ScrollView(.horizontal) {
-            GlassEffectContainer(spacing: 10) {
-                HStack(spacing: 10) {
-                    options
-                }
-                .padding(.horizontal, 12)
-                .animation(.snappy(duration: 0.2), value: state.tool)
+        GlassEffectContainer(spacing: 10) {
+            HStack(spacing: 10) {
+                options
             }
+            .padding(.horizontal, 12)
+            .animation(.snappy(duration: 0.2), value: state.tool)
         }
-        .scrollIndicators(.hidden)
-        .scrollBounceBehavior(.basedOnSize)
-        .scrollClipDisabled()
-        .frame(height: 52)
+        .frame(height: EditorToolbarMetrics.rowHeight)
     }
 
     @ViewBuilder
@@ -47,7 +42,7 @@ struct ToolOptionsBar: View {
     }
 
     private var censorOptions: some View {
-        GlassGroup {
+        GlassGroup(scrollsHorizontally: true) {
             GlassMenuButton(symbol: state.censorKind.symbolName, label: "Censor.Type") {
                 Picker("Censor.Type", selection: $state.censorKind) {
                     ForEach(CensorKind.allCases) { kind in
@@ -70,7 +65,7 @@ struct ToolOptionsBar: View {
     // MARK: - Painting
 
     private var brushOptions: some View {
-        GlassGroup {
+        GlassGroup(scrollsHorizontally: true) {
             if state.tool == .brush { ColorWell(state: state) }
             OptionSlider(
                 value: Binding(
@@ -113,7 +108,7 @@ struct ToolOptionsBar: View {
     }
 
     private var fillOptions: some View {
-        GlassGroup {
+        GlassGroup(scrollsHorizontally: true) {
             ColorWell(state: state)
             OptionSlider(
                 value: $state.fillTolerance, label: "Options.Tolerance",
@@ -123,7 +118,7 @@ struct ToolOptionsBar: View {
     }
 
     private var gradientOptions: some View {
-        GlassGroup {
+        GlassGroup(scrollsHorizontally: true) {
             ColorWell(state: state)
             OptionSlider(
                 value: $state.gradientOpacity, label: "Options.Opacity",
@@ -133,7 +128,7 @@ struct ToolOptionsBar: View {
     }
 
     private var eyedropperOptions: some View {
-        GlassGroup {
+        GlassGroup(scrollsHorizontally: true) {
             ColorWell(state: state)
             Text(state.color.hexString)
                 .font(.system(size: 15, weight: .medium).monospaced())
@@ -147,7 +142,7 @@ struct ToolOptionsBar: View {
     private var moveOptions: some View {
         let isLocked = state.activeLayer?.isLocked ?? true
         return Group {
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(symbol: "arrow.left.and.right.righttriangle.left.righttriangle.right", label: "Options.FlipHorizontal") {
                     state.updateTransform { $0.scaleX = -$0.scaleX; $0.rotation = -$0.rotation }
                 }
@@ -159,7 +154,7 @@ struct ToolOptionsBar: View {
                 }
                 TransformSettingsButton(state: state)
             }
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(symbol: "arrow.up.left.and.arrow.down.right", label: "Options.FitToCanvas") {
                     state.fitLayerToCanvas()
                 }
@@ -167,7 +162,7 @@ struct ToolOptionsBar: View {
                     state.resetTransform()
                 }
             }
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(symbol: "squareshape.dotted.split.2x2", label: "Options.Snap", isOn: state.snaps) {
                     state.snaps.toggle()
                 }
@@ -187,7 +182,7 @@ struct ToolOptionsBar: View {
 
     private var selectOptions: some View {
         Group {
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 ForEach(SelectionKind.allCases) { kind in
                     GlassIconButton(symbol: kind.symbolName, label: kind.label, isOn: state.selectionKind == kind) {
                         state.selectionKind = kind
@@ -196,14 +191,14 @@ struct ToolOptionsBar: View {
                 }
             }
             if state.selectionKind == .magic {
-                GlassGroup {
+                GlassGroup(scrollsHorizontally: true) {
                     OptionSlider(
                         value: $state.selectionTolerance, label: "Options.Tolerance",
                         valueText: "\(Int((state.selectionTolerance * 100).rounded()))%"
                     )
                 }
             }
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 SelectionMenu(state: state)
             }
         }
@@ -211,7 +206,7 @@ struct ToolOptionsBar: View {
 
     private var cropOptions: some View {
         Group {
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassMenuButton(symbol: "aspectratio", label: "Options.AspectRatio") {
                     Picker("Options.AspectRatio", selection: $state.cropAspect) {
                         ForEach(CropAspect.allCases) { aspect in
@@ -229,7 +224,7 @@ struct ToolOptionsBar: View {
                     state.flipCanvas(horizontal: true)
                 }
             }
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(symbol: "xmark", label: "Options.CropReset") {
                     state.resetCrop()
                 }
@@ -245,7 +240,7 @@ struct ToolOptionsBar: View {
     private var transformOptions: some View {
         let draft = state.transformDraft
         return Group {
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(symbol: "perspective", label: "Transform.Distort", isOn: state.transformMode == .distort) {
                     state.setTransformMode(.distort)
                 }
@@ -253,7 +248,7 @@ struct ToolOptionsBar: View {
                     state.setTransformMode(.warp)
                 }
             }
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(symbol: "xmark", label: "Transform.Reset") {
                     state.resetTransformDraft()
                 }
@@ -270,13 +265,13 @@ struct ToolOptionsBar: View {
     // MARK: - Adding
 
     private var textOptions: some View {
-        GlassGroup {
+        GlassGroup(scrollsHorizontally: true) {
             ColorWell(state: state)
             if state.activeLayer?.isText == true {
                 Button("Options.EditText") { state.presentedPanel = .text }
                     .font(.system(size: 15, weight: .medium))
                     .padding(.horizontal, 12)
-                    .frame(height: 40)
+                    .frame(height: EditorToolbarMetrics.controlSize)
                     .buttonStyle(.plain)
             } else {
                 Text("Options.TapToAddText")
@@ -289,7 +284,7 @@ struct ToolOptionsBar: View {
 
     private var penOptions: some View {
         Group {
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 ColorWell(state: state)
                 GlassIconButton(
                     symbol: state.shapeIsFilled ? "square.fill" : "square", label: "Options.ShapeFilled",
@@ -305,7 +300,7 @@ struct ToolOptionsBar: View {
                     label: "Options.LineWidth", valueText: "\(Int(state.shapeLineWidth.rounded())) px"
                 )
             }
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(
                     symbol: state.penAddsToLayer ? "square.stack.3d.up.fill" : "square.stack.3d.up",
                     label: "Options.PenAddsToLayer", isOn: state.penAddsToLayer
@@ -315,7 +310,7 @@ struct ToolOptionsBar: View {
                 .accessibilityIdentifier("penAddsToLayer")
             }
             if state.penPath != nil {
-                GlassGroup {
+                GlassGroup(scrollsHorizontally: true) {
                     GlassIconButton(symbol: "checkmark", label: "Options.FinishPath", isOn: true) {
                         state.finishPath()
                     }
@@ -333,7 +328,7 @@ struct ToolOptionsBar: View {
     @ViewBuilder
     private var nodeOptions: some View {
         if state.styledVectorPath != nil {
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(
                     symbol: "checklist", label: "Options.SelectMultiplePoints", isOn: state.isSelectingMultiplePoints
                 ) {
@@ -346,7 +341,7 @@ struct ToolOptionsBar: View {
             }
         }
         if let path = state.styledVectorPath {
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(
                     symbol: path.fill == nil ? "square" : "square.fill", label: "Options.Fill", isOn: path.fill != nil
                 ) {
@@ -357,7 +352,7 @@ struct ToolOptionsBar: View {
                     VectorColorWell(color: fill) { color in state.updateVectorStyle { $0.fill = color } }
                 }
             }
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(
                     symbol: "scribble", label: "Options.Stroke", isOn: path.stroke != nil
                 ) {
@@ -376,7 +371,7 @@ struct ToolOptionsBar: View {
                 }
             }
             if state.canCombineShapes {
-                GlassGroup {
+                GlassGroup(scrollsHorizontally: true) {
                     GlassMenuButton(symbol: "square.on.square.squareshape.controlhandles", label: "Vector.Combine") {
                         ForEach(VectorBoolean.allCases) { operation in
                             Button {
@@ -394,7 +389,7 @@ struct ToolOptionsBar: View {
                 }
             }
             if let node = state.selectedVectorNode {
-                GlassGroup {
+                GlassGroup(scrollsHorizontally: true) {
                     GlassIconButton(
                         symbol: node.isSmooth ? "point.topleft.down.curvedto.point.bottomright.up" : "chevron.up",
                         label: node.isSmooth ? "Options.MakeCorner" : "Options.MakeSmooth"
@@ -427,7 +422,7 @@ struct ToolOptionsBar: View {
 
     private var shapeOptions: some View {
         Group {
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 ForEach(ShapeSpec.Kind.allCases) { kind in
                     GlassIconButton(symbol: kind.symbolName, title: kind.label, isOn: state.shapeKind == kind) {
                         state.shapeKind = kind
@@ -435,7 +430,7 @@ struct ToolOptionsBar: View {
                     .accessibilityIdentifier("shapeKind.\(kind.rawValue)")
                 }
             }
-            GlassGroup {
+            GlassGroup(scrollsHorizontally: true) {
                 ColorWell(state: state)
                 if state.shapeKind.canFill {
                     GlassIconButton(
@@ -492,7 +487,7 @@ struct OptionSlider: View {
                 .frame(minWidth: 46, alignment: .trailing)
         }
         .padding(.horizontal, 10)
-        .frame(height: 40)
+        .frame(height: EditorToolbarMetrics.controlSize)
     }
 }
 
@@ -859,7 +854,7 @@ private struct VectorColorWell: View {
             supportsOpacity: true
         )
         .labelsHidden()
-        .frame(width: 40, height: 40)
+        .frame(width: EditorToolbarMetrics.controlSize, height: EditorToolbarMetrics.controlSize)
     }
 }
 

@@ -68,7 +68,7 @@ struct ColorWell: View {
                 .overlay(Circle().strokeBorder(.white, lineWidth: 2))
                 .overlay(Circle().strokeBorder(.black.opacity(0.15), lineWidth: 0.5))
                 .frame(width: 28, height: 28)
-                .frame(width: 40, height: 40)
+                .frame(width: EditorToolbarMetrics.controlSize, height: EditorToolbarMetrics.controlSize)
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
