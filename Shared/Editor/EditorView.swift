@@ -22,6 +22,7 @@ struct EditorView<Actions: View>: View {
     /// The height of the panel sheet on iPhone. Set afresh for each panel:
     /// one panel opening from another would otherwise keep its height.
     @State private var panelDetent: PresentationDetent = .medium
+    @State private var bottomToolbarInset: CGFloat = 0
 
     init(composition: Binding<Composition>, @ViewBuilder actions: () -> Actions) {
         _composition = composition
@@ -39,7 +40,7 @@ struct EditorView<Actions: View>: View {
         .allowsHitTesting(!state.isComparing)
             .background(Color(.secondarySystemBackground).ignoresSafeArea())
             .background { KeyboardCommands(state: state) }
-            .overlay(alignment: .bottom) {
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 if isCompact {
                     VStack(spacing: 8) {
                         HStack(spacing: 0) {
@@ -49,12 +50,15 @@ struct EditorView<Actions: View>: View {
                         }
                         ToolPicker(layout: .carousel, state: state, namespace: panelTransition)
                     }
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 8 + bottomToolbarInset)
                 } else {
                     ToolOptionsBar(state: state)
                         .padding(.leading, 72)
-                        .padding(.bottom, 12)
+                        .padding(.bottom, 12 + bottomToolbarInset)
                 }
+            }
+            .background {
+                EditorBottomSafeAreaReader { bottomToolbarInset = $0 }
             }
             .overlay(alignment: .leading) {
                 if !isCompact {
@@ -144,10 +148,10 @@ struct EditorView<Actions: View>: View {
     private func updateInsets() {
         if isCompact {
             let panelIsUp = state.presentedPanel?.keepsCanvasVisible == true
-            let bottom = panelIsUp ? state.viewportSize.height * 0.5 : 124
+            let bottom = panelIsUp ? state.viewportSize.height * 0.5 : 0
             state.canvasInsets = EdgeInsets(top: 8, leading: 0, bottom: bottom, trailing: 0)
         } else {
-            state.canvasInsets = EdgeInsets(top: 8, leading: 72, bottom: 64, trailing: 0)
+            state.canvasInsets = EdgeInsets(top: 8, leading: 72, bottom: 0, trailing: 0)
         }
     }
 
@@ -394,6 +398,52 @@ extension View {
             Button("Common.OK", role: .cancel) { state.errorMessage = nil }
         } message: {
             Text(state.errorMessage ?? "")
+        }
+    }
+}
+
+/// The document host can extend past the window's bottom safe area even
+/// when SwiftUI reports a smaller inset. Measure that overlap in the
+/// editor's own window, including when embedded in the Photos extension.
+private struct EditorBottomSafeAreaReader: UIViewRepresentable {
+    let insetChanged: (CGFloat) -> Void
+
+    func makeUIView(context: Context) -> ObserverView {
+        let view = ObserverView()
+        view.insetChanged = insetChanged
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: ObserverView, context: Context) {
+        view.insetChanged = insetChanged
+        view.setNeedsLayout()
+    }
+
+    final class ObserverView: UIView {
+        var insetChanged: ((CGFloat) -> Void)?
+        private var lastInset: CGFloat?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            setNeedsLayout()
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            setNeedsLayout()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard let window else { return }
+            let frameInWindow = convert(bounds, to: window)
+            let safeBottom = window.bounds.maxY - window.safeAreaInsets.bottom
+            let inset = max(0, frameInWindow.maxY - safeBottom)
+            guard lastInset != inset else { return }
+            lastInset = inset
+            let insetChanged = insetChanged
+            DispatchQueue.main.async { insetChanged?(inset) }
         }
     }
 }
