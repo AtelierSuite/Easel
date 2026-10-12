@@ -99,7 +99,10 @@ enum PSDWriter {
         // An adjustment Photoshop has a record for is written as one, with
         // no pixels; it may take some of its strength from the opacity.
         let adjustment = layer.adjustment.flatMap(PSDAdjustments.blocks(for:))
-        let blocks = adjustment?.blocks ?? []
+        var blocks = adjustment?.blocks ?? []
+        // Styles go as Photoshop's own effects, so the pixels go without them.
+        let effects = adjustment == nil ? PSDEffects.block(for: layer.effects) : nil
+        if let effects { blocks.append(("lfx2", effects)) }
         let opacity = layer.opacity * (adjustment?.opacity ?? 1)
         // The layer as it shows, without its mask, opacity or blend mode,
         // which are written as settings.
@@ -108,6 +111,7 @@ enum PSDWriter {
         plain.opacity = 1
         plain.blendMode = .normal
         plain.isVisible = true
+        if effects != nil { plain.effects = [] }
         let pixels = adjustment == nil ? Bitmap.pixels(of: CompositionRenderer.render(layers: [plain], size: canvasSize)) : nil
         let rect = pixels.map { opaqueBounds($0) } ?? .zero
         // A mask over an adjustment covers the canvas; otherwise the pixels.

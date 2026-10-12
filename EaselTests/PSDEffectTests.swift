@@ -1,0 +1,66 @@
+import CoreGraphics
+import Foundation
+import Testing
+@testable import Easel
+
+@Suite("Photoshop layer styles")
+struct PSDEffectTests {
+    private let size = CGSize(width: 60, height: 40)
+
+    private func styled(_ effects: [LayerEffect]) throws -> Layer {
+        var square = Layer(name: "Square", image: LayerImage(TestImages.solid(RGBAColor(red: 1, green: 0, blue: 0), width: 20, height: 20)),
+                           transform: LayerTransform(position: CGPoint(x: 30, y: 20)))
+        square.effects = effects
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: Composition(size: size, layers: [square])))
+        return try #require(read.layers.first)
+    }
+
+    @Test func everyKindComesBack() throws {
+        let effects = LayerEffect.Kind.allCases.map { kind -> LayerEffect in
+            var effect = LayerEffect(kind: kind)
+            effect.opacity = 0.7
+            effect.size = 9
+            effect.angle = 45
+            effect.distance = 7
+            effect.color = RGBAColor(red: 0.2, green: 0.4, blue: 0.6)
+            return effect
+        }
+        let read = try styled(effects)
+        #expect(Set(read.effects.map(\.kind)) == Set(LayerEffect.Kind.allCases))
+        for effect in read.effects {
+            #expect(abs(effect.opacity - 0.7) < 0.01)
+            if effect.kind.hasSize { #expect(effect.size == 9) }
+            if effect.kind.hasAngle { #expect(effect.angle == 45) }
+            if effect.kind.hasColor { #expect(abs(effect.color.blue - 0.6) < 0.01) }
+        }
+        #expect(read.effects.first { $0.kind == .dropShadow }?.distance == 7)
+    }
+
+    @Test func strokePositionAndGradientColoursComeBack() throws {
+        var stroke = LayerEffect(kind: .stroke)
+        stroke.position = .inside
+        var gradient = LayerEffect(kind: .gradientOverlay)
+        gradient.secondColor = RGBAColor(red: 0, green: 1, blue: 0)
+        let read = try styled([stroke, gradient])
+        #expect(read.effects.first { $0.kind == .stroke }?.position == .inside)
+        #expect(read.effects.first { $0.kind == .gradientOverlay }?.secondColor == RGBAColor(red: 0, green: 1, blue: 0))
+    }
+
+    @Test func thePixelsAreWrittenWithoutTheirStyles() throws {
+        var shadow = LayerEffect(kind: .dropShadow)
+        shadow.distance = 8
+        shadow.size = 0
+        let read = try styled([shadow])
+        // The layer's own pixels are just the square, not its shadow.
+        #expect(read.image.size == CGSize(width: 20, height: 20))
+        // Drawn again by Easel, the shadow is back.
+        let image = CompositionRenderer.render(Composition(size: size, layers: [read]))
+        #expect(TestImages.pixel(image, x: 30, y: 33).alpha > 100)
+    }
+
+    @Test func turnedOffStylesStayOff() throws {
+        var glow = LayerEffect(kind: .outerGlow)
+        glow.isEnabled = false
+        #expect(try styled([glow]).effects.first?.isEnabled == false)
+    }
+}

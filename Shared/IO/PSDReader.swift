@@ -223,12 +223,16 @@ enum PSDReader {
             }
             layer.groupID = open.last
             layer.isClipped = record.isClipped
+            // Photoshop keeps a layer's own pixels and its styles apart, as
+            // Easel does. Files with several of one effect may keep them as
+            // `lmfx` instead, laid out the same way.
+            if let effects = record.blocks["lfx2"] ?? record.blocks["lmfx"] { layer.effects = PSDEffects.effects(from: effects) }
             layers.append(layer)
         }
         return (layers, groups)
     }
 
-    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys)
+    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx"])
 
     private static func readRecord(_ reader: inout BigEndianReader, isLarge: Bool) throws -> LayerRecord {
         var record = LayerRecord()
