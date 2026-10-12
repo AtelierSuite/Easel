@@ -11,6 +11,21 @@ enum Painter {
         }
     }
 
+    /// `mask`, a layer's mask, with the canvas-sized `coverage` cut out of
+    /// it or added to it where the layer sits on the canvas.
+    static func apply(coverage: CGImage, toMask mask: CGImage, of layer: Layer, hides: Bool) -> CGImage {
+        let size = CGSize(width: mask.width, height: mask.height)
+        let canvas = CGSize(width: coverage.width, height: coverage.height)
+        return Bitmap.render(size: size) { context in
+            Bitmap.draw(mask, in: CGRect(origin: .zero, size: size), context: context)
+            // The mask may be a different size from the layer's pixels.
+            context.scaleBy(x: size.width / layer.image.size.width, y: size.height / layer.image.size.height)
+            context.concatenate(layer.affineTransform.inverted())
+            context.setBlendMode(hides ? .destinationOut : .normal)
+            Bitmap.draw(coverage, in: CGRect(origin: .zero, size: canvas), context: context)
+        }
+    }
+
     /// Fills the selected area.
     static func fill(_ selection: Selection, with color: RGBAColor, onto image: CGImage) -> CGImage {
         let size = CGSize(width: image.width, height: image.height)
