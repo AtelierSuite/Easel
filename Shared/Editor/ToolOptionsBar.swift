@@ -119,6 +119,15 @@ struct ToolOptionsBar: View {
 
     private var gradientOptions: some View {
         GlassGroup(scrollsHorizontally: true) {
+            GlassMenuButton(symbol: state.gradientKind.symbolName, label: "Gradient.Kind") {
+                Picker("Gradient.Kind", selection: $state.gradientKind) {
+                    ForEach(PaintGradient.Kind.allCases) { kind in
+                        Label(LocalizedStringKey(kind.labelKey), systemImage: kind.symbolName).tag(kind)
+                            .accessibilityIdentifier("gradientKind.\(kind.rawValue)")
+                    }
+                }
+            }
+            .accessibilityIdentifier("gradientKind")
             ColorWell(state: state)
             OptionSlider(
                 value: $state.gradientOpacity, label: "Options.Opacity",

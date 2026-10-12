@@ -544,6 +544,12 @@ S = {
 "Select.RefineEdge": ("Refine Edge", "境界線を調整", "가장자리 다듬기", "调整边缘", "調整邊緣"),
 "Select.Stroke": ("Stroke Selection", "選択範囲の境界線を描く", "선택 영역 획", "描边选区", "筆畫選取範圍"),
 "Select.Width": ("Width in pixels", "幅（ピクセル）", "폭(픽셀)", "宽度（像素）", "寬度（像素）"),
+"Gradient.Kind": ("Gradient Shape", "グラデーションの形状", "그레이디언트 모양", "渐变形状", "漸層形狀"),
+"Gradient.Linear": ("Linear", "線形", "선형", "线性", "線性"),
+"Gradient.Radial": ("Radial", "円形", "방사형", "径向", "放射狀"),
+"Gradient.Angular": ("Angular", "円錐形", "각도", "角度", "角度"),
+"Gradient.Reflected": ("Reflected", "反射形", "반사", "对称", "反射"),
+"Gradient.Diamond": ("Diamond", "菱形", "다이아몬드", "菱形", "菱形"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

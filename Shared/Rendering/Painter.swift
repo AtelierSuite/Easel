@@ -41,25 +41,22 @@ enum Painter {
         }
     }
 
-    /// A linear gradient from `color` at `start` to transparent at `end`,
-    /// painted over the image, inside `clip` if there is one.
+    /// A gradient laid from `start` to `end`, painted over the image,
+    /// inside `clip` if there is one; or, `erasing`, cutting the image away
+    /// as far as the gradient is opaque.
     static func gradient(
-        from start: CGPoint, to end: CGPoint, color: RGBAColor, opacity: Double, clip: Selection?,
+        _ gradient: PaintGradient, from start: CGPoint, to end: CGPoint, opacity: Double, clip: Selection?,
         erasing: Bool = false, onto image: CGImage
     ) -> CGImage {
         let size = CGSize(width: image.width, height: image.height)
         return Bitmap.render(size: size) { context in
             Bitmap.draw(image, in: CGRect(origin: .zero, size: size), context: context)
             clip?.clip(context, canvasSize: size)
-            let colors = [color.withAlpha(1).cgColor, color.withAlpha(0).cgColor] as CFArray
-            guard let gradient = CGGradient(colorsSpace: Bitmap.colorSpace, colors: colors, locations: [0, 1]) else {
-                return
-            }
             context.setAlpha(opacity)
             if erasing { context.setBlendMode(.destinationOut) }
-            context.drawLinearGradient(
-                gradient, start: start, end: end, options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
-            )
+            context.beginTransparencyLayer(auxiliaryInfo: nil)
+            gradient.draw(in: context, rect: CGRect(origin: .zero, size: size), from: start, to: end)
+            context.endTransparencyLayer()
         }
     }
 
