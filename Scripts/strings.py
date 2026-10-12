@@ -550,6 +550,17 @@ S = {
 "Gradient.Angular": ("Angular", "円錐形", "각도", "角度", "角度"),
 "Gradient.Reflected": ("Reflected", "反射形", "반사", "对称", "反射"),
 "Gradient.Diamond": ("Diamond", "菱形", "다이아몬드", "菱形", "菱形"),
+"Gradient.Edit": ("Edit Gradient", "グラデーションを編集", "그레이디언트 편집", "编辑渐变", "編輯漸層"),
+"Gradient.Presets": ("Presets", "プリセット", "사전 설정", "预设", "預設組"),
+"Gradient.Preset.Fading": ("Color to Transparent", "カラーから透明", "색상에서 투명으로", "颜色到透明", "顏色到透明"),
+"Gradient.Preset.ToWhite": ("Color to White", "カラーから白", "색상에서 흰색으로", "颜色到白色", "顏色到白色"),
+"Gradient.Preset.BlackToWhite": ("Black to White", "黒から白", "검은색에서 흰색으로", "黑色到白色", "黑色到白色"),
+"Gradient.Preset.Rainbow": ("Rainbow", "虹", "무지개", "彩虹", "彩虹"),
+"Gradient.Preset.Sunset": ("Sunset", "夕焼け", "노을", "日落", "夕陽"),
+"Gradient.Preset.Ocean": ("Ocean", "海", "바다", "海洋", "海洋"),
+"Gradient.StopColor": ("Stop Color", "分岐点のカラー", "정지점 색상", "色标颜色", "色標顏色"),
+"Gradient.RemoveStop": ("Remove Stop", "分岐点を削除", "정지점 제거", "移除色标", "移除色標"),
+"Gradient.Footer": ("Tap the bar to add a stop. Drag stops to move them.", "バーをタップすると分岐点を追加できます。分岐点はドラッグで移動できます。", "막대를 탭하여 정지점을 추가하십시오. 정지점을 드래그하여 이동하십시오.", "轻点渐变条以添加色标。拖移色标以移动它们。", "點一下漸層列以加入色標。拖移色標以移動。"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

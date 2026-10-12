@@ -80,6 +80,8 @@ final class EditorState {
     @ObservationIgnored var draggedGuide: Guide.ID?
     var gradientOpacity = 1.0
     var gradientKind: PaintGradient.Kind = .linear
+    /// The Gradient tool's colours; nil for the brush colour fading out.
+    var gradientStops: [PaintGradient.Stop]?
     var shapeKind: ShapeSpec.Kind = .rectangle
     var shapeIsFilled = false
     var shapeLineWidth = 12.0
@@ -1173,7 +1175,9 @@ final class EditorState {
         guard let layerID = activeLayerID else { return }
         // On a mask, a gradient fades the layer out from where it starts.
         let onMask = editsMask
-        let gradient = PaintGradient.fading(onMask ? .white : color, kind: gradientKind)
+        let gradient = onMask
+            ? PaintGradient.fading(.white, kind: gradientKind)
+            : PaintGradient(kind: gradientKind, stops: gradientStopsShown)
         let opacity = gradientOpacity
         let selection = selection
         editPixels(of: layerID, mask: onMask) { image, size in

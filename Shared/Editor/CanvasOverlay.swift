@@ -57,7 +57,9 @@ struct CanvasOverlay: View {
             line.addLine(to: end)
             context.stroke(line, with: .color(.white), style: StrokeStyle(lineWidth: 3, lineCap: .round))
             context.stroke(line, with: .color(.black.opacity(0.6)), style: StrokeStyle(lineWidth: 1, lineCap: .round))
-            for (point, fill) in [(start, state.color.color), (end, Color.clear)] {
+            let stops = state.gradientStopsShown.sorted { $0.location < $1.location }
+            let colors = [stops.first?.color ?? state.color, stops.last?.color ?? .clear].map(\.color)
+            for (point, fill) in [(start, colors[0]), (end, colors[1])] {
                 let dot = Path(ellipseIn: CGRect(x: point.x - 7, y: point.y - 7, width: 14, height: 14))
                 context.fill(dot, with: .color(fill))
                 context.stroke(dot, with: .color(.white), lineWidth: 2)

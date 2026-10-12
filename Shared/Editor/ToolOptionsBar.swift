@@ -129,6 +129,7 @@ struct ToolOptionsBar: View {
             }
             .accessibilityIdentifier("gradientKind")
             ColorWell(state: state)
+            GradientWell(state: state)
             OptionSlider(
                 value: $state.gradientOpacity, label: "Options.Opacity",
                 valueText: "\(Int((state.gradientOpacity * 100).rounded()))%"

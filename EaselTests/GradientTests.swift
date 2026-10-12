@@ -76,3 +76,42 @@ struct GradientTests {
         #expect(TestImages.isBlue(image, x: 40, y: 20))
     }
 }
+
+@Suite("Gradient stops")
+struct GradientStopTests {
+    @Test func colourBetweenStopsIsMixed() {
+        let gradient = PaintGradient(stops: [
+            .init(location: 0, color: RGBAColor(red: 1, green: 0, blue: 0)),
+            .init(location: 1, color: RGBAColor(red: 0, green: 0, blue: 1)),
+        ])
+        let middle = gradient.color(at: 0.5)
+        #expect(abs(middle.red - 0.5) < 0.01 && abs(middle.blue - 0.5) < 0.01)
+        #expect(gradient.color(at: 0) == RGBAColor(red: 1, green: 0, blue: 0))
+    }
+
+    @Test func manyStopsAllShow() {
+        let stops = GradientPreset.rainbow.stops(with: .black)
+        let blank = Bitmap.solid(size: CGSize(width: 100, height: 4), color: .clear)
+        let image = Painter.gradient(PaintGradient(stops: stops), from: CGPoint(x: 0, y: 2), to: CGPoint(x: 100, y: 2), opacity: 1, clip: nil, onto: blank)
+        #expect(TestImages.isRed(image, x: 0, y: 2))
+        let green = TestImages.pixel(image, x: 50, y: 2)
+        // sRGB green sits inside Display P3, so some red shows in its bytes.
+        #expect(green.green > 150 && green.green > green.red + 60 && green.blue < 120)
+    }
+
+    @Test func stopsOutOfOrderAreSorted() {
+        let gradient = PaintGradient(stops: [
+            .init(location: 1, color: .white), .init(location: 0, color: .black),
+        ])
+        #expect(gradient.sortedStops.first?.color == .black)
+    }
+
+    @MainActor @Test func theFadingPresetFollowsTheBrushColour() {
+        let state = EditorState()
+        state.applyGradientPreset(.rainbow)
+        #expect(state.gradientStops != nil)
+        state.applyGradientPreset(.fading)
+        state.color = RGBAColor(red: 0, green: 1, blue: 0)
+        #expect(state.gradientStopsShown.first?.color == RGBAColor(red: 0, green: 1, blue: 0))
+    }
+}
