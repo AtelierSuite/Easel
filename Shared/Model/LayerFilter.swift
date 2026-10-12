@@ -10,6 +10,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case levels, curves, colorBalance, gradientMap
         /// Hue, saturation and lightness changed colour by colour.
         case hsl
+        /// One colour, and those near it, changed to another.
+        case replaceColor
         case gaussianBlur, motionBlur, zoomBlur, lensBlur, noiseReduction, mosaic
         /// Undoes a lens's bowing, colour fringes and dark corners.
         case lensCorrection
@@ -32,7 +34,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// the add menu groups them.
         static let groups: [[Kind]] = [
             [.blackAndWhite, .sepia, .saturation, .brightness, .contrast],
-            [.levels, .curves, .colorBalance, .gradientMap, .hsl],
+            [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor],
             [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic],
             [.unsharpMask, .highPass, .lensCorrection],
             [.twirl, .pinch, .emboss, .halftone],
@@ -50,6 +52,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .colorBalance: return String(localized: "LayerFilter.ColorBalance")
             case .gradientMap: return String(localized: "LayerFilter.GradientMap")
             case .hsl: return String(localized: "LayerFilter.HSL")
+            case .replaceColor: return String(localized: "LayerFilter.ReplaceColor")
             case .gaussianBlur: return String(localized: "LayerFilter.GaussianBlur")
             case .motionBlur: return String(localized: "LayerFilter.MotionBlur")
             case .zoomBlur: return String(localized: "LayerFilter.ZoomBlur")
@@ -78,6 +81,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .colorBalance: return "paintpalette"
             case .gradientMap: return "swatchpalette"
             case .hsl: return "paintpalette.fill"
+            case .replaceColor: return "eyedropper.full"
             case .gaussianBlur: return "aqi.medium"
             case .motionBlur: return "wind"
             case .zoomBlur: return "scope"
@@ -107,6 +111,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         var defaultAmount: Double {
             switch self {
             case .blackAndWhite, .sepia, .levels, .curves, .colorBalance, .gradientMap, .hsl: return 1
+            case .replaceColor: return 0.3
             case .saturation: return 0.5
             case .brightness: return 0.2
             case .contrast: return 0.3
@@ -127,7 +132,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
 
         var hasAngle: Bool { [.motionBlur, .emboss, .halftone].contains(self) }
         /// Filters set with their own controls rather than one amount.
-        var hasAmount: Bool { ![.levels, .curves, .colorBalance, .lensCorrection, .hsl].contains(self) }
+        var hasAmount: Bool { ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor].contains(self) }
         var hasCenter: Bool { [.zoomBlur, .twirl, .pinch].contains(self) }
         /// How far round each pixel a filter looks, set apart from its amount.
         var hasRadius: Bool { self == .unsharpMask }
@@ -165,6 +170,11 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     /// HSL: for each band of `hslBandHues` in turn, how far its hue turns,
     /// and how its saturation and lightness change, each -1...1.
     var hslBands: [Double]?
+    /// Replace colour: the colour picked out, and the hue, saturation and
+    /// lightness changes made to it, each -1...1. `amount` is how near a
+    /// colour must be to count.
+    var replaceSource: RGBAColor?
+    var replaceShift: [Double]?
 
     /// The middle of each HSL band, as fractions of a turn: red, orange,
     /// yellow, green, aqua, blue, purple and magenta.

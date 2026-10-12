@@ -134,6 +134,7 @@ struct FilterRow: View {
                 if filter.kind == .gradientMap { gradientControls }
                 if filter.kind == .lensCorrection { lensControls }
                 if filter.kind == .hsl { hslControls }
+                if filter.kind == .replaceColor { replaceControls }
                 if filter.kind == .curves {
                     CurveEditor(values: filter.curve ?? LayerFilter.straightCurve) { values in
                         state.updateFilter(filter.id) { $0.curve = values }
@@ -256,6 +257,34 @@ struct FilterRow: View {
                 ),
                 range: -1...1,
                 valueText: "\(Int(((filter.hslBands ?? LayerFilter.neutralHSL)[band * 3 + part] * 100).rounded()))"
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var replaceControls: some View {
+        ColorPicker("LayerFilters.ReplaceSource", selection: colorBinding(\.replaceSource, default: .init(red: 1, green: 0, blue: 0)), supportsOpacity: false)
+            .font(.subheadline)
+        LabeledSlider(
+            label: "LayerFilters.Fuzziness", value: binding(\.amount), range: 0.02...1,
+            valueText: "\(Int((filter.amount * 100).rounded()))"
+        )
+        let labels: [LocalizedStringKey] = ["LayerFilters.Hue", "Adjust.Saturation", "LayerFilters.Lightness"]
+        ForEach(0..<3, id: \.self) { part in
+            LabeledSlider(
+                label: labels[part],
+                value: Binding(
+                    get: { (filter.replaceShift ?? [0, 0, 0])[part] },
+                    set: { value in
+                        state.updateFilter(filter.id) { filter in
+                            var shift = filter.replaceShift ?? [0, 0, 0]
+                            shift[part] = value
+                            filter.replaceShift = shift
+                        }
+                    }
+                ),
+                range: -1...1,
+                valueText: "\(Int(((filter.replaceShift ?? [0, 0, 0])[part] * 100).rounded()))"
             )
         }
     }

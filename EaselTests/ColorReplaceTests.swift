@@ -48,8 +48,21 @@ struct ColorReplaceTests {
         #expect(red.green > 60)
     }
 
+    @Test func replacingChangesTheColourPickedAndItsNeighbours() {
+        let replaced = filtered(swatches(), .replaceColor) {
+            $0.replaceSource = RGBAColor(red: 1, green: 0, blue: 0)
+            $0.replaceShift = [0, 0, -1]
+            $0.amount = 0.3
+        }
+        // Red goes dark; green, blue and grey stay.
+        #expect(TestImages.pixel(replaced, x: 5, y: 5).red < 60)
+        #expect(TestImages.isBlue(replaced, x: 25, y: 5))
+        #expect(TestImages.pixel(replaced, x: 15, y: 5).green > 150)
+    }
+
     @Test func hslCanBeAnAdjustmentLayer() {
         #expect(LayerFilter.Kind.hsl.isPerPixel)
+        #expect(LayerFilter.Kind.replaceColor.isPerPixel)
     }
 
     @Test func hueSaturationLightnessRoundTrips() {

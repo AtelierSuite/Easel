@@ -601,8 +601,11 @@ S = {
 "LayerFilter.Emboss": ("Emboss", "エンボス", "엠보스", "浮雕", "浮雕"),
 "LayerFilter.Halftone": ("Halftone", "ハーフトーン", "하프톤", "半调", "半色調"),
 "LayerFilter.HSL": ("Hue, Saturation & Lightness", "色相・彩度・輝度", "색조, 채도 및 밝기", "色相/饱和度/亮度", "色相、飽和度與亮度"),
+"LayerFilter.ReplaceColor": ("Replace Color", "色の置き換え", "색상 대체", "替换颜色", "取代顏色"),
 "LayerFilters.Hue": ("Hue", "色相", "색조", "色相", "色相"),
 "LayerFilters.Lightness": ("Lightness", "輝度", "밝기", "亮度", "明度"),
+"LayerFilters.ReplaceSource": ("Color to Replace", "置き換える色", "대체할 색상", "要替换的颜色", "要取代的顏色"),
+"LayerFilters.Fuzziness": ("Fuzziness", "許容量", "허용량", "颜色容差", "朦朧"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

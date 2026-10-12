@@ -96,6 +96,8 @@ extension LayerFilter {
             output = mix.outputImage ?? input
         case .hsl:
             output = adjustHSL(input)
+        case .replaceColor:
+            output = replaceColor(input)
         case .gaussianBlur:
             // Clamped first so the edges blur into themselves rather than
             // into transparency.
@@ -277,6 +279,23 @@ extension LayerFilter {
             return ColorTransforms.shift(
                 color, hue: mixed(0) / 6, saturation: mixed(1), lightness: mixed(2), weight: min(1, hsl.y * 4)
             )
+        }
+    }
+
+    /// Colours near the one picked moved as set, more the nearer they are.
+    private func replaceColor(_ input: CIImage) -> CIImage {
+        let shift = (replaceShift?.count == 3 ? replaceShift! : [0, 0, 0]).map { min(max($0, -1), 1) }
+        guard let source = replaceSource, shift.contains(where: { $0 != 0 }) else { return input }
+        let target = ColorTransforms.hsl(SIMD3(source.red, source.green, source.blue))
+        let tolerance = max(amount, 0.02)
+        return ColorTransforms.apply(input) { color in
+            let hsl = ColorTransforms.hsl(color)
+            // Hue counts only as far as both colours have one.
+            let hueWeight = min(hsl.y, target.y) * 4
+            let distance = ColorTransforms.hueDistance(hsl.x, target.x) * 2 * min(1, hueWeight)
+                + abs(hsl.y - target.y) * 0.5 + abs(hsl.z - target.z) * 0.5
+            let weight = max(0, 1 - distance / tolerance)
+            return ColorTransforms.shift(color, hue: shift[0] / 2, saturation: shift[1], lightness: shift[2], weight: weight)
         }
     }
 
