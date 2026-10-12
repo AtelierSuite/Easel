@@ -25,7 +25,14 @@ enum VectorRenderer {
         context.setLineCap(.round)
         for path in content.paths where !path.nodes.isEmpty {
             let cgPath = path.cgPath
-            if let fill = path.fill, path.isClosed {
+            if let gradient = path.fillGradient, path.fill != nil, path.isClosed {
+                context.saveGState()
+                context.addPath(cgPath)
+                context.clip(using: .evenOdd)
+                let line = path.gradientLine
+                gradient.draw(in: context, rect: cgPath.boundingBoxOfPath.integral, from: line.start, to: line.end)
+                context.restoreGState()
+            } else if let fill = path.fill, path.isClosed {
                 context.addPath(cgPath)
                 context.setFillColor(fill.cgColor)
                 context.fillPath(using: .evenOdd)

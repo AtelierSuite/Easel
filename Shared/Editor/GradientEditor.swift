@@ -37,9 +37,11 @@ enum GradientPreset: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// A button showing the gradient in hand, opening its editor.
+/// A button showing a gradient, opening its editor.
 struct GradientWell: View {
-    @Bindable var state: EditorState
+    @Binding var stops: [PaintGradient.Stop]
+    /// Applies a preset, which may follow the brush colour.
+    let choosePreset: (GradientPreset) -> Void
     @State private var isPresented = false
 
     var body: some View {
@@ -47,7 +49,7 @@ struct GradientWell: View {
             isPresented = true
         } label: {
             Capsule()
-                .fill(LinearGradient(stops: state.gradientStopsShown.swiftUIStops, startPoint: .leading, endPoint: .trailing))
+                .fill(LinearGradient(stops: stops.swiftUIStops, startPoint: .leading, endPoint: .trailing))
                 .background(Checkerboard(squareSize: 4).clipShape(.capsule))
                 .overlay(Capsule().strokeBorder(.white, lineWidth: 2))
                 .overlay(Capsule().strokeBorder(.black.opacity(0.15), lineWidth: 0.5))
@@ -60,24 +62,24 @@ struct GradientWell: View {
         .accessibilityLabel("Gradient.Edit")
         .accessibilityIdentifier("gradientWell")
         .popover(isPresented: $isPresented) {
-            GradientEditor(state: state)
+            GradientEditor(stops: $stops, choosePreset: choosePreset)
                 .presentationCompactAdaptation(.popover)
         }
     }
 }
 
-/// The gradient's stops along a bar: tap one to pick it and change its
+/// A gradient's stops along a bar: tap one to pick it and change its
 /// colour, drag it along, add stops between or take them away.
 struct GradientEditor: View {
-    @Bindable var state: EditorState
+    @Binding var stops: [PaintGradient.Stop]
+    let choosePreset: (GradientPreset) -> Void
     @State private var selected = 0
 
     var body: some View {
-        let stops = state.gradientStopsShown
         VStack(alignment: .leading, spacing: 14) {
             Menu {
                 ForEach(GradientPreset.allCases) { preset in
-                    Button(preset.labelKey) { state.applyGradientPreset(preset) }
+                    Button(preset.labelKey) { choosePreset(preset) }
                         .accessibilityIdentifier("gradientPreset.\(preset.rawValue)")
                 }
             } label: {
@@ -135,41 +137,29 @@ struct GradientEditor: View {
         .frame(width: 300)
     }
 
-    private func edit(_ change: (inout [PaintGradient.Stop]) -> Void) {
-        var stops = state.gradientStopsShown
-        change(&stops)
-        state.gradientStops = stops
-    }
-
     private func addStop(at location: Double) {
         let location = min(max(location, 0), 1)
-        let gradient = PaintGradient(stops: state.gradientStopsShown)
-        edit { stops in
-            stops.append(PaintGradient.Stop(location: location, color: gradient.color(at: location)))
-            stops.sort { $0.location < $1.location }
-            selected = stops.firstIndex { $0.location == location } ?? 0
-        }
+        let color = PaintGradient(stops: stops).color(at: location)
+        var changed = stops
+        changed.append(PaintGradient.Stop(location: location, color: color))
+        changed.sort { $0.location < $1.location }
+        selected = changed.firstIndex { $0.location == location } ?? 0
+        stops = changed
     }
 
     private func moveStop(_ index: Int, to location: Double) {
-        edit { stops in
-            guard stops.indices.contains(index) else { return }
-            stops[index].location = min(max(location, 0), 1)
-        }
+        guard stops.indices.contains(index) else { return }
+        stops[index].location = min(max(location, 0), 1)
     }
 
     private func setColor(_ color: RGBAColor, of index: Int) {
-        edit { stops in
-            guard stops.indices.contains(index) else { return }
-            stops[index].color = color
-        }
+        guard stops.indices.contains(index) else { return }
+        stops[index].color = color
     }
 
     private func removeStop(_ index: Int) {
-        edit { stops in
-            guard stops.count > 2, stops.indices.contains(index) else { return }
-            stops.remove(at: index)
-        }
+        guard stops.count > 2, stops.indices.contains(index) else { return }
+        stops.remove(at: index)
         selected = max(0, selected - 1)
     }
 }
@@ -222,5 +212,10 @@ extension EditorState {
     func applyGradientPreset(_ preset: GradientPreset) {
         // The first follows the brush colour as it changes.
         gradientStops = preset == .fading ? nil : preset.stops(with: color)
+    }
+
+    /// The Gradient tool's stops, for its editor.
+    var gradientStopsBinding: Binding<[PaintGradient.Stop]> {
+        Binding(get: { self.gradientStopsShown }, set: { self.gradientStops = $0 })
     }
 }

@@ -115,3 +115,44 @@ struct GradientStopTests {
         #expect(state.gradientStopsShown.first?.color == RGBAColor(red: 0, green: 1, blue: 0))
     }
 }
+
+@Suite("Gradient fills on shapes")
+struct VectorGradientTests {
+    private func square(angle: Double, kind: PaintGradient.Kind = .linear) -> Layer {
+        let nodes = [CGPoint(x: 0, y: 0), CGPoint(x: 40, y: 0), CGPoint(x: 40, y: 40), CGPoint(x: 0, y: 40)].map { VectorNode(point: $0) }
+        var path = VectorPath(nodes: nodes, isClosed: true, fill: .black, stroke: nil, strokeWidth: 0)
+        path.fillGradient = PaintGradient(kind: kind, stops: [
+            .init(location: 0, color: RGBAColor(red: 1, green: 0, blue: 0)),
+            .init(location: 1, color: RGBAColor(red: 0, green: 0, blue: 1)),
+        ])
+        path.gradientAngle = angle
+        return Layer.vector([path], name: "Square")
+    }
+
+    @Test func aGradientRunsAcrossTheShape() {
+        let image = square(angle: 0).image.cgImage
+        #expect(TestImages.pixel(image, x: 2, y: 20).red > 200)
+        #expect(TestImages.pixel(image, x: 38, y: 20).blue > 200)
+    }
+
+    @Test func itsAngleTurnsIt() {
+        // 90°: from the bottom up.
+        let image = square(angle: 90).image.cgImage
+        #expect(TestImages.pixel(image, x: 20, y: 38).red > 200)
+        #expect(TestImages.pixel(image, x: 20, y: 2).blue > 200)
+    }
+
+    @Test func otherShapesRunOutFromTheMiddle() {
+        let image = square(angle: 0, kind: .radial).image.cgImage
+        #expect(TestImages.pixel(image, x: 20, y: 20).red > 200)
+        #expect(TestImages.pixel(image, x: 1, y: 1).blue > 150)
+    }
+
+    @Test func theGradientIsSaved() throws {
+        let layer = square(angle: 30)
+        let composition = Composition(size: CGSize(width: 50, height: 50), layers: [layer])
+        let read = try CompositionArchive.composition(from: try CompositionArchive.fileWrapper(for: composition))
+        #expect(read.layers[0].vector?.paths.first?.fillGradient == layer.vector?.paths.first?.fillGradient)
+        #expect(read.layers[0].vector?.paths.first?.gradientAngle == 30)
+    }
+}

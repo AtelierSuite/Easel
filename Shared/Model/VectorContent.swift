@@ -31,6 +31,11 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
     /// inside another cuts it out. Optional so older files still open.
     var extraContours: [[VectorNode]]?
     var fill: RGBAColor?
+    /// Fills the path with a gradient instead of its fill colour.
+    var fillGradient: PaintGradient?
+    /// Which way the gradient runs across the path, in degrees
+    /// anticlockwise from rightwards.
+    var gradientAngle: Double?
     var stroke: RGBAColor?
     var strokeWidth: Double
     /// Words set along the path, following its curve.
@@ -82,6 +87,22 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
 
     func offset(by delta: CGPoint) -> VectorPath {
         mappingNodes { $0.offset(by: delta) }
+    }
+
+    /// Where the fill gradient's line runs: across the whole path for a
+    /// straight gradient, out from its middle for the others.
+    var gradientLine: (start: CGPoint, end: CGPoint) {
+        let box = cgPath.boundingBoxOfPath
+        let radians = (gradientAngle ?? 0) * .pi / 180
+        let direction = CGVector(dx: cos(radians), dy: -sin(radians))
+        // Far enough to reach the box's corners.
+        let half = (abs(direction.dx) * box.width + abs(direction.dy) * box.height) / 2
+        let center = CGPoint(x: box.midX, y: box.midY)
+        let end = CGPoint(x: center.x + direction.dx * half, y: center.y + direction.dy * half)
+        if fillGradient?.kind == .linear {
+            return (CGPoint(x: center.x - direction.dx * half, y: center.y - direction.dy * half), end)
+        }
+        return (center, end)
     }
 }
 

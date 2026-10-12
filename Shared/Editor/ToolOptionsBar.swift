@@ -129,7 +129,7 @@ struct ToolOptionsBar: View {
             }
             .accessibilityIdentifier("gradientKind")
             ColorWell(state: state)
-            GradientWell(state: state)
+            GradientWell(stops: state.gradientStopsBinding, choosePreset: state.applyGradientPreset)
             OptionSlider(
                 value: $state.gradientOpacity, label: "Options.Opacity",
                 valueText: "\(Int((state.gradientOpacity * 100).rounded()))%"
@@ -370,7 +370,47 @@ struct ToolOptionsBar: View {
                 }
                 .accessibilityIdentifier("vectorFill")
                 if let fill = path.fill {
-                    VectorColorWell(color: fill) { color in state.updateVectorStyle { $0.fill = color } }
+                    if let gradient = path.fillGradient {
+                        GlassMenuButton(symbol: gradient.kind.symbolName, label: "Gradient.Kind") {
+                            Picker("Gradient.Kind", selection: Binding(
+                                get: { gradient.kind },
+                                set: { kind in state.updateVectorStyle { $0.fillGradient?.kind = kind } }
+                            )) {
+                                ForEach(PaintGradient.Kind.allCases) { kind in
+                                    Label(LocalizedStringKey(kind.labelKey), systemImage: kind.symbolName).tag(kind)
+                                }
+                            }
+                        }
+                        GradientWell(
+                            stops: Binding(
+                                get: { gradient.stops },
+                                set: { stops in state.updateVectorStyle { $0.fillGradient?.stops = stops } }
+                            ),
+                            choosePreset: { preset in
+                                state.updateVectorStyle { $0.fillGradient?.stops = preset.stops(with: state.color) }
+                            }
+                        )
+                        OptionSlider(
+                            value: Binding(
+                                get: { path.gradientAngle ?? 0 },
+                                set: { value in state.updateVectorStyle { $0.gradientAngle = value } }
+                            ),
+                            range: -180...180, label: "LayerFilters.Angle",
+                            valueText: "\(Int((path.gradientAngle ?? 0).rounded()))°"
+                        )
+                    } else {
+                        VectorColorWell(color: fill) { color in state.updateVectorStyle { $0.fill = color } }
+                    }
+                    GlassIconButton(
+                        symbol: "circle.lefthalf.striped.horizontal", label: "Options.GradientFill",
+                        isOn: path.fillGradient != nil
+                    ) {
+                        state.updateVectorStyle { path in
+                            path.fillGradient = path.fillGradient == nil
+                                ? PaintGradient(kind: state.gradientKind, stops: state.gradientStopsShown) : nil
+                        }
+                    }
+                    .accessibilityIdentifier("vectorGradientFill")
                 }
             }
             GlassGroup(scrollsHorizontally: true) {

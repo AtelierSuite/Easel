@@ -561,6 +561,7 @@ S = {
 "Gradient.StopColor": ("Stop Color", "分岐点のカラー", "정지점 색상", "色标颜色", "色標顏色"),
 "Gradient.RemoveStop": ("Remove Stop", "分岐点を削除", "정지점 제거", "移除色标", "移除色標"),
 "Gradient.Footer": ("Tap the bar to add a stop. Drag stops to move them.", "バーをタップすると分岐点を追加できます。分岐点はドラッグで移動できます。", "막대를 탭하여 정지점을 추가하십시오. 정지점을 드래그하여 이동하십시오.", "轻点渐变条以添加色标。拖移色标以移动它们。", "點一下漸層列以加入色標。拖移色標以移動。"),
+"Options.GradientFill": ("Gradient Fill", "グラデーションで塗りつぶし", "그레이디언트 채우기", "渐变填充", "漸層填色"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

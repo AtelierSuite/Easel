@@ -14420,6 +14420,41 @@
         }
       }
     },
+    "Options.GradientFill": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gradient Fill"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グラデーションで塗りつぶし"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그레이디언트 채우기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "渐变填充"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漸層填色"
+          }
+        }
+      }
+    },
     "Options.LineWidth": {
       "extractionState": "manual",
       "localizations": {
