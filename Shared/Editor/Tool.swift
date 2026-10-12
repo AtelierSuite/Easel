@@ -203,6 +203,8 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
     case adjustments
     /// The active layer's own filters, which stay editable.
     case filters
+    /// The active layer's shadows, glows, strokes and overlays.
+    case effects
     /// One-tap looks painted into the active layer.
     case looks
     case text
@@ -217,6 +219,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
         case .layers: return "Panel.Layers.Title"
         case .adjustments: return "Panel.Adjustments.Title"
         case .filters: return "Panel.Filters.Title"
+        case .effects: return "Panel.Effects.Title"
         case .looks: return "Panel.Looks.Title"
         case .text: return "Panel.Text.Title"
         case .imageSize: return "Panel.ImageSize.Title"
@@ -229,6 +232,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
         case .layers: return "square.3.layers.3d"
         case .adjustments: return "slider.horizontal.3"
         case .filters: return "camera.filters"
+        case .effects: return "square.on.square.squareshape.controlhandles"
         case .looks: return "wand.and.sparkles"
         case .text: return "textformat"
         case .imageSize: return "arrow.up.left.and.arrow.down.right"
@@ -240,7 +244,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
     /// they stop at half height and the canvas moves into the top half.
     var keepsCanvasVisible: Bool {
         switch self {
-        case .layers, .adjustments, .filters, .looks, .text, .history: return true
+        case .layers, .adjustments, .filters, .effects, .looks, .text, .history: return true
         case .imageSize: return false
         }
     }

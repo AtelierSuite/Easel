@@ -17,6 +17,9 @@ struct Layer: Identifiable, Equatable, Sendable {
     /// Run over `image` whenever the layer is drawn, in order; the pixels
     /// themselves are never changed by them.
     var filters: [LayerFilter] = []
+    /// Shadows, glows, outlines and the like, worked out from the layer's
+    /// shape whenever it is drawn.
+    var effects: [LayerEffect] = []
     /// Hides parts of the layer without changing its pixels.
     var mask: LayerMask?
     var transform: LayerTransform

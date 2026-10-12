@@ -136,7 +136,8 @@ struct Composition: Equatable, Sendable {
         let upper = layers[index]
         // Two vector layers that mix plainly stay one vector layer.
         if var lowerVector = lower.vector, let upperVector = upper.vector,
-           upper.blendMode == .normal, upper.opacity == lower.opacity, upper.filters.isEmpty, upper.mask == nil {
+           upper.blendMode == .normal, upper.opacity == lower.opacity, upper.filters.isEmpty, upper.mask == nil,
+           upper.effects.isEmpty, lower.effects.isEmpty, !upper.isClipped {
             let toLower = upper.affineTransform.concatenating(lower.affineTransform.inverted())
             lowerVector.paths += upperVector.paths.map { path in
                 var path = path.mappingNodes { $0.mapped(toLower) }
@@ -171,7 +172,7 @@ struct Composition: Equatable, Sendable {
     }
 
     /// Turns a layer into plain pixels covering the canvas one for one, its
-    /// filters painted in. Text stops being editable.
+    /// filters and effects painted in. Text stops being editable.
     mutating func rasterize(_ id: Layer.ID) {
         guard let index = index(of: id) else { return }
         layers[index] = layers[index].rasterized(in: size)
@@ -337,6 +338,7 @@ extension Layer {
         guard !isAligned(to: canvasSize) else { return self }
         var placed = self
         placed.filters = []
+        placed.effects = []
         placed.mask = nil
         placed.opacity = 1
         placed.blendMode = .normal
@@ -366,9 +368,10 @@ extension Layer {
     /// The layer as it shows, filters and all, drawn into plain pixels that
     /// line up with the canvas.
     func rasterized(in canvasSize: CGSize) -> Layer {
-        guard !isAligned(to: canvasSize) || hasActiveFilters || activeMask != nil else {
+        guard !isAligned(to: canvasSize) || hasActiveFilters || activeMask != nil || hasActiveEffects else {
             var result = self
             result.filters = []
+            result.effects = []
             result.mask = nil
             return result
         }
@@ -382,6 +385,7 @@ extension Layer {
         result.text = nil
         result.vector = nil
         result.filters = []
+        result.effects = []
         result.mask = nil
         result.transform = LayerTransform(position: CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2))
         return result

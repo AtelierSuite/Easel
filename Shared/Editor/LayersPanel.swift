@@ -123,7 +123,7 @@ struct LayersPanel: View {
                 .disabled(!layer.isClipped && !composition.canClip(layer.id))
                 .accessibilityIdentifier("clipToBelow")
                 Button {
-                    openFilters()
+                    open(.filters)
                 } label: {
                     LabeledContent {
                         Text(verbatim: layer.activeFilters.isEmpty ? "" : "\(layer.activeFilters.count)")
@@ -132,23 +132,33 @@ struct LayersPanel: View {
                     }
                 }
                 .accessibilityIdentifier("layerFilters")
+                Button {
+                    open(.effects)
+                } label: {
+                    LabeledContent {
+                        Text(verbatim: layer.activeEffects.isEmpty ? "" : "\(layer.activeEffects.count)")
+                    } label: {
+                        Label("Panel.Effects.Title", systemImage: EditorPanel.effects.symbolName)
+                    }
+                }
+                .accessibilityIdentifier("layerEffects")
             }
             MaskSection(layer: layer, state: state)
     }
 
     @Environment(\.panelPlacement) private var placement
 
-    /// On iPhone, the layers sheet goes down before the filters one comes up:
+    /// On iPhone, the layers sheet goes down before the next one comes up:
     /// swapped in place, the new sheet would keep the full height.
-    private func openFilters() {
+    private func open(_ panel: EditorPanel) {
         guard placement == .sheet else {
-            state.presentedPanel = .filters
+            state.presentedPanel = panel
             return
         }
         state.presentedPanel = nil
         Task {
             try? await Task.sleep(for: .milliseconds(450))
-            state.presentedPanel = .filters
+            state.presentedPanel = panel
         }
     }
 

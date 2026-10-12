@@ -220,6 +220,7 @@ struct EditorView<Actions: View>: View {
         case .layers: LayersPanel(composition: state.composition, state: state)
         case .adjustments: AdjustmentsPanel(state: state)
         case .filters: LayerFiltersPanel(state: state)
+        case .effects: LayerEffectsPanel(state: state)
         case .looks: LooksPanel(state: state)
         case .text: TextPanel(state: state)
         case .imageSize: CanvasSizePanel(state: state)

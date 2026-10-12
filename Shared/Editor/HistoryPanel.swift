@@ -31,6 +31,7 @@ enum HistoryNaming {
         case .text: return String(localized: "History.Text")
         case .vector: return String(localized: "History.Shape")
         case .filters: return String(localized: "History.Filters")
+        case .effects: return String(localized: "History.Effects")
         case .name: return String(localized: "History.Rename")
         case .visibility: return String(localized: "History.Visibility")
         case .other: return String(localized: "History.EditLayers")

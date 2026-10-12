@@ -207,6 +207,10 @@ final class EditorState {
     /// slider being dragged asks far faster than filters can run.
     @ObservationIgnored private var wantedFilters: [Layer.ID: (key: FilterCache.Key, source: LayerImage)] = [:]
     @ObservationIgnored private var filteringLayers: Set<Layer.ID> = []
+    /// The same for layers with effects.
+    private var styledDisplay: [Layer.ID: (key: StyleCache.Key, styled: StyledLayer)] = [:]
+    @ObservationIgnored private var wantedStyles: [Layer.ID: (key: StyleCache.Key, layer: Layer)] = [:]
+    @ObservationIgnored private var stylingLayers: Set<Layer.ID> = []
 
     struct PendingStroke: Identifiable {
         let id = UUID()
@@ -367,6 +371,29 @@ final class EditorState {
             }
             filteringLayers.remove(layerID)
         }
+    }
+
+    /// What to show for a layer with effects: the newest copy with them
+    /// worked out, asking for a fresher one if needed. Nil for a layer
+    /// without effects, or before the first copy is ready.
+    func styledDisplay(for layer: Layer) -> StyledLayer? {
+        guard layer.hasActiveEffects else { return nil }
+        let key = StyleCache.Key(layer: layer, maxPixelSize: Self.filterDisplaySize)
+        let shown = styledDisplay[layer.id]
+        if let shown, shown.key == key { return shown.styled }
+        wantedStyles[layer.id] = (key, layer)
+        if stylingLayers.insert(layer.id).inserted {
+            Task { @MainActor in
+                while let wanted = wantedStyles.removeValue(forKey: layer.id) {
+                    let styled = await Task.detached(priority: .userInitiated) {
+                        StyleCache.shared.styled(for: wanted.key, layer: wanted.layer)
+                    }.value
+                    styledDisplay[layer.id] = (wanted.key, styled)
+                }
+                stylingLayers.remove(layer.id)
+            }
+        }
+        return shown?.styled
     }
 
     // MARK: - Viewport

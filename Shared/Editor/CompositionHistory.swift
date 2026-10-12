@@ -169,7 +169,7 @@ final class CompositionHistory {
 /// small change — a slider being dragged, text being typed — is one step.
 struct EditScope: Equatable {
     enum Kind: Equatable {
-        case opacity, blendMode, transform, text, vector, filters, name, visibility, other
+        case opacity, blendMode, transform, text, vector, filters, effects, name, visibility, other
     }
 
     var layerID: Layer.ID?
@@ -207,6 +207,12 @@ struct EditScope: Equatable {
             // changes their count or order and is a step of its own.
             kind = before.filters.map(\.id) == after.filters.map(\.id)
                 && before.filters.map(\.isEnabled) == after.filters.map(\.isEnabled) ? .filters : .other
+        } else if before.effects != after.effects {
+            // Only a slider moving, as for filters.
+            kind = before.effects.map(\.id) == after.effects.map(\.id)
+                && before.effects.map(\.isEnabled) == after.effects.map(\.isEnabled) ? .effects : .other
+        } else if before.isClipped != after.isClipped {
+            kind = .other
         } else if before.opacity != after.opacity {
             kind = .opacity
         } else if before.blendMode != after.blendMode {
@@ -229,7 +235,7 @@ struct EditScope: Equatable {
     /// Pixel edits and structural changes are always steps of their own.
     var coalesces: Bool {
         switch kind {
-        case .opacity, .transform, .text, .vector, .filters, .name: return true
+        case .opacity, .transform, .text, .vector, .filters, .effects, .name: return true
         case .blendMode, .visibility, .other: return false
         }
     }

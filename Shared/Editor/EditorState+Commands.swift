@@ -463,6 +463,39 @@ extension EditorState {
     }
 }
 
+// MARK: - Layer styles
+
+extension EditorState {
+    /// Gives the active layer an effect of this kind, or turns its own back
+    /// on: a layer has one of each.
+    func addEffect(_ kind: LayerEffect.Kind) {
+        updateActiveLayer { layer in
+            if let index = layer.effects.firstIndex(where: { $0.kind == kind }) {
+                layer.effects[index].isEnabled = true
+            } else {
+                var effect = LayerEffect(kind: kind)
+                // Sized for the picture: a shadow that shows on a phone
+                // photo is lost on a poster.
+                let factor = max(0.5, max(read().size.width, read().size.height) / 1024)
+                effect.size = (effect.size * factor).rounded()
+                effect.distance = (effect.distance * factor).rounded()
+                layer.effects.append(effect)
+            }
+        }
+    }
+
+    func updateEffect(_ id: LayerEffect.ID, _ change: (inout LayerEffect) -> Void) {
+        updateActiveLayer { layer in
+            guard let index = layer.effects.firstIndex(where: { $0.id == id }) else { return }
+            change(&layer.effects[index])
+        }
+    }
+
+    func removeEffect(_ id: LayerEffect.ID) {
+        updateActiveLayer { $0.effects.removeAll { $0.id == id } }
+    }
+}
+
 // MARK: - Layer masks
 
 extension EditorState {

@@ -117,47 +117,89 @@ struct CanvasView: View {
         .allowsHitTesting(false)
     }
 
+    /// Which part of a layer with effects to show; see `StyledLayer`.
+    private enum LayerPart {
+        case whole, behind, content, front
+    }
+
     /// One layer as it shows, with whatever is being done to it.
     @ViewBuilder
-    private func layerView(_ layer: Layer, _ viewport: CanvasViewport) -> some View {
+    private func layerView(_ layer: Layer, _ viewport: CanvasViewport, part: LayerPart = .whole) -> some View {
         if let bent = state.transformPreview, bent.layerID == layer.id {
             // A layer being bent shows as it will be: lined up with the
             // canvas, its mask already in it.
-            LayerView(
-                layer: Self.canvasAligned(layer, image: bent.image, canvasSize: composition.size),
-                displayed: bent.image, preview: nil, strokes: [], maskStrokes: [], retouch: nil,
-                canvasSize: composition.size, viewport: viewport, displayScale: displayScale
-            )
-        } else {
-            LayerView(
-                layer: layer,
-                displayed: state.displayImage(for: layer),
-                preview: state.layerPreview?.layerID == layer.id ? state.layerPreview?.image : nil,
-                strokes: strokes(on: layer.id, mask: false),
-                maskStrokes: strokes(on: layer.id, mask: true),
-                retouch: retouch(on: layer.id),
-                canvasSize: composition.size,
-                viewport: viewport,
-                displayScale: displayScale
-            )
+            if part == .whole || part == .content {
+                LayerView(
+                    layer: Self.canvasAligned(layer, image: bent.image, canvasSize: composition.size),
+                    displayed: bent.image, strokes: [], maskStrokes: [], retouch: nil,
+                    canvasSize: composition.size, viewport: viewport, displayScale: displayScale
+                )
+            }
+        } else if let preview = state.layerPreview, preview.layerID == layer.id {
+            if part == .whole || part == .content {
+                liveLayerView(layer, displayed: preview.image, viewport)
+            }
+        } else if let styled = state.styledDisplay(for: layer) {
+            switch part {
+            case .whole:
+                liveLayerView(layer, displayed: styled.composite, padding: styled.padding, viewport)
+            case .content:
+                liveLayerView(layer, displayed: styled.content, padding: styled.padding, viewport)
+            case .behind, .front:
+                if let image = part == .behind ? styled.behind : styled.front {
+                    LayerView(
+                        layer: layer, displayed: image, padding: styled.padding, masksItself: false,
+                        strokes: [], maskStrokes: [], retouch: nil,
+                        canvasSize: composition.size, viewport: viewport, displayScale: displayScale
+                    )
+                }
+            }
+        } else if part == .whole || part == .content {
+            liveLayerView(layer, displayed: state.displayImage(for: layer), viewport)
         }
+    }
+
+    /// A layer with the strokes and retouching being done to it drawn over.
+    /// An image with effects worked out has its mask in it already.
+    private func liveLayerView(
+        _ layer: Layer, displayed: CGImage, padding: Double? = nil, _ viewport: CanvasViewport
+    ) -> some View {
+        LayerView(
+            layer: layer,
+            displayed: displayed,
+            padding: padding ?? 0,
+            masksItself: padding == nil,
+            strokes: strokes(on: layer.id, mask: false),
+            maskStrokes: strokes(on: layer.id, mask: true),
+            retouch: retouch(on: layer.id),
+            canvasSize: composition.size,
+            viewport: viewport,
+            displayScale: displayScale
+        )
     }
 
     /// A base and the layers clipped to it, as `CompositionRenderer` draws
     /// them: the base made opaque, the clipped layers mixed over it, all cut
-    /// back to the base's shape and put down as the base would be.
+    /// back to the base's shape between the base's effects behind and in
+    /// front of it, and put down as the base would be.
     private func clippingGroup(_ base: Layer, clipped: [Layer], _ viewport: CanvasViewport) -> some View {
         let plain = base.with(opacity: 1, blendMode: .normal)
         return ZStack(alignment: .topLeading) {
-            layerView(plain, viewport)
-                .colorEffect(ShaderLibrary.opaqueColor())
-            ForEach(clipped) { layer in
-                layerView(layer, viewport)
+            layerView(plain, viewport, part: .behind)
+            ZStack(alignment: .topLeading) {
+                layerView(plain, viewport, part: .content)
+                    .colorEffect(ShaderLibrary.opaqueColor())
+                ForEach(clipped) { layer in
+                    layerView(layer, viewport)
+                }
             }
+            .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
+            .compositingGroup()
+            .mask(alignment: .topLeading) { layerView(plain, viewport, part: .content) }
+            layerView(plain, viewport, part: .front)
         }
         .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
         .compositingGroup()
-        .mask(alignment: .topLeading) { layerView(plain, viewport) }
         .opacity(base.opacity)
         .blendMode(base.blendMode.swiftUI)
     }
@@ -214,7 +256,10 @@ private struct LayerView: View {
     let layer: Layer
     /// The layer's pixels as they show, filters applied.
     let displayed: CGImage
-    let preview: CGImage?
+    /// How far `displayed` reaches past the layer's edges, in its own pixels.
+    var padding = 0.0
+    /// Whether the layer's mask still has to be applied to `displayed`.
+    var masksItself = true
     let strokes: [Stroke]
     /// Strokes on their way into the layer's mask.
     let maskStrokes: [Stroke]
@@ -224,13 +269,16 @@ private struct LayerView: View {
     let displayScale: Double
 
     var body: some View {
-        let image = preview ?? displayed
+        let image = displayed
         let transform = layer.transform
         let scale = viewport.scale
         // Past twice the screen's resolution, pixels show as squares, which
         // is what someone zoomed that far in is looking for.
         let pixelScale = scale * abs(transform.scaleX) * displayScale
-        let content = placed(Image(decorative: image, scale: 1).interpolation(pixelScale > 2 ? .none : .high))
+        let content = placed(
+            Image(decorative: image, scale: 1).interpolation(pixelScale > 2 ? .none : .high),
+            rect: layer.paddedRect(imageWidth: image.width, padding: padding)
+        )
 
         let paintStrokes = strokes.filter(\.kind.isPaint)
         Group {
@@ -269,10 +317,11 @@ private struct LayerView: View {
         .blendMode(layer.blendMode.swiftUI)
     }
 
-    /// An image of the layer's size, placed where the layer is on screen.
-    private func placed(_ image: Image) -> some View {
+    /// An image covering `rect` of the layer's own pixels — all of them
+    /// unless told otherwise — placed where the layer is on screen.
+    private func placed(_ image: Image, rect: CGRect? = nil) -> some View {
         let transform = layer.transform
-        let size = layer.image.size
+        let size = (rect ?? CGRect(origin: .zero, size: layer.image.size)).size
         let scale = viewport.scale
         return image
             .resizable()
@@ -286,7 +335,7 @@ private struct LayerView: View {
     /// it, or everything when it has no mask in use.
     @ViewBuilder
     private var maskView: some View {
-        if let mask = layer.activeMask {
+        if masksItself, let mask = layer.activeMask {
             ZStack(alignment: .topLeading) {
                 placed(Image(decorative: mask.image.cgImage, scale: 1))
                 if !maskStrokes.isEmpty {

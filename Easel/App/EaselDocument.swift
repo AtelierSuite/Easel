@@ -19,9 +19,9 @@ extension UTType {
 /// or a plain picture file edited where it lies — which keeps its format
 /// and so is flattened when it is saved.
 struct EaselDocument: FileDocument {
-    /// Photoshop files are written back with their layers. Large Photoshop
-    /// and Pixelmator Pro files open but are not written back: Keep Layers
-    /// turns them into an Easel image.
+    /// Photoshop and Pixelmator Pro files open, but are saved as an Easel
+    /// copy before they are edited. Photoshop files can still be written,
+    /// for exporting; large Photoshop and Pixelmator Pro files cannot.
     static let readableContentTypes: [UTType] = [
         .easelImage, .png, .jpeg, .heic, .photoshopImage, .photoshopLargeImage,
         .pixelmatorProImage, .pixelmatorProPackage,

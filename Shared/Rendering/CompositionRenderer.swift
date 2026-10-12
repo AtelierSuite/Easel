@@ -22,44 +22,52 @@ enum CompositionRenderer {
     static func draw(_ layers: [Layer], in context: CGContext) {
         for unit in layers.clippingUnits where unit.base.isVisible && unit.base.opacity > 0 {
             let clipped = unit.clipped.filter { $0.isVisible && $0.opacity > 0 }
+            let base = unit.base
+            let styled = base.styledImage
             guard !clipped.isEmpty else {
-                draw(unit.base, image: unit.base.renderedImage, in: context)
+                draw(base, image: styled.composite, padding: styled.padding, in: context)
                 continue
             }
             // The base at full opacity with the clipped layers mixed over
-            // it, cut back to the base's shape, then put down as the base
-            // would be.
-            let base = unit.base
+            // it, cut back to the base's shape, between the base's effects
+            // behind and in front of it; all put down as the base would be.
             context.saveGState()
             context.setAlpha(base.opacity)
             context.setBlendMode(base.blendMode.cgBlendMode)
             context.beginTransparencyLayer(auxiliaryInfo: nil)
+            let plain = base.with(opacity: 1, blendMode: .normal)
+            if let behind = styled.behind { draw(plain, image: behind, padding: styled.padding, in: context) }
+            context.saveGState()
+            context.beginTransparencyLayer(auxiliaryInfo: nil)
             // Drawing the base's shape over the group below only cuts
-            // within the base's own edges; past them, the clip does.
-            context.addLines(between: base.corners)
+            // within the image's own edges; past them, the clip does.
+            context.addLines(between: plain.corners(padding: styled.padding))
             context.closePath()
             context.clip()
-            let shape = base.renderedImage
-            draw(base.with(opacity: 1, blendMode: .normal), image: opaque(shape), in: context)
+            draw(plain, image: opaque(styled.content), padding: styled.padding, in: context)
             for layer in clipped {
-                draw(layer, image: layer.renderedImage, in: context)
+                let image = layer.styledImage
+                draw(layer, image: image.composite, padding: image.padding, in: context)
             }
-            context.saveGState()
-            context.setBlendMode(.destinationIn)
-            context.concatenate(base.affineTransform)
-            Bitmap.draw(shape, in: CGRect(origin: .zero, size: base.image.size), context: context)
+            draw(plain, image: styled.content, padding: styled.padding, in: context, blendMode: .destinationIn)
+            context.endTransparencyLayer()
             context.restoreGState()
+            if let front = styled.front { draw(plain, image: front, padding: styled.padding, in: context) }
             context.endTransparencyLayer()
             context.restoreGState()
         }
     }
 
-    private static func draw(_ layer: Layer, image: CGImage, in context: CGContext) {
+    /// Draws `image`, the layer's pixels with `padding` of the image's own
+    /// round each edge, where the layer sits.
+    private static func draw(
+        _ layer: Layer, image: CGImage, padding: Double, in context: CGContext, blendMode: CGBlendMode? = nil
+    ) {
         context.saveGState()
         context.setAlpha(layer.opacity)
-        context.setBlendMode(layer.blendMode.cgBlendMode)
+        context.setBlendMode(blendMode ?? layer.blendMode.cgBlendMode)
         context.concatenate(layer.affineTransform)
-        Bitmap.draw(image, in: CGRect(origin: .zero, size: layer.image.size), context: context)
+        Bitmap.draw(image, in: layer.paddedRect(imageWidth: image.width, padding: padding), context: context)
         context.restoreGState()
     }
 

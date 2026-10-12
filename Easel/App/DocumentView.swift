@@ -8,28 +8,78 @@ struct DocumentView: View {
     @State private var errorMessage: String?
     @State private var savedToPhotos = false
     @State private var isExportingWithPresets = false
+    @State private var isAskingToCopy = false
+    @State private var isSavingCopy = false
+    @State private var hasCopy = false
+    @Environment(\.dismiss) private var dismiss
 
     private var name: String {
         fileURL?.deletingPathExtension().lastPathComponent ?? String(localized: "Export.DefaultName")
     }
 
+    /// A Photoshop or Pixelmator Pro file, not yet saved as an Easel copy,
+    /// which stays untouched until it is.
+    private var requiresCopy: Bool {
+        !hasCopy && fileURL.map(DocumentConversion.requiresCopy) == true
+    }
+
     var body: some View {
         EditorView(composition: $document.composition) { exportMenu }
+            .disabled(requiresCopy)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarTitleMenu { titleMenu }
             .alert(
                 "Alert.Error.Title",
                 isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
             ) {
-                Button("Common.OK", role: .cancel) { errorMessage = nil }
+                Button("Common.OK", role: .cancel) {
+                    errorMessage = nil
+                    if requiresCopy { isAskingToCopy = true }
+                }
             } message: {
                 Text(errorMessage ?? "")
+            }
+            .alert("CopyToEasel.Title", isPresented: $isAskingToCopy) {
+                Button("CopyToEasel.Save") { isSavingCopy = true }
+                Button("CopyToEasel.Close", role: .cancel) { dismiss() }
+            } message: {
+                Text("CopyToEasel.Message")
+            }
+            .fileExporter(
+                isPresented: $isSavingCopy, document: document, contentTypes: [.easelImage], defaultFilename: name
+            ) { result in
+                switch result {
+                case .success(let url): adoptCopy(at: url)
+                case .failure(let error): errorMessage = error.localizedDescription
+                }
+            } onCancellation: {
+                isAskingToCopy = true
+            }
+            .onAppear {
+                if requiresCopy { isAskingToCopy = true }
             }
             .sensoryFeedback(.success, trigger: savedToPhotos)
             .sheet(isPresented: $isExportingWithPresets) {
                 ExportPresetsSheet(composition: document.composition, name: name)
                     .presentationContentInteraction(.scrolls)
             }
+    }
+
+    /// Has the open document follow the copy just saved, so edits from here
+    /// on are saved to it. The picker only grants access to the copy, so that
+    /// access is held for as long as the app runs, through the document's
+    /// last save as it closes.
+    private func adoptCopy(at url: URL) {
+        guard let fileURL else { return }
+        _ = url.startAccessingSecurityScopedResource()
+        Task {
+            do {
+                try await DocumentConversion.adopt(copyAt: url, of: fileURL)
+                hasCopy = true
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 
     private var exportMenu: some View {
@@ -65,9 +115,8 @@ struct DocumentView: View {
         .accessibilityIdentifier("export")
     }
 
-    /// Renaming, and — for a plain picture, which flattens when saved, or a
-    /// file that cannot be saved at all — turning the file into an Easel
-    /// image that keeps its layers.
+    /// Renaming, and — for a plain picture, which flattens when saved —
+    /// turning the file into an Easel image that keeps its layers.
     @ViewBuilder
     private var titleMenu: some View {
         RenameButton()
@@ -84,11 +133,7 @@ struct DocumentView: View {
                     }
                 }
             } footer: {
-                if DocumentConversion.keepsOriginal(fileURL) {
-                    Text("TitleMenu.ConvertToEasel.Footer.ReadOnly")
-                } else {
-                    Text("TitleMenu.ConvertToEasel.Footer")
-                }
+                Text("TitleMenu.ConvertToEasel.Footer")
             }
         }
     }

@@ -3,18 +3,18 @@ import Foundation
 /// Turns a plain picture file, which can only be saved flattened, into an
 /// Easel image that keeps its layers — in place, the way Rename moves a file,
 /// so the open document follows it and from then on saves as a package.
-/// Files Easel cannot write back, such as Pixelmator Pro documents, stay
-/// where they were beside the new Easel image.
+/// Photoshop and Pixelmator Pro documents are never edited in place: before
+/// anything changes, they are saved as an Easel copy wherever the person
+/// picks, and the open document follows that copy instead.
 enum DocumentConversion {
     static func canConvert(_ fileURL: URL) -> Bool {
-        // Photoshop files keep their layers as they are.
-        !["easel", "psd"].contains(fileURL.pathExtension.lowercased())
+        fileURL.pathExtension.lowercased() != "easel" && !requiresCopy(fileURL)
     }
 
-    /// Whether the original file is left beside the Easel image: nothing
-    /// edited in it could be saved back, so it is not given up.
-    static func keepsOriginal(_ fileURL: URL) -> Bool {
-        ["pxd", "psb"].contains(fileURL.pathExtension.lowercased())
+    /// Whether the file has to be saved as an Easel copy before it is edited:
+    /// its layers, effects and masks would not all survive being written back.
+    static func requiresCopy(_ fileURL: URL) -> Bool {
+        ["psd", "psb", "pxd"].contains(fileURL.pathExtension.lowercased())
     }
 
     /// Moves the file to an `.easel` name beside it and writes the
@@ -38,17 +38,12 @@ enum DocumentConversion {
             error: &coordinationError
         ) { source, target in
             do {
-                let keepsSource = keepsOriginal(source)
-                if !keepsSource {
-                    try FileManager.default.moveItem(at: source, to: target)
-                }
+                try FileManager.default.moveItem(at: source, to: target)
                 coordinator.item(at: source, didMoveTo: target)
                 // After the move, so the document reading it back already
                 // knows it by its new type. A package is a folder, so the
                 // picture moved there is replaced outright.
-                if !keepsSource {
-                    try FileManager.default.removeItem(at: target)
-                }
+                try FileManager.default.removeItem(at: target)
                 try wrapper.write(to: target, options: .atomic, originalContentsURL: nil)
             } catch {
                 failure = error
@@ -56,6 +51,24 @@ enum DocumentConversion {
         }
         if let error = coordinationError ?? failure { throw error }
         return destination
+    }
+
+    /// Points the open document at a copy already saved elsewhere, as though
+    /// the original had moved there, leaving the original untouched.
+    ///
+    /// Off the main actor, for the same reason as `convert`.
+    @concurrent
+    static func adopt(copyAt destination: URL, of url: URL) async throws {
+        let coordinator = NSFileCoordinator()
+        var coordinationError: NSError?
+        coordinator.coordinate(
+            writingItemAt: url, options: .forMoving,
+            writingItemAt: destination, options: [],
+            error: &coordinationError
+        ) { source, target in
+            coordinator.item(at: source, didMoveTo: target)
+        }
+        if let coordinationError { throw coordinationError }
     }
 
     /// `name.easel`, or `name 2.easel` and upwards when that is taken.

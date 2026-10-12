@@ -21,19 +21,16 @@ struct DocumentConversionTests {
         #expect(!FileManager.default.fileExists(atPath: picture.path))
     }
 
-    /// Nothing edited in a Pixelmator or large Photoshop file can be saved
-    /// back to it, so the original stays beside the Easel image.
-    @Test func pixelmatorAndLargePhotoshopFilesAreKept() async throws {
-        let folder = try folder()
-        defer { try? FileManager.default.removeItem(at: folder) }
-        for name in ["Sketch.pxd", "Poster.psb"] {
-            let original = folder.appending(path: name)
-            let contents = Data(name.utf8)
-            try contents.write(to: original)
-            let easel = try await DocumentConversion.convert(fileAt: original, composition: .blank())
-            #expect(easel.pathExtension == "easel")
-            #expect(try CompositionArchive.composition(from: FileWrapper(url: easel)).size == Composition.blank().size)
-            #expect(try Data(contentsOf: original) == contents)
+    /// Photoshop and Pixelmator Pro files are saved as an Easel copy
+    /// before they are edited, rather than converted where they lie.
+    @Test func photoshopAndPixelmatorFilesRequireACopy() {
+        for name in ["Sketch.pxd", "Poster.psb", "Layers.PSD"] {
+            let url = URL(filePath: "/tmp/\(name)")
+            #expect(DocumentConversion.requiresCopy(url))
+            #expect(!DocumentConversion.canConvert(url))
+        }
+        for name in ["Photo.png", "Photo.jpg", "Painting.easel"] {
+            #expect(!DocumentConversion.requiresCopy(URL(filePath: "/tmp/\(name)")))
         }
     }
 }
