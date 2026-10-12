@@ -596,6 +596,10 @@ S = {
 "LayerFilter.UnsharpMask": ("Unsharp Mask", "アンシャープマスク", "언샵 마스크", "USM 锐化", "遮色片銳利化調整"),
 "LayerFilter.HighPass": ("High Pass", "ハイパス", "하이 패스", "高反差保留", "顏色快調"),
 "LayerFilters.Radius": ("Radius", "半径", "반경", "半径", "強度"),
+"LayerFilter.Twirl": ("Twirl", "渦巻き", "소용돌이", "旋转扭曲", "旋轉扭曲"),
+"LayerFilter.Pinch": ("Pinch", "つまむ", "핀치", "挤压", "擠壓"),
+"LayerFilter.Emboss": ("Emboss", "エンボス", "엠보스", "浮雕", "浮雕"),
+"LayerFilter.Halftone": ("Halftone", "ハーフトーン", "하프톤", "半调", "半色調"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

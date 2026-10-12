@@ -15,6 +15,14 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case unsharpMask
         /// Keeps only the fine detail, on grey, for blending over a copy.
         case highPass
+        /// Swirls the picture round a point.
+        case twirl
+        /// Pinches the picture in towards a point, or bulges it out.
+        case pinch
+        /// Grey relief, as if pressed into metal.
+        case emboss
+        /// Printed in dots of cyan, magenta, yellow and black.
+        case halftone
 
         var id: String { rawValue }
 
@@ -25,6 +33,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             [.levels, .curves, .colorBalance, .gradientMap],
             [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic],
             [.unsharpMask, .highPass, .lensCorrection],
+            [.twirl, .pinch, .emboss, .halftone],
         ]
 
         var label: String {
@@ -47,6 +56,10 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .lensCorrection: return String(localized: "LayerFilter.LensCorrection")
             case .unsharpMask: return String(localized: "LayerFilter.UnsharpMask")
             case .highPass: return String(localized: "LayerFilter.HighPass")
+            case .twirl: return String(localized: "LayerFilter.Twirl")
+            case .pinch: return String(localized: "LayerFilter.Pinch")
+            case .emboss: return String(localized: "LayerFilter.Emboss")
+            case .halftone: return String(localized: "LayerFilter.Halftone")
             }
         }
 
@@ -70,6 +83,10 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .lensCorrection: return "camera.metering.center.weighted"
             case .unsharpMask: return "triangle"
             case .highPass: return "waveform.path"
+            case .twirl: return "tornado"
+            case .pinch: return "arrow.down.right.and.arrow.up.left.circle"
+            case .emboss: return "square.stack.3d.down.forward"
+            case .halftone: return "circle.grid.3x3"
             }
         }
 
@@ -77,7 +94,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// middle; the rest run from nothing to full strength.
         var amountRange: ClosedRange<Double> {
             switch self {
-            case .saturation, .brightness, .contrast, .lensCorrection: return -1...1
+            case .saturation, .brightness, .contrast, .lensCorrection, .twirl, .pinch: return -1...1
             default: return 0...1
             }
         }
@@ -93,6 +110,10 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .lensCorrection: return 0
             case .unsharpMask: return 0.5
             case .highPass: return 0.2
+            case .twirl: return 0.5
+            case .pinch: return 0.4
+            case .emboss: return 0.6
+            case .halftone: return 0.3
             }
         }
 
@@ -100,10 +121,10 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// also be adjustment layers changing everything beneath them.
         var isPerPixel: Bool { Self.groups[0].contains(self) || Self.groups[1].contains(self) }
 
-        var hasAngle: Bool { self == .motionBlur }
+        var hasAngle: Bool { [.motionBlur, .emboss, .halftone].contains(self) }
         /// Filters set with their own controls rather than one amount.
         var hasAmount: Bool { ![.levels, .curves, .colorBalance, .lensCorrection].contains(self) }
-        var hasCenter: Bool { self == .zoomBlur }
+        var hasCenter: Bool { [.zoomBlur, .twirl, .pinch].contains(self) }
         /// How far round each pixel a filter looks, set apart from its amount.
         var hasRadius: Bool { self == .unsharpMask }
     }
