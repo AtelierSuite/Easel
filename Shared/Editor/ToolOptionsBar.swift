@@ -234,6 +234,14 @@ struct ToolOptionsBar: View {
                         value: $state.selectionTolerance, label: "Options.Tolerance",
                         valueText: "\(Int((state.selectionTolerance * 100).rounded()))%"
                     )
+                    GlassIconButton(
+                        symbol: state.selectsContiguously ? "point.3.connected.trianglepath.dotted" : "circle.grid.cross",
+                        label: state.selectsContiguously ? "Select.Contiguous" : "Select.Anywhere",
+                        isOn: !state.selectsContiguously
+                    ) {
+                        state.selectsContiguously.toggle()
+                    }
+                    .accessibilityIdentifier("selectContiguous")
                 }
             }
             GlassGroup(scrollsHorizontally: true) {
@@ -911,6 +919,7 @@ struct SelectionMenuItems: View {
         Section {
             Button("Select.All", systemImage: "selection.pin.in.out") { state.selectAll() }
             Button("Select.Subject", systemImage: "person.and.background.dotted") { state.selectObject(at: nil) }
+            Button("Select.ColorRange", systemImage: "eyedropper.halffull") { state.selectColorRange(state.color) }
             Button("Select.Deselect", systemImage: "xmark.square") { state.deselect() }
                 .disabled(!hasSelection)
             Button("Select.Invert", systemImage: "square.on.square.intersection.dashed") { state.invertSelection() }

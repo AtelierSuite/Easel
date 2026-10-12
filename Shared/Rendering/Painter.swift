@@ -139,8 +139,30 @@ enum Painter {
         return region
     }
 
+    /// Every pixel close in colour to `target` — premultiplied bytes, as
+    /// layers keep them — wherever it is: fully within `tolerance`, fading
+    /// out over as much again, so the selection's edge is soft.
+    static func colorRange(
+        in pixels: PixelBuffer, target: (red: Double, green: Double, blue: Double, alpha: Double), tolerance: Double
+    ) -> [UInt8] {
+        let threshold = max(1, min(max(tolerance, 0), 1) * 255)
+        var region = [UInt8](repeating: 0, count: pixels.width * pixels.height)
+        pixels.bytes.withUnsafeBufferPointer { bytes in
+            for index in region.indices {
+                let offset = index * 4
+                let difference = max(
+                    abs(Double(bytes[offset]) - target.red), abs(Double(bytes[offset + 1]) - target.green),
+                    abs(Double(bytes[offset + 2]) - target.blue), abs(Double(bytes[offset + 3]) - target.alpha)
+                )
+                let coverage = min(max(2 - difference / threshold, 0), 1)
+                region[index] = UInt8((coverage * 255).rounded())
+            }
+        }
+        return region
+    }
+
     /// The colour as premultiplied Display P3 bytes, the layout layers use.
-    private static func premultipliedBytes(of color: RGBAColor) -> (red: Double, green: Double, blue: Double, alpha: Double) {
+    static func premultipliedBytes(of color: RGBAColor) -> (red: Double, green: Double, blue: Double, alpha: Double) {
         let converted = color.cgColor.converted(to: Bitmap.colorSpace, intent: .defaultIntent, options: nil)
         let components = converted?.components ?? [color.red, color.green, color.blue, color.alpha]
         let alpha = min(max(components[3], 0), 1)

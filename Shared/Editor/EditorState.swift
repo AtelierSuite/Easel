@@ -97,6 +97,9 @@ final class EditorState {
     var pendingSelectionEdit: SelectionEdit?
     /// How different a colour may be and still be picked by magic select.
     var selectionTolerance = 0.15
+    /// Whether magic select picks only the run of colour touching the tap,
+    /// or that colour anywhere in the picture.
+    var selectsContiguously = true
     /// The picture's edges, for magnetic select to cling to; worked out
     /// when a magnetic drag starts.
     @ObservationIgnored var edgeMap: EdgeMap?

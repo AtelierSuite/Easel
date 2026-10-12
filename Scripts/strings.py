@@ -606,6 +606,9 @@ S = {
 "LayerFilters.Lightness": ("Lightness", "輝度", "밝기", "亮度", "明度"),
 "LayerFilters.ReplaceSource": ("Color to Replace", "置き換える色", "대체할 색상", "要替换的颜色", "要取代的顏色"),
 "LayerFilters.Fuzziness": ("Fuzziness", "許容量", "허용량", "颜色容差", "朦朧"),
+"Select.Contiguous": ("Touching Color Only", "隣接する色のみ", "인접한 색상만", "仅连续颜色", "僅相連的顏色"),
+"Select.Anywhere": ("This Color Anywhere", "同じ色をすべて", "모든 곳의 같은 색상", "所有相同颜色", "所有相同顏色"),
+"Select.ColorRange": ("Select Brush Color", "ブラシカラーを選択", "브러시 색상 선택", "选择画笔颜色", "選取筆刷顏色"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

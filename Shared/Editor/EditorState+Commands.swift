@@ -613,20 +613,45 @@ extension EditorState {
             return
         }
         let tolerance = selectionTolerance
+        let contiguous = selectsContiguously
         enqueue({ () -> SelectionMask? in
-            Self.colourRegion(in: composition, at: point, tolerance: tolerance)
+            Self.colourRegion(in: composition, at: point, tolerance: tolerance, contiguous: contiguous)
         }, apply: { [weak self] mask in
             self?.select(Selection(shape: .mask(mask)))
         })
     }
 
-    /// The pixels around `point` close in colour to it.
-    nonisolated static func colourRegion(in composition: Composition, at point: CGPoint, tolerance: Double) -> SelectionMask? {
+    /// The pixels around `point` close in colour to it, or, not
+    /// `contiguous`, every pixel in the picture close to it.
+    nonisolated static func colourRegion(
+        in composition: Composition, at point: CGPoint, tolerance: Double, contiguous: Bool = true
+    ) -> SelectionMask? {
         guard let pixels = Bitmap.pixels(of: CompositionRenderer.render(composition)) else { return nil }
         let x = min(max(Int(point.x), 0), pixels.width - 1)
         let y = min(max(Int(point.y), 0), pixels.height - 1)
-        let region = Painter.floodRegion(in: pixels, seedX: x, seedY: y, tolerance: tolerance)
+        let region: [UInt8]
+        if contiguous {
+            region = Painter.floodRegion(in: pixels, seedX: x, seedY: y, tolerance: tolerance)
+        } else {
+            let offset = (y * pixels.width + x) * 4
+            let target = (red: Double(pixels.bytes[offset]), green: Double(pixels.bytes[offset + 1]),
+                          blue: Double(pixels.bytes[offset + 2]), alpha: Double(pixels.bytes[offset + 3]))
+            region = Painter.colorRange(in: pixels, target: target, tolerance: tolerance)
+        }
         return SelectionMask(bytes: region, width: pixels.width, height: pixels.height)
+    }
+
+    /// Selects every part of the picture close to `color`, wherever it is.
+    func selectColorRange(_ color: RGBAColor) {
+        let composition = composition
+        let tolerance = selectionTolerance
+        enqueue({ () -> SelectionMask? in
+            guard let pixels = Bitmap.pixels(of: CompositionRenderer.render(composition)) else { return nil }
+            let region = Painter.colorRange(in: pixels, target: Painter.premultipliedBytes(of: color), tolerance: tolerance)
+            return SelectionMask(bytes: region, width: pixels.width, height: pixels.height)
+        }, apply: { [weak self] mask in
+            self?.select(Selection(shape: .mask(mask)))
+        })
     }
 }
 

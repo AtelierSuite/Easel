@@ -104,3 +104,38 @@ struct SelectionOperationTests {
         #expect(coverage(state.selection, x: 35, y: 5) == 255)
     }
 }
+
+@Suite("Selecting by colour range")
+struct ColorRangeTests {
+    /// Red, blue, red in three columns.
+    private func stripes() -> Composition {
+        let size = CGSize(width: 30, height: 10)
+        let image = Bitmap.render(size: size) { context in
+            context.setFillColor(RGBAColor(red: 1, green: 0, blue: 0).cgColor)
+            context.fill(CGRect(x: 0, y: 0, width: 30, height: 10))
+            context.setFillColor(RGBAColor(red: 0, green: 0, blue: 1).cgColor)
+            context.fill(CGRect(x: 10, y: 0, width: 10, height: 10))
+        }
+        return Composition(size: size, layers: [Layer(name: "Stripes", image: LayerImage(image), canvasSize: size)])
+    }
+
+    @Test func contiguousStopsAtOtherColours() throws {
+        let mask = try #require(EditorState.colourRegion(in: stripes(), at: CGPoint(x: 2, y: 2), tolerance: 0.1))
+        #expect(mask.bytes[5 * 30 + 25] == 0)
+    }
+
+    @Test func anywherePicksTheColourAcrossTheWholePicture() throws {
+        let mask = try #require(EditorState.colourRegion(in: stripes(), at: CGPoint(x: 2, y: 2), tolerance: 0.1, contiguous: false))
+        #expect(mask.bytes[5 * 30 + 2] == 255)
+        #expect(mask.bytes[5 * 30 + 25] == 255)
+        #expect(mask.bytes[5 * 30 + 15] == 0)
+    }
+
+    @Test func colourRangesHaveSoftEdges() {
+        let pixels = PixelBuffer(width: 3, height: 1, bytes: [255, 0, 0, 255, 230, 0, 0, 255, 128, 0, 0, 255])
+        let region = Painter.colorRange(in: pixels, target: (255, 0, 0, 255), tolerance: 0.08)
+        #expect(region[0] == 255)
+        #expect(region[1] > 0 && region[1] < 255)
+        #expect(region[2] == 0)
+    }
+}
