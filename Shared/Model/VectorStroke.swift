@@ -193,7 +193,22 @@ extension VectorPath {
     }
 
     private func drawArrowhead(_ head: VectorStrokeStyle.Arrowhead, atStart: Bool, in context: CGContext, color: RGBAColor) {
-        guard head != .none else { return }
+        guard let shape = arrowhead(head, atStart: atStart) else { return }
+        context.saveGState()
+        context.setFillColor(color.cgColor)
+        context.setStrokeColor(color.cgColor)
+        context.setLineWidth(strokeWidth)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.addPath(shape.path)
+        if shape.isFilled { context.fillPath() } else { context.strokePath() }
+        context.restoreGState()
+    }
+
+    /// An arrowhead's outline at one end of an open path, and whether it is
+    /// filled or drawn as a line the stroke's width.
+    func arrowhead(_ head: VectorStrokeStyle.Arrowhead, atStart: Bool) -> (path: CGPath, isFilled: Bool)? {
+        guard head != .none, !isClosed, nodes.count > 1 else { return nil }
         let tip = atStart ? nodes[0] : nodes[nodes.count - 1]
         let neighbour = atStart ? nodes[1] : nodes[nodes.count - 2]
         // Pointing out of the line, along its last stretch.
@@ -206,28 +221,24 @@ extension VectorPath {
         let p = tip.point
         let back = CGPoint(x: p.x - dx * size, y: p.y - dy * size)
         let side = CGVector(dx: -dy * size * 0.55, dy: dx * size * 0.55)
-        context.saveGState()
-        context.setFillColor(color.cgColor)
-        context.setStrokeColor(color.cgColor)
-        context.setLineWidth(strokeWidth)
-        context.setLineCap(.round)
-        context.setLineJoin(.round)
+        let path = CGMutablePath()
         switch head {
-        case .none: break
+        case .none:
+            return nil
         case .triangle:
-            context.addLines(between: [p, CGPoint(x: back.x + side.dx, y: back.y + side.dy), CGPoint(x: back.x - side.dx, y: back.y - side.dy)])
-            context.closePath()
-            context.fillPath()
+            path.addLines(between: [p, CGPoint(x: back.x + side.dx, y: back.y + side.dy), CGPoint(x: back.x - side.dx, y: back.y - side.dy)])
+            path.closeSubpath()
+            return (path, true)
         case .open:
-            context.addLines(between: [CGPoint(x: back.x + side.dx, y: back.y + side.dy), p, CGPoint(x: back.x - side.dx, y: back.y - side.dy)])
-            context.strokePath()
+            path.addLines(between: [CGPoint(x: back.x + side.dx, y: back.y + side.dy), p, CGPoint(x: back.x - side.dx, y: back.y - side.dy)])
+            return (path, false)
         case .circle:
             let radius = size * 0.4
-            context.fillEllipse(in: CGRect(x: p.x - radius, y: p.y - radius, width: radius * 2, height: radius * 2))
+            path.addEllipse(in: CGRect(x: p.x - radius, y: p.y - radius, width: radius * 2, height: radius * 2))
+            return (path, true)
         case .bar:
-            context.addLines(between: [CGPoint(x: p.x + side.dx, y: p.y + side.dy), CGPoint(x: p.x - side.dx, y: p.y - side.dy)])
-            context.strokePath()
+            path.addLines(between: [CGPoint(x: p.x + side.dx, y: p.y + side.dy), CGPoint(x: p.x - side.dx, y: p.y - side.dy)])
+            return (path, false)
         }
-        context.restoreGState()
     }
 }

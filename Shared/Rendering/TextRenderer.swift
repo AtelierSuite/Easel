@@ -80,6 +80,16 @@ enum TextRenderer {
     /// its outline and its background, with a little room so italics and
     /// descenders are not clipped.
     static func render(_ text: TextContent) -> CGImage {
+        let size = imageSize(for: text)
+        return Bitmap.render(size: size) { draw(text, in: $0, size: size) }
+    }
+
+    /// The size of the image `render` draws, room round the words and all.
+    static func imageSize(for text: TextContent) -> CGSize {
+        layout(for: text).size
+    }
+
+    private static func layout(for text: TextContent) -> (string: NSAttributedString, size: CGSize, padding: CGFloat, outlineWidth: Double) {
         let string = attributedString(for: text)
         let boxWidth = text.boxWidth.map { max($0, 1) }
         var bounds = string.boundingRect(
@@ -96,30 +106,36 @@ enum TextRenderer {
             width: min(ceil(bounds.width) + padding * 2, CGFloat(Bitmap.maximumDimension)),
             height: min(ceil(bounds.height) + padding * 2, CGFloat(Bitmap.maximumDimension))
         )
+        return (string, size, padding, outlineWidth)
+    }
+
+    /// Draws the text, its outline and background into `context`, which is
+    /// set up with y running down over a rectangle of `size` — the image's,
+    /// or a page's when the words go into a PDF as words.
+    static func draw(_ text: TextContent, in context: CGContext, size: CGSize) {
+        let (string, _, padding, outlineWidth) = layout(for: text)
         let textRect = CGRect(x: padding, y: padding, width: size.width - padding * 2, height: size.height - padding * 2)
-        return Bitmap.render(size: size) { context in
-            UIGraphicsPushContext(context)
-            if let background = text.background {
-                let box = CGRect(origin: .zero, size: size)
-                let radius = min(box.width, box.height) / 2 * min(max(background.cornerRadius, 0), 1)
-                context.setFillColor(background.color.cgColor)
-                context.addPath(CGPath(roundedRect: box, cornerWidth: radius, cornerHeight: radius, transform: nil))
-                context.fillPath()
-            }
-            if let outline = text.outline {
-                // Stroked first and filled over, so the outline sits wholly
-                // outside the letters. A stroke width is a percentage of the
-                // font size and straddles the edge, hence the doubling.
-                let stroked = NSMutableAttributedString(attributedString: string)
-                stroked.addAttributes([
-                    .strokeColor: UIColor(cgColor: outline.color.cgColor),
-                    .strokeWidth: outlineWidth * 2 / max(text.fontSize, 1) * 100,
-                ], range: NSRange(location: 0, length: stroked.length))
-                context.setLineJoin(.round)
-                stroked.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
-            }
-            string.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
-            UIGraphicsPopContext()
+        UIGraphicsPushContext(context)
+        if let background = text.background {
+            let box = CGRect(origin: .zero, size: size)
+            let radius = min(box.width, box.height) / 2 * min(max(background.cornerRadius, 0), 1)
+            context.setFillColor(background.color.cgColor)
+            context.addPath(CGPath(roundedRect: box, cornerWidth: radius, cornerHeight: radius, transform: nil))
+            context.fillPath()
         }
+        if let outline = text.outline {
+            // Stroked first and filled over, so the outline sits wholly
+            // outside the letters. A stroke width is a percentage of the
+            // font size and straddles the edge, hence the doubling.
+            let stroked = NSMutableAttributedString(attributedString: string)
+            stroked.addAttributes([
+                .strokeColor: UIColor(cgColor: outline.color.cgColor),
+                .strokeWidth: outlineWidth * 2 / max(text.fontSize, 1) * 100,
+            ], range: NSRange(location: 0, length: stroked.length))
+            context.setLineJoin(.round)
+            stroked.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        }
+        string.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        UIGraphicsPopContext()
     }
 }

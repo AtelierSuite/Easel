@@ -75,6 +75,9 @@ enum ImageAutomation {
             return try ImageCodec.encode(image, as: format.contentType, quality: quality)
         case .psd, .easel:
             return try PSDWriter.data(for: Composition(image: image, name: String(localized: "Layer.DefaultName.Background")))
+        case .svg:
+            return SVGWriter.data(for: Composition(image: image, name: String(localized: "Layer.DefaultName.Background")))
+
         }
     }
 

@@ -6335,6 +6335,41 @@
         }
       }
     },
+    "Export.SVG": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SVG (Vectors)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SVG（ベクター）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SVG(벡터)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SVG（矢量）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SVG（向量）"
+          }
+        }
+      }
+    },
     "Export.SaveToPhotos": {
       "extractionState": "manual",
       "localizations": {
