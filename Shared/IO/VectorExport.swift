@@ -53,7 +53,7 @@ enum VectorExportItem {
 extension VectorPath {
     /// Whether a vector file can draw the path as it is, without pixels.
     var isExpressibleAsVector: Bool {
-        text == nil && (fillGradient.map { [.linear, .radial, .reflected].contains($0.kind) } ?? true)
+        text == nil && fillPattern == nil && (fillGradient.map { [.linear, .radial, .reflected].contains($0.kind) } ?? true)
     }
 }
 

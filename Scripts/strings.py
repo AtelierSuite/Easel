@@ -683,6 +683,8 @@ S = {
 "Pattern.Diagonal": ("Diagonal Lines", "斜線", "사선", "斜线", "斜線"),
 "Pattern.Waves": ("Waves", "波", "물결", "波浪", "波浪"),
 "History.Patterns": ("Patterns", "パターン", "패턴", "图案", "圖樣"),
+"Options.PatternFill": ("Pattern Fill", "パターンで塗りつぶし", "패턴 채우기", "图案填充", "圖樣填色"),
+"Options.NoPattern": ("No Pattern", "パターンなし", "패턴 없음", "无图案", "無圖樣"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

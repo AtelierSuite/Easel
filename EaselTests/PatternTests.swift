@@ -44,3 +44,34 @@ struct PatternTests {
         #expect(TestImages.isRed(read.patterns[0].image.cgImage, x: 1, y: 1))
     }
 }
+
+@Suite("Pattern fills on shapes")
+struct VectorPatternTests {
+    private func square(_ pattern: PatternChoice) -> Layer {
+        var path = VectorPath.shape(ShapeSpec(kind: .rectangle, start: .zero, end: CGPoint(x: 48, y: 48), isFilled: true,
+                                              lineWidth: 1, color: .black))[0]
+        path.fillPattern = pattern
+        return Layer.vector([path], name: "Square")
+    }
+
+    @Test func aShapeFillsWithTiles() {
+        var checker = PatternChoice(preset: .checker)
+        checker.color = RGBAColor(red: 1, green: 0, blue: 0)
+        let image = square(checker).image.cgImage
+        #expect(TestImages.isRed(image, x: 4, y: 4))
+        #expect(TestImages.isClear(image, x: 16, y: 4))
+    }
+
+    @Test func aPicturesTileTravelsWithTheShape() {
+        let swatch = PatternSwatch(name: "Blue", image: LayerImage(TestImages.solid(RGBAColor(red: 0, green: 0, blue: 1), width: 8, height: 8)))
+        let carried = PatternChoice(preset: nil, swatchID: swatch.id).carryingTile(from: [swatch])
+        #expect(carried.tileData != nil)
+        #expect(TestImages.isBlue(square(carried).image.cgImage, x: 20, y: 20))
+    }
+
+    @Test func svgDrawsPatternedShapesAsPixels() throws {
+        let composition = Composition(size: CGSize(width: 48, height: 48), layers: [square(PatternChoice(preset: .dots))])
+        let svg = try #require(String(data: SVGWriter.data(for: composition), encoding: .utf8))
+        #expect(svg.contains("data:image/png"))
+    }
+}

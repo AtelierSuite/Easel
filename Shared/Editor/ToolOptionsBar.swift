@@ -475,6 +475,38 @@ struct ToolOptionsBar: View {
                     } else {
                         VectorColorWell(color: fill) { color in state.updateVectorStyle { $0.fill = color } }
                     }
+                    GlassMenuButton(symbol: path.fillPattern?.preset?.symbolName ?? "square.grid.3x3", label: "Options.PatternFill") {
+                        Button("Options.NoPattern", systemImage: "square.fill") {
+                            state.updateVectorStyle { $0.fillPattern = nil }
+                        }
+                        Section("Pattern.BuiltIn") {
+                            ForEach(PatternChoice.Preset.allCases) { preset in
+                                Button {
+                                    state.updateVectorStyle { path in
+                                        path.fillPattern = PatternChoice(preset: preset, color: path.fill ?? state.color)
+                                        path.fillGradient = nil
+                                    }
+                                } label: {
+                                    Label(LocalizedStringKey(preset.labelKey), systemImage: preset.symbolName)
+                                }
+                            }
+                        }
+                        if !state.composition.patterns.isEmpty {
+                            Section("Pattern.Document") {
+                                ForEach(state.composition.patterns) { swatch in
+                                    Button(swatch.name, systemImage: "photo") {
+                                        let pattern = PatternChoice(preset: nil, swatchID: swatch.id)
+                                            .carryingTile(from: state.composition.patterns)
+                                        state.updateVectorStyle { path in
+                                            path.fillPattern = pattern
+                                            path.fillGradient = nil
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("vectorPatternFill")
                     GlassIconButton(
                         symbol: "circle.lefthalf.striped.horizontal", label: "Options.GradientFill",
                         isOn: path.fillGradient != nil
@@ -482,6 +514,7 @@ struct ToolOptionsBar: View {
                         state.updateVectorStyle { path in
                             path.fillGradient = path.fillGradient == nil
                                 ? PaintGradient(kind: state.gradientKind, stops: state.gradientStopsShown) : nil
+                            if path.fillGradient != nil { path.fillPattern = nil }
                         }
                     }
                     .accessibilityIdentifier("vectorGradientFill")

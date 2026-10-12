@@ -28,11 +28,23 @@ struct PatternChoice: Codable, Hashable, Sendable {
     var color: RGBAColor = .black
     /// How large each tile is, as a multiple of its own size.
     var scale = 1.0
+    /// A picture's own tile carried along as PNG, for shapes that are drawn
+    /// without the picture's swatches to hand.
+    var tileData: Data?
 
     /// The tile at its own size, or nil if its swatch is gone.
     func tile(in swatches: [PatternSwatch]) -> CGImage? {
         if let preset { return Self.presetTile(preset, color: color) }
-        return swatches.first { $0.id == swatchID }?.image.cgImage
+        if let swatch = swatches.first(where: { $0.id == swatchID }) { return swatch.image.cgImage }
+        return tileData.flatMap { try? ImageCodec.decode($0) }
+    }
+
+    /// The same pattern, carrying its tile with it if it is the picture's own.
+    func carryingTile(from swatches: [PatternSwatch]) -> PatternChoice {
+        guard preset == nil, let swatch = swatches.first(where: { $0.id == swatchID }) else { return self }
+        var copy = self
+        copy.tileData = try? swatch.image.pngData()
+        return copy
     }
 
     static let presetSize = 24.0

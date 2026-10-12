@@ -36,6 +36,8 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
     /// Which way the gradient runs across the path, in degrees
     /// anticlockwise from rightwards.
     var gradientAngle: Double?
+    /// Fills the path with a repeating tile instead of its fill colour.
+    var fillPattern: PatternChoice?
     var stroke: RGBAColor?
     var strokeWidth: Double
     /// Dashes, ends, arrowheads and the like; nil for a plain round line.
