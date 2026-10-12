@@ -20,6 +20,7 @@ enum RetouchEffect {
     static func image(_ kind: Stroke.Kind, settings: BrushSettings, of image: CGImage) -> CGImage {
         if case .clone(let offset) = kind { return shifted(image, by: offset) }
         if kind == .mosaic { return mosaic(image, cell: mosaicCell(for: settings)) }
+        if case .tone(let tone) = kind { return toned(image, tone, settings: settings) }
         return ImageProcessing.apply({ input in
             switch kind {
             case .blur:
@@ -33,7 +34,7 @@ enum RetouchEffect {
                 filter.radius = Float(blurRadius(for: settings))
                 filter.angle = Float(angle * .pi / 180)
                 return filter.outputImage ?? input
-            case .paint, .erase, .heal, .clone, .mosaic:
+            case .paint, .erase, .heal, .clone, .mosaic, .tone:
                 return input
             }
         }, to: image)
@@ -41,6 +42,36 @@ enum RetouchEffect {
 }
 
 extension RetouchEffect {
+    /// The image as a toning brush at full strength leaves it; the brush's
+    /// opacity decides how much of that each stroke lays down.
+    static func toned(_ image: CGImage, _ tone: ToneKind, settings: BrushSettings) -> CGImage {
+        ImageProcessing.apply({ input in
+            switch tone {
+            case .dodge, .burn:
+                let filter = CIFilter.exposureAdjust()
+                filter.inputImage = input
+                filter.ev = tone == .dodge ? 0.6 : -0.6
+                return filter.outputImage ?? input
+            case .saturate, .desaturate:
+                let filter = CIFilter.colorControls()
+                filter.inputImage = input
+                filter.saturation = tone == .saturate ? 1.6 : 0.4
+                return filter.outputImage ?? input
+            case .sharpen:
+                let filter = CIFilter.unsharpMask()
+                filter.inputImage = input.clampedToExtent()
+                filter.radius = Float(1 + settings.size * 0.03)
+                filter.intensity = 0.8
+                return filter.outputImage ?? input
+            case .soften:
+                let filter = CIFilter.gaussianBlur()
+                filter.inputImage = input.clampedToExtent()
+                filter.radius = Float(1 + settings.size * 0.05)
+                return filter.outputImage ?? input
+            }
+        }, to: image)
+    }
+
     /// The image in square tiles, each the average of everything it covers.
     /// Shrunk so a tile becomes one pixel, then blown back up unsmoothed:
     /// sampling one pixel per tile instead would lose thin lines such as

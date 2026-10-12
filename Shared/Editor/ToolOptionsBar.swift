@@ -24,6 +24,9 @@ struct ToolOptionsBar: View {
         case .censor:
             censorOptions
             brushOptions
+        case .tone:
+            toneOptions
+            brushOptions
         case .clone:
             brushOptions
             cloneOptions
@@ -38,6 +41,20 @@ struct ToolOptionsBar: View {
         case .shape: shapeOptions
         case .pen: penOptions
         case .nodes: nodeOptions
+        }
+    }
+
+    private var toneOptions: some View {
+        GlassGroup(scrollsHorizontally: true) {
+            GlassMenuButton(symbol: state.toneKind.symbolName, label: "Tone.Type") {
+                Picker("Tone.Type", selection: $state.toneKind) {
+                    ForEach(ToneKind.allCases) { kind in
+                        Label(kind.label, systemImage: kind.symbolName).tag(kind)
+                            .accessibilityIdentifier("tone.type.\(kind.rawValue)")
+                    }
+                }
+            }
+            .accessibilityIdentifier("tone.type")
         }
     }
 

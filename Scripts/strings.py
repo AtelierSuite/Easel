@@ -577,6 +577,14 @@ S = {
 "Text.Selection.Clear": ("Clear Character Styling", "文字のスタイルを消去", "문자 스타일 지우기", "清除字符样式", "清除字元樣式"),
 "Text.Underline": ("Underline", "下線", "밑줄", "下划线", "底線"),
 "Common.Done": ("Done", "完了", "완료", "完成", "完成"),
+"Tool.Tone": ("Tone", "トーン", "톤", "色调", "色調"),
+"Tone.Type": ("Tone Brush", "トーンブラシ", "톤 브러시", "色调画笔", "色調筆刷"),
+"Tone.Dodge": ("Dodge", "覆い焼き", "닷지", "减淡", "加亮"),
+"Tone.Burn": ("Burn", "焼き込み", "번", "加深", "加深"),
+"Tone.Saturate": ("Saturate", "彩度を上げる", "채도 증가", "加色", "增加飽和度"),
+"Tone.Desaturate": ("Desaturate", "彩度を下げる", "채도 감소", "去色", "降低飽和度"),
+"Tone.Sharpen": ("Sharpen", "シャープ", "선명하게", "锐化", "銳利化"),
+"Tone.Soften": ("Blur", "ぼかし", "흐리게", "模糊", "模糊"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

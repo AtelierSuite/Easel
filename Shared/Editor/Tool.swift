@@ -7,6 +7,8 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     case transform
     case brush, eraser, fill, gradient, eyedropper
     case censor, heal
+    /// Dodges, burns, saturates, sharpens or softens where it is dragged.
+    case tone
     /// Pushes the picture along a drag as if it were soft.
     case liquify
     /// Paints with pixels copied from another part of the layer.
@@ -24,7 +26,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     static let groups: [[Tool]] = [
         [.move, .transform, .select, .crop],
         [.brush, .eraser, .fill, .gradient, .eyedropper],
-        [.liquify, .censor, .heal, .clone],
+        [.liquify, .censor, .tone, .heal, .clone],
         [.text, .shape, .pen, .nodes],
     ]
 
@@ -40,6 +42,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         case .gradient: return "circle.lefthalf.striped.horizontal"
         case .eyedropper: return "eyedropper"
         case .censor: return "square.grid.3x3.fill"
+        case .tone: return "circle.lefthalf.filled.inverse"
         case .heal: return "bandage"
         case .liquify: return "hand.draw"
         case .clone: return "square.on.square.dashed"
@@ -65,6 +68,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         case .gradient: return "Tool.Gradient"
         case .eyedropper: return "Tool.Eyedropper"
         case .censor: return "Tool.Censor"
+        case .tone: return "Tool.Tone"
         case .heal: return "Tool.Heal"
         case .liquify: return "Tool.Liquify"
         case .clone: return "Tool.Clone"
@@ -89,6 +93,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         case .gradient: return "d"
         case .eyedropper: return "i"
         case .censor: return "r"
+        case .tone: return "o"
         case .heal: return "j"
         case .liquify: return "l"
         case .clone: return "k"
@@ -103,7 +108,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     /// visible and unlocked.
     var paintsPixels: Bool {
         switch self {
-        case .brush, .eraser, .fill, .gradient, .liquify, .censor, .heal, .clone: return true
+        case .brush, .eraser, .fill, .gradient, .liquify, .censor, .tone, .heal, .clone: return true
         default: return false
         }
     }
@@ -111,7 +116,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     /// Brushes that change what is already there rather than adding colour.
     var isRetouch: Bool {
         switch self {
-        case .liquify, .censor, .heal, .clone: return true
+        case .liquify, .censor, .tone, .heal, .clone: return true
         default: return false
         }
     }
@@ -119,7 +124,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
     /// Tools that are dragged like a brush and leave a stroke.
     var usesStrokes: Bool {
         switch self {
-        case .brush, .eraser, .censor, .heal, .clone: return true
+        case .brush, .eraser, .censor, .tone, .heal, .clone: return true
         default: return false
         }
     }
@@ -246,6 +251,35 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
         switch self {
         case .layers, .adjustments, .filters, .effects, .looks, .text, .history: return true
         case .imageSize: return false
+        }
+    }
+}
+
+/// What the Tone tool does where it is dragged.
+enum ToneKind: String, CaseIterable, Identifiable, Sendable {
+    case dodge, burn, saturate, desaturate, sharpen, soften
+
+    var id: String { rawValue }
+
+    var label: LocalizedStringKey {
+        switch self {
+        case .dodge: return "Tone.Dodge"
+        case .burn: return "Tone.Burn"
+        case .saturate: return "Tone.Saturate"
+        case .desaturate: return "Tone.Desaturate"
+        case .sharpen: return "Tone.Sharpen"
+        case .soften: return "Tone.Soften"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .dodge: return "sun.max"
+        case .burn: return "flame"
+        case .saturate: return "drop.fill"
+        case .desaturate: return "drop"
+        case .sharpen: return "triangle"
+        case .soften: return "aqi.medium"
         }
     }
 }

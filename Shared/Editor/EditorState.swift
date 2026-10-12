@@ -42,6 +42,11 @@ final class EditorState {
     }
     /// Motion blur direction in degrees.
     var censorAngle = 0.0
+    /// For the Tone tool, opacity is how much each stroke does.
+    var toneBrush = BrushSettings(size: 80, opacity: 0.3, softness: 0.6, usesPressure: false)
+    var toneKind: ToneKind = .dodge {
+        didSet { if toneKind != oldValue { retouchEffect = nil } }
+    }
     var isSmudging: Bool { tool == .censor && censorKind == .smudge }
     var healBrush = BrushSettings(size: 40, softness: 0.3, usesPressure: false)
     var cloneBrush = BrushSettings(size: 60, softness: 0.4, usesPressure: false)
@@ -291,6 +296,7 @@ final class EditorState {
         scaled(&eraser)
         scaled(&liquifyBrush)
         scaled(&censorBrush)
+        scaled(&toneBrush)
         scaled(&healBrush)
         scaled(&cloneBrush)
         shapeLineWidth = (shapeLineWidth * factor).rounded()
@@ -506,6 +512,7 @@ final class EditorState {
             case .eraser: return eraser
             case .liquify: return liquifyBrush
             case .censor: return censorBrush
+            case .tone: return toneBrush
             case .heal: return healBrush
             case .clone: return cloneBrush
             default: return brush
@@ -516,6 +523,7 @@ final class EditorState {
             case .eraser: eraser = newValue
             case .liquify: liquifyBrush = newValue
             case .censor: censorBrush = newValue
+            case .tone: toneBrush = newValue
             case .heal: healBrush = newValue
             case .clone: cloneBrush = newValue
             default: brush = newValue
@@ -544,6 +552,7 @@ final class EditorState {
             case .smudge: return .paint
             }
         case .heal: return .heal
+        case .tone: return .tone(toneKind)
         case .clone: return .clone(offset: cloneOffset ?? .zero)
         default: return .paint
         }
@@ -596,7 +605,7 @@ final class EditorState {
             return
         }
         switch tool {
-        case .brush, .eraser, .censor, .heal, .clone:
+        case .brush, .eraser, .censor, .tone, .heal, .clone:
             guard paintingBlocker() == nil else { return }
             // Started beside the ruler, the whole stroke runs along it.
             dockedEdge = rulerEdge(near: point)
@@ -617,7 +626,7 @@ final class EditorState {
                 )
                 return
             }
-            if tool == .censor || tool == .clone { prepareRetouchEffect() }
+            if tool == .censor || tool == .clone || tool == .tone { prepareRetouchEffect() }
             activeStroke = Stroke(
                 points: [StrokePoint(location: point, pressure: pressure, azimuth: azimuth, altitude: altitude, time: time)],
                 settings: currentBrush, kind: strokeKind, clip: selection
@@ -678,7 +687,7 @@ final class EditorState {
             return
         }
         switch tool {
-        case .brush, .eraser, .censor, .heal, .clone:
+        case .brush, .eraser, .censor, .tone, .heal, .clone:
             guard let edge = dockedEdge else {
                 activeStroke?.points.append(contentsOf: points)
                 return
@@ -776,7 +785,7 @@ final class EditorState {
                 return
             }
             finishSmudge()
-        case .brush, .eraser, .censor, .heal, .clone:
+        case .brush, .eraser, .censor, .tone, .heal, .clone:
             dockedEdge = nil
             if let blocker = paintingBlocker(), isTap {
                 errorMessage = blocker
@@ -1147,7 +1156,7 @@ final class EditorState {
             switch stroke.kind {
             case .paint, .erase:
                 return Painter.paint(stroke, onto: image)
-            case .blur, .mosaic, .motionBlur, .clone:
+            case .blur, .mosaic, .motionBlur, .clone, .tone:
                 let effect = prepared.flatMap { $0.matches(stroke, source: image) ? $0.image : nil }
                     ?? RetouchEffect.image(stroke.kind, settings: stroke.settings, of: image)
                 return Painter.apply(effect, onto: image, through: stroke)

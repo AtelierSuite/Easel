@@ -113,6 +113,8 @@ struct Stroke: Equatable, Sendable {
         case motionBlur(angle: Double)
         /// The layer's own pixels, from `offset` away, painted through.
         case clone(offset: CGVector)
+        /// Lightened, darkened, more or less colourful, sharper or softer.
+        case tone(ToneKind)
 
         /// Whether the stroke lays down the brush's colour or takes away;
         /// the rest are masks.
@@ -153,14 +155,15 @@ struct Stroke: Equatable, Sendable {
     /// The same stroke, laying down solid white: the shape of a mask. For
     /// the retouching brushes, strength is how much they do, not how see-
     /// through the stroke is, so the mask is opaque. A clone keeps its
-    /// opacity: the copy goes down as see-through as the brush.
+    /// opacity: the copy goes down as see-through as the brush; so does a
+    /// toning stroke, whose strength builds up stroke by stroke.
     var asMask: Stroke {
         var mask = self
         mask.kind = .paint
         mask.settings.color = .white
         switch kind {
         case .blur, .mosaic, .motionBlur, .heal: mask.settings.opacity = 1
-        case .paint, .erase, .clone: break
+        case .paint, .erase, .clone, .tone: break
         }
         return mask
     }
