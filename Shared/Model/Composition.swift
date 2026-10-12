@@ -19,6 +19,8 @@ struct Composition: Equatable, Sendable {
     var swatches: [RGBAColor] = []
     /// Pattern tiles made from the picture, to fill with again.
     var patterns: [PatternSwatch] = []
+    /// Saved arrangements of the layers; see `LayerComp`.
+    var layerComps: [LayerComp] = []
 
     static let defaultSize = CGSize(width: 2048, height: 1536)
 

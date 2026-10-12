@@ -38,6 +38,7 @@ enum CompositionArchive {
         var guides: [Guide]?
         var swatches: [RGBAColor]?
         var patterns: [PatternRecord]?
+        var layerComps: [LayerComp]?
     }
 
     struct PatternRecord: Codable {
@@ -176,7 +177,8 @@ enum CompositionArchive {
             groups: composition.groups.isEmpty ? nil : composition.groups,
             guides: composition.guides.isEmpty ? nil : composition.guides,
             swatches: composition.swatches.isEmpty ? nil : composition.swatches,
-            patterns: patterns.isEmpty ? nil : patterns
+            patterns: patterns.isEmpty ? nil : patterns,
+            layerComps: composition.layerComps.isEmpty ? nil : composition.layerComps
         )
     }
 
@@ -220,6 +222,7 @@ enum CompositionArchive {
         )
         composition.guides = manifest.guides ?? []
         composition.swatches = manifest.swatches ?? []
+        composition.layerComps = manifest.layerComps ?? []
         composition.patterns = try (manifest.patterns ?? []).map { record in
             guard let data = read(record.file) else { throw Failure.missingLayer(record.file) }
             return PatternSwatch(id: record.id, name: record.name, image: LayerImage(try ImageCodec.decode(data), encoded: data))

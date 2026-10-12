@@ -693,6 +693,14 @@ S = {
 "Trace.BlackAndWhite": ("Black and White", "白黒", "흑백", "黑白", "黑白"),
 "Trace.Colors %lld": ("%lld Colors", "%lld色", "%lld색", "%lld 种颜色", "%lld 種顏色"),
 "Trace.LayerName %@": ("%@ (Traced)", "%@（トレース）", "%@(추적됨)", "%@（描摹）", "%@（描圖）"),
+"Panel.Comps.Title": ("Layer Comps", "レイヤーカンプ", "레이어 구성", "图层复合", "圖層構圖"),
+"Comps.DefaultName": ("Comp", "カンプ", "구성", "复合", "構圖"),
+"Comps.Add": ("Save Current Layers", "現在のレイヤーを保存", "현재 레이어 저장", "存储当前图层", "儲存目前圖層"),
+"Comps.Update": ("Update to Current Layers", "現在のレイヤーで更新", "현재 레이어로 업데이트", "更新为当前图层", "更新為目前圖層"),
+"Comps.Rename": ("Rename Comp", "カンプの名前を変更", "구성 이름 변경", "重命名复合", "重新命名構圖"),
+"Comps.Export": ("Export Each Comp", "各カンプを書き出す", "각 구성 내보내기", "导出每个复合", "輸出每個構圖"),
+"Comps.Footer": ("A comp remembers which layers show, where they sit and how they blend. Tap one to bring it back.", "カンプはレイヤーの表示、位置、描画モードを記憶します。タップすると元に戻ります。", "구성은 표시되는 레이어, 위치 및 혼합 방식을 기억합니다. 탭하여 되돌리십시오.", "复合会记住哪些图层可见、它们的位置以及混合方式。轻点即可恢复。", "構圖會記住哪些圖層可見、位置及混合方式。點一下即可恢復。"),
+"History.Comps": ("Layer Comps", "レイヤーカンプ", "레이어 구성", "图层复合", "圖層構圖"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

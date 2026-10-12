@@ -12,6 +12,7 @@ enum HistoryNaming {
             if old.guides != new.guides { return String(localized: "History.Guides") }
             if old.swatches != new.swatches { return String(localized: "History.Swatches") }
             if old.patterns != new.patterns { return String(localized: "History.Patterns") }
+            if old.layerComps != new.layerComps { return String(localized: "History.Comps") }
             return String(localized: "History.Groups")
         }
         let changed = zip(old.layers, new.layers).filter { $0 != $1 }

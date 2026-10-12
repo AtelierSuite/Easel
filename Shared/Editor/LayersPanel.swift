@@ -370,6 +370,7 @@ private struct LayerRow: View {
 /// Adding, copying and combining layers.
 struct LayerActionsBar: View {
     @Bindable var state: EditorState
+    @Environment(\.panelPlacement) fileprivate var placement
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var isPickingPhotos = false
 
@@ -431,6 +432,8 @@ struct LayerActionsBar: View {
                             .disabled(active == nil)
                         Button("Layers.Flatten", systemImage: "square.3.layers.3d.down.right") { state.flatten() }
                             .disabled(state.composition.layers.count < 2)
+                        Button("Panel.Comps.Title", systemImage: EditorPanel.comps.symbolName) { openComps() }
+                            .accessibilityIdentifier("layerComps")
                     }
                 }
             }
@@ -444,6 +447,21 @@ struct LayerActionsBar: View {
                 state.addImageLayers(result.images)
                 if result.failed { state.errorMessage = String(localized: "Error.ImportFailed") }
             }
+        }
+    }
+}
+
+extension LayerActionsBar {
+    /// On iPhone, the layers sheet goes down before the comps one comes up.
+    private func openComps() {
+        guard placement == .sheet else {
+            state.presentedPanel = .comps
+            return
+        }
+        state.presentedPanel = nil
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            state.presentedPanel = .comps
         }
     }
 }

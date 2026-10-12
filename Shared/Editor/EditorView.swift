@@ -226,6 +226,7 @@ struct EditorView<Actions: View>: View {
         case .text: TextPanel(state: state)
         case .imageSize: CanvasSizePanel(state: state)
         case .history: HistoryPanel(history: history, state: state)
+        case .comps: LayerCompsPanel(state: state)
         }
     }
 

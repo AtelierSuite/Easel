@@ -245,6 +245,8 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
     case imageSize
     /// The steps taken, to go back to.
     case history
+    /// Saved arrangements of the layers.
+    case comps
 
     var id: String { rawValue }
 
@@ -258,6 +260,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
         case .text: return "Panel.Text.Title"
         case .imageSize: return "Panel.ImageSize.Title"
         case .history: return "Panel.History.Title"
+        case .comps: return "Panel.Comps.Title"
         }
     }
 
@@ -271,6 +274,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
         case .text: return "textformat"
         case .imageSize: return "arrow.up.left.and.arrow.down.right"
         case .history: return "clock.arrow.circlepath"
+        case .comps: return "square.stack.3d.forward.dottedline"
         }
     }
 
@@ -278,7 +282,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
     /// they stop at half height and the canvas moves into the top half.
     var keepsCanvasVisible: Bool {
         switch self {
-        case .layers, .adjustments, .filters, .effects, .looks, .text, .history: return true
+        case .layers, .adjustments, .filters, .effects, .looks, .text, .history, .comps: return true
         case .imageSize: return false
         }
     }
