@@ -38,7 +38,15 @@ extension EditorState {
     func updateVector(_ layerID: Layer.ID, _ change: (inout VectorContent) -> Void) {
         update { composition in
             guard var layer = composition[layerID], var content = layer.vector else { return }
+            let before = content
             change(&content)
+            // Points moved by hand make a live shape a plain path.
+            for index in content.paths.indices where index < before.paths.count {
+                let old = before.paths[index]
+                if content.paths[index].nodes != old.nodes, content.paths[index].liveShape == old.liveShape {
+                    content.paths[index].liveShape = nil
+                }
+            }
             layer.setVector(content)
             composition[layerID] = layer
         }

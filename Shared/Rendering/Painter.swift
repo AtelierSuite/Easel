@@ -174,14 +174,17 @@ enum Painter {
 /// A shape drawn with the shape tool, which becomes a layer of its own.
 struct ShapeSpec: Equatable, Sendable {
     enum Kind: String, CaseIterable, Identifiable, Codable, Sendable {
-        case rectangle, ellipse, line, arrow
+        case rectangle, roundedRectangle, ellipse, polygon, star, line, arrow
 
         var id: String { rawValue }
 
         var symbolName: String {
             switch self {
             case .rectangle: return "rectangle"
+            case .roundedRectangle: return "app"
             case .ellipse: return "circle"
+            case .polygon: return "hexagon"
+            case .star: return "star"
             case .line: return "line.diagonal"
             case .arrow: return "arrow.up.right"
             }
@@ -190,14 +193,27 @@ struct ShapeSpec: Equatable, Sendable {
         var label: String {
             switch self {
             case .rectangle: return String(localized: "Shape.Rectangle")
+            case .roundedRectangle: return String(localized: "Shape.RoundedRectangle")
             case .ellipse: return String(localized: "Shape.Ellipse")
+            case .polygon: return String(localized: "Shape.Polygon")
+            case .star: return String(localized: "Shape.Star")
             case .line: return String(localized: "Shape.Line")
             case .arrow: return String(localized: "Shape.Arrow")
             }
         }
 
         /// Lines have no inside to fill.
-        var canFill: Bool { self == .rectangle || self == .ellipse }
+        var canFill: Bool { self != .line && self != .arrow }
+
+        /// The kind of live shape it makes, if its settings stay editable.
+        var liveKind: LiveShape.Kind? {
+            switch self {
+            case .roundedRectangle: return .roundedRectangle
+            case .polygon: return .polygon
+            case .star: return .star
+            default: return nil
+            }
+        }
     }
 
     var kind: Kind
@@ -206,6 +222,14 @@ struct ShapeSpec: Equatable, Sendable {
     var isFilled: Bool
     var lineWidth: Double
     var color: RGBAColor
+    var cornerRadius = 24.0
+    var sides = 6
+    var innerRatio = 0.45
+
+    /// The live shape it makes, for the kinds that keep their settings.
+    var liveShape: LiveShape? {
+        kind.liveKind.map { LiveShape(kind: $0, rect: rect, cornerRadius: cornerRadius, sides: sides, innerRatio: innerRatio) }
+    }
 
     var rect: CGRect {
         CGRect(x: min(start.x, end.x), y: min(start.y, end.y), width: abs(end.x - start.x), height: abs(end.y - start.y))
@@ -217,6 +241,10 @@ struct ShapeSpec: Equatable, Sendable {
     var path: CGPath {
         let path = CGMutablePath()
         switch kind {
+        case .roundedRectangle, .polygon, .star:
+            if let live = liveShape {
+                return VectorPath(nodes: live.nodes, isClosed: true, fill: nil, stroke: nil, strokeWidth: 0).cgPath
+            }
         case .rectangle:
             path.addRect(rect)
         case .ellipse:

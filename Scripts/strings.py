@@ -643,6 +643,14 @@ S = {
 "Stroke.Profile.TaperStart": ("Taper Start", "始点を細く", "시작 가늘게", "起点渐细", "起點漸細"),
 "Stroke.Profile.TaperEnd": ("Taper End", "終点を細く", "끝 가늘게", "终点渐细", "終點漸細"),
 "Stroke.Profile.Bulge": ("Bulge", "膨らみ", "부풀리기", "凸起", "凸起"),
+"Shape.Kind": ("Shape", "シェイプ", "모양", "形状", "形狀"),
+"Shape.RoundedRectangle": ("Rounded Rectangle", "角丸長方形", "둥근 사각형", "圆角矩形", "圓角矩形"),
+"Shape.Polygon": ("Polygon", "多角形", "다각형", "多边形", "多邊形"),
+"Shape.Star": ("Star", "スター", "별", "星形", "星形"),
+"Shape.CornerRadius": ("Corner Radius", "角の半径", "모서리 반경", "圆角半径", "圓角半徑"),
+"Shape.Sides": ("Sides", "辺の数", "변", "边数", "邊數"),
+"Shape.Points": ("Points", "頂点の数", "꼭짓점", "角数", "角數"),
+"Shape.InnerRadius": ("Inner Radius", "内側の半径", "내부 반경", "内半径", "內半徑"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

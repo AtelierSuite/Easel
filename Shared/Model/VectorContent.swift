@@ -42,6 +42,8 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
     var strokeStyle: VectorStrokeStyle?
     /// Words set along the path, following its curve.
     var text: PathText?
+    /// The shape it was drawn as, while its settings can still be changed.
+    var liveShape: LiveShape?
 
     var cgPath: CGPath {
         let path = CGMutablePath()
@@ -67,6 +69,8 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
         var copy = self
         copy.nodes = nodes.map(change)
         copy.extraContours = extraContours?.map { $0.map(change) }
+        // Bent out of its box, it is no longer that shape.
+        copy.liveShape = nil
         return copy
     }
 
@@ -88,7 +92,16 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
     }
 
     func offset(by delta: CGPoint) -> VectorPath {
-        mappingNodes { $0.offset(by: delta) }
+        var moved = mappingNodes { $0.offset(by: delta) }
+        moved.liveShape = liveShape?.offset(by: delta)
+        return moved
+    }
+
+    /// Draws the live shape again from its settings.
+    mutating func rebuildLiveShape() {
+        guard let liveShape else { return }
+        nodes = liveShape.nodes
+        isClosed = true
     }
 
     /// Where the fill gradient's line runs: across the whole path for a
@@ -148,7 +161,14 @@ extension VectorPath {
             VectorPath(nodes: nodes, isClosed: closed, fill: fill, stroke: stroke, strokeWidth: spec.lineWidth)
         }
         let rect = spec.rect
+        if let live = spec.liveShape {
+            var shape = path(live.nodes, closed: true)
+            shape.liveShape = live
+            return [shape]
+        }
         switch spec.kind {
+        case .roundedRectangle, .polygon, .star:
+            return []
         case .rectangle:
             return [path([
                 VectorNode(point: CGPoint(x: rect.minX, y: rect.minY)), VectorNode(point: CGPoint(x: rect.maxX, y: rect.minY)),

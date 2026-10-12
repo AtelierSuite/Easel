@@ -382,6 +382,20 @@ struct ToolOptionsBar: View {
         }
     }
 
+    /// One of the picked path's live shape settings, redrawing the shape
+    /// as it changes.
+    private func liveBinding<Value>(_ keyPath: WritableKeyPath<LiveShape, Value>) -> Binding<Value> {
+        Binding(
+            get: { (state.styledVectorPath?.liveShape ?? LiveShape(kind: .polygon, rect: .zero))[keyPath: keyPath] },
+            set: { value in
+                state.updateVectorStyle { path in
+                    path.liveShape?[keyPath: keyPath] = value
+                    path.rebuildLiveShape()
+                }
+            }
+        )
+    }
+
     @ViewBuilder
     private var nodeOptions: some View {
         if state.styledVectorPath != nil {
@@ -474,6 +488,16 @@ struct ToolOptionsBar: View {
                     )
                 }
             }
+            if let live = path.liveShape {
+                GlassGroup(scrollsHorizontally: true) {
+                    LiveShapeControls(
+                        kind: live.kind,
+                        cornerRadius: liveBinding(\.cornerRadius),
+                        sides: liveBinding(\.sides),
+                        innerRatio: liveBinding(\.innerRatio)
+                    )
+                }
+            }
             if state.canCombineShapes {
                 GlassGroup(scrollsHorizontally: true) {
                     GlassMenuButton(symbol: "square.on.square.squareshape.controlhandles", label: "Vector.Combine") {
@@ -527,12 +551,19 @@ struct ToolOptionsBar: View {
     private var shapeOptions: some View {
         Group {
             GlassGroup(scrollsHorizontally: true) {
-                ForEach(ShapeSpec.Kind.allCases) { kind in
-                    GlassIconButton(symbol: kind.symbolName, title: kind.label, isOn: state.shapeKind == kind) {
-                        state.shapeKind = kind
+                GlassMenuButton(symbol: state.shapeKind.symbolName, label: "Shape.Kind") {
+                    Picker("Shape.Kind", selection: $state.shapeKind) {
+                        ForEach(ShapeSpec.Kind.allCases) { kind in
+                            Label(kind.label, systemImage: kind.symbolName).tag(kind)
+                                .accessibilityIdentifier("shapeKind.\(kind.rawValue)")
+                        }
                     }
-                    .accessibilityIdentifier("shapeKind.\(kind.rawValue)")
                 }
+                .accessibilityIdentifier("shapeKind")
+                LiveShapeControls(
+                    kind: state.shapeKind.liveKind, cornerRadius: $state.shapeCornerRadius,
+                    sides: $state.shapeSides, innerRatio: $state.shapeInnerRatio
+                )
             }
             GlassGroup(scrollsHorizontally: true) {
                 ColorWell(state: state)
@@ -956,6 +987,34 @@ struct SelectionMenuItems: View {
         Section {
             Button("Select.CropToSelection", systemImage: "crop") { state.cropToSelection() }
                 .disabled(!hasSelection)
+        }
+    }
+}
+
+/// The settings a live shape keeps: corner radius, sides or points, and
+/// how deep a star's points go.
+private struct LiveShapeControls: View {
+    let kind: LiveShape.Kind?
+    @Binding var cornerRadius: Double
+    @Binding var sides: Int
+    @Binding var innerRatio: Double
+
+    var body: some View {
+        switch kind {
+        case .roundedRectangle:
+            OptionSlider(value: $cornerRadius, range: 0...400, label: "Shape.CornerRadius", valueText: "\(Int(cornerRadius.rounded())) px")
+                .accessibilityIdentifier("shapeCornerRadius")
+        case .polygon, .star:
+            OptionSlider(
+                value: Binding(get: { Double(sides) }, set: { sides = Int($0.rounded()) }), range: 3...16,
+                label: kind == .star ? "Shape.Points" : "Shape.Sides", valueText: "\(sides)"
+            )
+            .accessibilityIdentifier("shapeSides")
+            if kind == .star {
+                OptionSlider(value: $innerRatio, range: 0.1...0.95, label: "Shape.InnerRadius", valueText: "\(Int((innerRatio * 100).rounded()))%")
+            }
+        case nil:
+            EmptyView()
         }
     }
 }

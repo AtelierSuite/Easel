@@ -90,6 +90,9 @@ final class EditorState {
     var shapeKind: ShapeSpec.Kind = .rectangle
     var shapeIsFilled = false
     var shapeLineWidth = 12.0
+    var shapeCornerRadius = 24.0
+    var shapeSides = 6
+    var shapeInnerRatio = 0.45
     var selectionKind: SelectionKind = .rectangle
     /// How a new selection meets the one already there.
     var selectionMode: SelectionMode = .replace
@@ -691,7 +694,8 @@ final class EditorState {
         case .shape:
             draftShape = ShapeSpec(
                 kind: shapeKind, start: point, end: point, isFilled: shapeIsFilled,
-                lineWidth: shapeLineWidth, color: color
+                lineWidth: shapeLineWidth, color: color, cornerRadius: shapeCornerRadius, sides: shapeSides,
+                innerRatio: shapeInnerRatio
             )
         case .gradient:
             guard paintingBlocker() == nil else { return }
