@@ -53,6 +53,30 @@ struct TextPanel: View {
                         ),
                         valueText: "\(Int(text.fontSize.rounded())) px"
                     )
+                    LabeledSlider(
+                        label: "Text.Tracking",
+                        value: Binding(
+                            get: { text.tracking ?? 0 },
+                            set: { value in state.updateText { $0.tracking = abs(value) < 0.005 ? nil : value } }
+                        ),
+                        range: -0.2...1,
+                        valueText: "\(Int(((text.tracking ?? 0) * 1000).rounded()))"
+                    )
+                    .accessibilityIdentifier("textTracking")
+                    LabeledSlider(
+                        label: "Text.LineSpacing",
+                        value: Binding(
+                            get: { text.lineSpacing ?? 1 },
+                            set: { value in state.updateText { $0.lineSpacing = abs(value - 1) < 0.01 ? nil : value } }
+                        ),
+                        range: 0.6...3,
+                        valueText: String(format: "%.2f×", text.lineSpacing ?? 1)
+                    )
+                    .accessibilityIdentifier("textLineSpacing")
+                    Toggle("Text.Kerning", isOn: Binding(
+                        get: { text.usesKerning ?? true },
+                        set: { value in state.updateText { $0.usesKerning = value ? nil : false } }
+                    ))
                     ColorPicker(
                         "Text.Color",
                         selection: Binding(

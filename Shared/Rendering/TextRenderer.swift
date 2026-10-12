@@ -41,11 +41,16 @@ enum TextRenderer {
         let color = UIColor(
             red: text.color.red, green: text.color.green, blue: text.color.blue, alpha: text.color.alpha
         )
+        if let lineSpacing = text.lineSpacing { paragraph.lineHeightMultiple = max(lineSpacing, 0.1) }
         // An empty layer still needs a line's height to be found and tapped.
         let string = text.string.isEmpty ? " " : text.string
-        return NSAttributedString(string: string, attributes: [
+        var attributes: [NSAttributedString.Key: Any] = [
             .font: font(for: text), .foregroundColor: color, .paragraphStyle: paragraph,
-        ])
+        ]
+        if let tracking = text.tracking { attributes[.tracking] = tracking * text.fontSize }
+        // A kern of zero turns the font's pair kerning off.
+        if text.usesKerning == false { attributes[.kern] = 0 }
+        return NSAttributedString(string: string, attributes: attributes)
     }
 
     /// The text drawn on a transparent image just large enough to hold it,

@@ -283,6 +283,13 @@ struct TextContent: Codable, Equatable, Sendable {
     var fontSize: Double
     var color: RGBAColor
     var alignment: Alignment = .center
+    /// Extra room between every letter, as a fraction of the font size;
+    /// negative draws them together.
+    var tracking: Double?
+    /// The height of each line, as a multiple of the font's own.
+    var lineSpacing: Double?
+    /// Whether the font's own spacing for pairs of letters is used.
+    var usesKerning: Bool?
     /// A line drawn around each letter; nil for none. Optional so files
     /// saved before outlines existed still open.
     var outline: Outline?

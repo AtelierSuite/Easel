@@ -564,6 +564,9 @@ S = {
 "Options.GradientFill": ("Gradient Fill", "グラデーションで塗りつぶし", "그레이디언트 채우기", "渐变填充", "漸層填色"),
 "Text.Font": ("Font", "フォント", "서체", "字体", "字體"),
 "Text.Font.System": ("System Font", "システムフォント", "시스템 서체", "系统字体", "系統字體"),
+"Text.Tracking": ("Tracking", "トラッキング", "자간", "字距", "字距"),
+"Text.LineSpacing": ("Line Spacing", "行間", "행간", "行距", "行距"),
+"Text.Kerning": ("Font Kerning", "フォントのカーニング", "서체 커닝", "字体字偶间距", "字體字距微調"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]
