@@ -2,8 +2,8 @@ import CoreGraphics
 import Foundation
 
 /// Writes a composition as a Photoshop document: one pixel layer per layer,
-/// with its name, opacity, blend mode, visibility and mask, groups as layer
-/// folders, and the flattened picture for apps that read only that.
+/// with its name, opacity, blend mode, clipping, visibility and mask, groups
+/// as layer folders, and the flattened picture for apps that read only that.
 ///
 /// Text, vectors and filters are written as the pixels they show, so the
 /// file looks the same in Photoshop; they are not editable there.
@@ -148,7 +148,7 @@ enum PSDWriter {
         header.ascii("8BIM")
         header.ascii(blendKey(layer.blendMode))
         header.uint8(Int((min(max(layer.opacity, 0), 1) * 255).rounded()))
-        header.uint8(0)
+        header.uint8(layer.isClipped ? 1 : 0)
         header.uint8(layer.isVisible ? 0 : 2)
         header.uint8(0)
 

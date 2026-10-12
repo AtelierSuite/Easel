@@ -6,9 +6,9 @@ import zlib
 /// Reads Photoshop documents (`.psd`, and large `.psb`) into layers.
 ///
 /// Each pixel layer comes in with its placement, opacity, blend mode,
-/// visibility, name and mask. Group folders are flattened into the stack —
-/// their layers keep their order — and adjustment, type and smart-object
-/// layers come in as the pixels Photoshop saved for them. A file with no
+/// clipping, visibility, name and mask. Group folders are flattened into the
+/// stack — their layers keep their order — and adjustment, type and
+/// smart-object layers come in as the pixels Photoshop saved for them. A file with no
 /// layer data opens as its flattened picture.
 enum PSDReader {
     enum Failure: LocalizedError {
@@ -112,6 +112,7 @@ enum PSDReader {
         var blendKey = "norm"
         var opacity = 255
         var isHidden = false
+        var isClipped = false
         var name = ""
         var isGroupBoundary = false
         /// 1 or 2: a group folder's own record, above its layers; 3: the
@@ -196,6 +197,7 @@ enum PSDReader {
                 layer.mask = makeMask(maskRecord, plane: planes[-2], layer: record)
             }
             layer.groupID = open.last
+            layer.isClipped = record.isClipped
             layers.append(layer)
         }
         return (layers, groups)
@@ -216,7 +218,7 @@ enum PSDReader {
         guard try reader.ascii(4) == "8BIM" else { throw Failure.damaged }
         record.blendKey = try reader.ascii(4)
         record.opacity = Int(try reader.uint8())
-        try reader.skip(1) // Clipping.
+        record.isClipped = try reader.uint8() != 0
         let flags = try reader.uint8()
         record.isHidden = flags & 0x02 != 0
         try reader.skip(1)

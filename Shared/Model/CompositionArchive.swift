@@ -51,6 +51,7 @@ enum CompositionArchive {
         var transform: LayerTransform
         var opacity: Double
         var blendMode: LayerBlendMode
+        var isClipped: Bool?
         var isVisible: Bool
         var isLocked: Bool
         var groupID: UUID?
@@ -147,7 +148,8 @@ enum CompositionArchive {
                 id: layer.id, name: layer.name, file: file, text: layer.text, vector: layer.vector,
                 filters: layer.filters.isEmpty ? nil : layer.filters,
                 maskFile: maskFile, maskEnabled: layer.mask.map(\.isEnabled), transform: layer.transform,
-                opacity: layer.opacity, blendMode: layer.blendMode, isVisible: layer.isVisible, isLocked: layer.isLocked,
+                opacity: layer.opacity, blendMode: layer.blendMode, isClipped: layer.isClipped ? true : nil,
+                isVisible: layer.isVisible, isLocked: layer.isLocked,
                 groupID: layer.groupID,
                 isBlank: layer.image.isBlank ? true : nil
             ))
@@ -190,6 +192,7 @@ enum CompositionArchive {
                 isLocked: record.isLocked
             )
             layer.groupID = record.groupID
+            layer.isClipped = record.isClipped ?? false
             return layer
         }
         var composition = Composition(

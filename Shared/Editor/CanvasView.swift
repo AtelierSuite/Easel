@@ -97,27 +97,12 @@ struct CanvasView: View {
 
     private func layerStack(_ viewport: CanvasViewport) -> some View {
         ZStack(alignment: .topLeading) {
-            ForEach(composition.displayLayers) { layer in
-                if layer.isVisible, let bent = state.transformPreview, bent.layerID == layer.id {
-                    // A layer being bent shows as it will be: lined up with
-                    // the canvas, its mask already in it.
-                    LayerView(
-                        layer: Self.canvasAligned(layer, image: bent.image, canvasSize: composition.size),
-                        displayed: bent.image, preview: nil, strokes: [], maskStrokes: [], retouch: nil,
-                        canvasSize: composition.size, viewport: viewport, displayScale: displayScale
-                    )
-                } else if layer.isVisible {
-                    LayerView(
-                        layer: layer,
-                        displayed: state.displayImage(for: layer),
-                        preview: state.layerPreview?.layerID == layer.id ? state.layerPreview?.image : nil,
-                        strokes: strokes(on: layer.id, mask: false),
-                        maskStrokes: strokes(on: layer.id, mask: true),
-                        retouch: retouch(on: layer.id),
-                        canvasSize: composition.size,
-                        viewport: viewport,
-                        displayScale: displayScale
-                    )
+            ForEach(composition.displayLayers.clippingUnits) { unit in
+                let clipped = unit.clipped.filter(\.isVisible)
+                if unit.base.isVisible, clipped.isEmpty {
+                    layerView(unit.base, viewport)
+                } else if unit.base.isVisible {
+                    clippingGroup(unit.base, clipped: clipped, viewport)
                 }
             }
         }
@@ -130,6 +115,51 @@ struct CanvasView: View {
                 .offset(x: viewport.canvasFrame.minX, y: viewport.canvasFrame.minY)
         }
         .allowsHitTesting(false)
+    }
+
+    /// One layer as it shows, with whatever is being done to it.
+    @ViewBuilder
+    private func layerView(_ layer: Layer, _ viewport: CanvasViewport) -> some View {
+        if let bent = state.transformPreview, bent.layerID == layer.id {
+            // A layer being bent shows as it will be: lined up with the
+            // canvas, its mask already in it.
+            LayerView(
+                layer: Self.canvasAligned(layer, image: bent.image, canvasSize: composition.size),
+                displayed: bent.image, preview: nil, strokes: [], maskStrokes: [], retouch: nil,
+                canvasSize: composition.size, viewport: viewport, displayScale: displayScale
+            )
+        } else {
+            LayerView(
+                layer: layer,
+                displayed: state.displayImage(for: layer),
+                preview: state.layerPreview?.layerID == layer.id ? state.layerPreview?.image : nil,
+                strokes: strokes(on: layer.id, mask: false),
+                maskStrokes: strokes(on: layer.id, mask: true),
+                retouch: retouch(on: layer.id),
+                canvasSize: composition.size,
+                viewport: viewport,
+                displayScale: displayScale
+            )
+        }
+    }
+
+    /// A base and the layers clipped to it, as `CompositionRenderer` draws
+    /// them: the base made opaque, the clipped layers mixed over it, all cut
+    /// back to the base's shape and put down as the base would be.
+    private func clippingGroup(_ base: Layer, clipped: [Layer], _ viewport: CanvasViewport) -> some View {
+        let plain = base.with(opacity: 1, blendMode: .normal)
+        return ZStack(alignment: .topLeading) {
+            layerView(plain, viewport)
+                .colorEffect(ShaderLibrary.opaqueColor())
+            ForEach(clipped) { layer in
+                layerView(layer, viewport)
+            }
+        }
+        .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
+        .compositingGroup()
+        .mask(alignment: .topLeading) { layerView(plain, viewport) }
+        .opacity(base.opacity)
+        .blendMode(base.blendMode.swiftUI)
     }
 
     /// `layer` showing `image`, a shrunk copy of the whole canvas, instead

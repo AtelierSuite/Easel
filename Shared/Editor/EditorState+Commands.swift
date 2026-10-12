@@ -64,6 +64,12 @@ extension EditorState {
         update { $0[id]?.isLocked = isLocked }
     }
 
+    /// Clips the layer to the one beneath it, or lets it go.
+    func setClipped(_ isClipped: Bool, of id: Layer.ID) {
+        guard !isClipped || read().canClip(id) else { return }
+        update { $0[id]?.isClipped = isClipped }
+    }
+
     func rename(_ id: Layer.ID, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }

@@ -1,4 +1,6 @@
 import CoreGraphics
+import CoreImage
+import CoreImage.CIFilterBuiltins
 
 /// Flattens layers into one image, the way the canvas shows them.
 enum CompositionRenderer {
@@ -18,14 +20,62 @@ enum CompositionRenderer {
 
     /// Draws the layers into a context already set up in canvas coordinates.
     static func draw(_ layers: [Layer], in context: CGContext) {
-        for layer in layers where layer.isVisible && layer.opacity > 0 {
+        for unit in layers.clippingUnits where unit.base.isVisible && unit.base.opacity > 0 {
+            let clipped = unit.clipped.filter { $0.isVisible && $0.opacity > 0 }
+            guard !clipped.isEmpty else {
+                draw(unit.base, image: unit.base.renderedImage, in: context)
+                continue
+            }
+            // The base at full opacity with the clipped layers mixed over
+            // it, cut back to the base's shape, then put down as the base
+            // would be.
+            let base = unit.base
             context.saveGState()
-            context.setAlpha(layer.opacity)
-            context.setBlendMode(layer.blendMode.cgBlendMode)
-            context.concatenate(layer.affineTransform)
-            Bitmap.draw(layer.renderedImage, in: CGRect(origin: .zero, size: layer.image.size), context: context)
+            context.setAlpha(base.opacity)
+            context.setBlendMode(base.blendMode.cgBlendMode)
+            context.beginTransparencyLayer(auxiliaryInfo: nil)
+            // Drawing the base's shape over the group below only cuts
+            // within the base's own edges; past them, the clip does.
+            context.addLines(between: base.corners)
+            context.closePath()
+            context.clip()
+            let shape = base.renderedImage
+            draw(base.with(opacity: 1, blendMode: .normal), image: opaque(shape), in: context)
+            for layer in clipped {
+                draw(layer, image: layer.renderedImage, in: context)
+            }
+            context.saveGState()
+            context.setBlendMode(.destinationIn)
+            context.concatenate(base.affineTransform)
+            Bitmap.draw(shape, in: CGRect(origin: .zero, size: base.image.size), context: context)
+            context.restoreGState()
+            context.endTransparencyLayer()
             context.restoreGState()
         }
+    }
+
+    private static func draw(_ layer: Layer, image: CGImage, in context: CGContext) {
+        context.saveGState()
+        context.setAlpha(layer.opacity)
+        context.setBlendMode(layer.blendMode.cgBlendMode)
+        context.concatenate(layer.affineTransform)
+        Bitmap.draw(image, in: CGRect(origin: .zero, size: layer.image.size), context: context)
+        context.restoreGState()
+    }
+
+    /// `image` with every pixel at full opacity, its colour as it was
+    /// before being faded: what clipped layers mix with, before the base's
+    /// own transparency is put back over them all.
+    static func opaque(_ image: CGImage) -> CGImage {
+        ImageProcessing.apply({ input in
+            // Colour matrices work on unpremultiplied colour, so setting
+            // alpha to one keeps each colour as it was.
+            let filter = CIFilter.colorMatrix()
+            filter.inputImage = input
+            filter.aVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+            filter.biasVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+            return filter.outputImage ?? input
+        }, to: image)
     }
 
     /// A smaller copy of the whole picture, for previews and thumbnails.

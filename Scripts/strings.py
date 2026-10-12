@@ -498,6 +498,9 @@ S = {
 "Toolbar.Redo": ("Redo", "やり直す", "실행 복귀", "重做", "重做"),
 "Toolbar.Share": ("Share", "共有", "공유", "共享", "分享"),
 "Toolbar.Undo": ("Undo", "取り消す", "실행 취소", "撤销", "還原"),
+"Layers.ClipToBelow": ("Clip to Layer Below", "下のレイヤーでクリップ", "아래 레이어에 클리핑", "剪切到下方图层", "剪裁至下方圖層"),
+"Layers.ReleaseClipping": ("Release Clipping", "クリッピングを解除", "클리핑 해제", "释放剪切", "解除剪裁"),
+"Layers.Clipped": ("Clipped to Layer Below", "下のレイヤーでクリップ中", "아래 레이어에 클리핑됨", "已剪切到下方图层", "已剪裁至下方圖層"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

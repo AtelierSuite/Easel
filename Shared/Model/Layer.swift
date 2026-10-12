@@ -22,6 +22,8 @@ struct Layer: Identifiable, Equatable, Sendable {
     var transform: LayerTransform
     var opacity: Double = 1
     var blendMode: LayerBlendMode = .normal
+    /// Shows only where the layer beneath has pixels; see `ClippingUnit`.
+    var isClipped = false
     var isVisible = true
     var isLocked = false
     /// The group the layer is in, if any.

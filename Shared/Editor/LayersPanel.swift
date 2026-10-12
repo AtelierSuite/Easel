@@ -116,6 +116,12 @@ struct LayersPanel: View {
                     get: { layer.isLocked },
                     set: { state.setLocked($0, of: layer.id) }
                 ))
+                Toggle("Layers.ClipToBelow", isOn: Binding(
+                    get: { layer.isClipped },
+                    set: { state.setClipped($0, of: layer.id) }
+                ))
+                .disabled(!layer.isClipped && !composition.canClip(layer.id))
+                .accessibilityIdentifier("clipToBelow")
                 Button {
                     openFilters()
                 } label: {
@@ -165,6 +171,14 @@ struct LayersPanel: View {
                 .disabled(composition.layers.first?.id == layer.id)
             Button("Layers.MergeDown", systemImage: "square.2.layers.3d.bottom.filled") { state.mergeDown(layer.id) }
                 .disabled(!composition.canMergeDown(layer.id))
+            if layer.isClipped {
+                Button("Layers.ReleaseClipping", systemImage: "arrow.turn.left.up") {
+                    state.setClipped(false, of: layer.id)
+                }
+            } else {
+                Button("Layers.ClipToBelow", systemImage: "arrow.turn.left.down") { state.setClipped(true, of: layer.id) }
+                    .disabled(!composition.canClip(layer.id))
+            }
             if layer.isText || layer.isVector {
                 Button("Layers.Rasterize", systemImage: "square.grid.3x3.square") { state.rasterizeLayer(layer.id) }
             }
@@ -208,6 +222,14 @@ private struct LayerRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            if layer.isClipped {
+                // Pointing down at the layer it clips to, as in Photoshop.
+                Image(systemName: "arrow.turn.left.down")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12)
+                    .accessibilityLabel("Layers.Clipped")
+            }
             let thumbnail = layer.image.thumbnail()
             ZStack {
                 Checkerboard(squareSize: 5)
