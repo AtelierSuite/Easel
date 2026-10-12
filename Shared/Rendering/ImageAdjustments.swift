@@ -2,6 +2,48 @@ import CoreGraphics
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
+/// A correction for the colour of the light a picture was taken in, as
+/// how much to scale its red, green and blue light: a picked grey comes out
+/// grey, however strong the cast, and keeps its brightness.
+struct WhiteBalance: Equatable, Sendable {
+    var red: Double
+    var green: Double
+    var blue: Double
+
+    /// The balance that makes `color` neutral. Colours are kept in
+    /// extended sRGB as they look; light adds up once made linear.
+    init(neutralizing color: RGBAColor) {
+        func linear(_ value: Double) -> Double {
+            let v = max(value, 0.0001)
+            return v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+        }
+        let r = linear(color.red), g = linear(color.green), b = linear(color.blue)
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        red = luminance / r
+        green = luminance / g
+        blue = luminance / b
+    }
+
+    init(red: Double, green: Double, blue: Double) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+    }
+
+    /// Scaled on linear sRGB, so the picture's own colour space doesn't
+    /// skew it.
+    func apply(to image: CIImage) -> CIImage {
+        let sRGB = CGColorSpace(name: CGColorSpace.linearSRGB)!
+        let filter = CIFilter.colorMatrix()
+        filter.inputImage = image.matchedFromWorkingSpace(to: sRGB) ?? image
+        filter.rVector = CIVector(x: red, y: 0, z: 0, w: 0)
+        filter.gVector = CIVector(x: 0, y: green, z: 0, w: 0)
+        filter.bVector = CIVector(x: 0, y: 0, z: blue, w: 0)
+        let scaled = filter.outputImage ?? image
+        return scaled.matchedToWorkingSpace(from: sRGB) ?? scaled
+    }
+}
+
 /// The tone and colour sliders, each at rest at zero.
 struct Adjustments: Equatable, Sendable {
     var exposure: Double = 0
@@ -19,45 +61,13 @@ struct Adjustments: Equatable, Sendable {
 
     var isIdentity: Bool { self == Adjustments() }
 
-    /// The warmth and tint that turn `color` grey, found by narrowing in on
-    /// the pair that leaves it least colourful.
-    static func neutralBalance(for color: RGBAColor) -> (temperature: Double, tint: Double) {
-        let space = CGColorSpace(name: CGColorSpace.extendedSRGB)!
-        let sample = CIImage(color: CIColor(red: color.red, green: color.green, blue: color.blue, alpha: 1, colorSpace: space)
-            ?? CIColor(red: color.red, green: color.green, blue: color.blue))
-            .cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
-        func chroma(_ temperature: Double, _ tint: Double) -> Double {
-            var adjustments = Adjustments()
-            adjustments.temperature = temperature
-            adjustments.tint = tint
-            var pixel = [Float](repeating: 0, count: 4)
-            ImageProcessing.context.render(
-                adjustments.apply(to: sample), toBitmap: &pixel, rowBytes: 16,
-                bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBAf, colorSpace: space
-            )
-            let r = Double(pixel[0]), g = Double(pixel[1]), b = Double(pixel[2])
-            let mean = (r + g + b) / 3
-            return abs(r - mean) + abs(g - mean) + abs(b - mean)
-        }
-        var best = (temperature: 0.0, tint: 0.0)
-        var span = 1.0
-        for _ in 0..<4 {
-            var bestScore = Double.infinity
-            let center = best
-            for i in -4...4 {
-                for j in -4...4 {
-                    let temperature = min(max(center.temperature + Double(i) / 4 * span, -1), 1)
-                    let tint = min(max(center.tint + Double(j) / 4 * span, -1), 1)
-                    let score = chroma(temperature, tint)
-                    if score < bestScore {
-                        bestScore = score
-                        best = (temperature, tint)
-                    }
-                }
-            }
-            span /= 4
-        }
-        return best
+    /// A white balance found by the picker, kept apart from the Warmth and
+    /// Tint sliders so it can correct casts well past their reach.
+    var balance: WhiteBalance?
+
+    /// The white balance that turns `color` grey.
+    static func neutralBalance(for color: RGBAColor) -> WhiteBalance {
+        WhiteBalance(neutralizing: color)
     }
 
     enum Key: String, CaseIterable, Identifiable, Sendable {
@@ -183,6 +193,7 @@ struct Adjustments: Equatable, Sendable {
             filter.amount = Float(vibrance)
             image = filter.outputImage ?? image
         }
+        if let balance { image = balance.apply(to: image) }
         if temperature != 0 || tint != 0 {
             let filter = CIFilter.temperatureAndTint()
             filter.inputImage = image

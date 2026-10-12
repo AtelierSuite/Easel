@@ -29,6 +29,20 @@ struct AdjustmentsPanel: View {
                     pickNeutral()
                 }
                 .accessibilityIdentifier("pickNeutral")
+                if let balance = adjustments.balance {
+                    LabeledContent("Adjust.PickedBalance") {
+                        HStack {
+                            // The picked light's colour, which it takes away.
+                            Circle()
+                                .fill(Color(red: 1 / balance.red, green: 1 / balance.green, blue: 1 / balance.blue).opacity(0.9))
+                                .frame(width: 18, height: 18)
+                            Button("Adjust.RemoveBalance", systemImage: "xmark.circle.fill") { adjustments.balance = nil }
+                                .labelStyle(.iconOnly)
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             } footer: {
                 Text("Adjust.PickNeutral.Footer")
             }
@@ -79,8 +93,7 @@ extension AdjustmentsPanel {
                 let balance = await Task.detached(priority: .userInitiated) {
                     Adjustments.neutralBalance(for: color)
                 }.value
-                adjustments.temperature = balance.temperature
-                adjustments.tint = balance.tint
+                adjustments.balance = balance
             }
         }
     }
