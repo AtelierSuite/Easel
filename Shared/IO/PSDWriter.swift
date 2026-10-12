@@ -11,7 +11,7 @@ enum PSDWriter {
     static func data(for composition: Composition) throws -> Data {
         let width = Int(composition.size.width.rounded())
         let height = Int(composition.size.height.rounded())
-        var out = Writer()
+        var out = PSDBinaryWriter()
 
         // Header: RGB, 8 bits, colour and transparency.
         out.ascii("8BPS")
@@ -25,7 +25,7 @@ enum PSDWriter {
         out.uint32(0)
 
         // Image resources: the colour profile the pixels are in.
-        var resources = Writer()
+        var resources = PSDBinaryWriter()
         if let icc = Bitmap.colorSpace.copyICCData() as Data? {
             resources.ascii("8BIM")
             resources.uint16(1039)
@@ -38,13 +38,13 @@ enum PSDWriter {
         out.bytes(resources.data)
 
         // Layers.
-        var info = Writer()
+        var info = PSDBinaryWriter()
         let records = Self.records(for: composition)
         info.int16(records.count)
         for record in records { info.bytes(record.header) }
         for record in records { info.bytes(record.channels) }
         if info.data.count % 2 != 0 { info.zeros(1) }
-        var section = Writer()
+        var section = PSDBinaryWriter()
         section.uint32(info.data.count)
         section.bytes(info.data)
         section.uint32(0) // No global mask.
@@ -96,6 +96,11 @@ enum PSDWriter {
     }
 
     private static func layerRecord(_ layer: Layer, canvasSize: CGSize) -> Record {
+        // An adjustment Photoshop has a record for is written as one, with
+        // no pixels; it may take some of its strength from the opacity.
+        let adjustment = layer.adjustment.flatMap(PSDAdjustments.blocks(for:))
+        let blocks = adjustment?.blocks ?? []
+        let opacity = layer.opacity * (adjustment?.opacity ?? 1)
         // The layer as it shows, without its mask, opacity or blend mode,
         // which are written as settings.
         var plain = layer
@@ -103,9 +108,10 @@ enum PSDWriter {
         plain.opacity = 1
         plain.blendMode = .normal
         plain.isVisible = true
-        let image = CompositionRenderer.render(layers: [plain], size: canvasSize)
-        let pixels = Bitmap.pixels(of: image)
+        let pixels = adjustment == nil ? Bitmap.pixels(of: CompositionRenderer.render(layers: [plain], size: canvasSize)) : nil
         let rect = pixels.map { opaqueBounds($0) } ?? .zero
+        // A mask over an adjustment covers the canvas; otherwise the pixels.
+        let maskRect = adjustment == nil ? rect : CGRect(origin: .zero, size: canvasSize)
 
         var channels: [(id: Int, data: [UInt8])] = []
         if let pixels, rect.width > 0 {
@@ -128,14 +134,14 @@ enum PSDWriter {
                 context.clear(CGRect(origin: .zero, size: layer.image.size))
                 Bitmap.draw(layerMask.image.cgImage, in: CGRect(origin: .zero, size: layer.image.size), context: context)
             }
-            if let maskPixels = Bitmap.pixels(of: maskImage), rect.width > 0 {
-                let alpha = planes(maskPixels, rect: rect)[3]
-                mask = (rect, channelData(alpha, width: Int(rect.width), height: Int(rect.height)), !layerMask.isEnabled)
+            if let maskPixels = Bitmap.pixels(of: maskImage), maskRect.width > 0 {
+                let alpha = planes(maskPixels, rect: maskRect)[3]
+                mask = (maskRect, channelData(alpha, width: Int(maskRect.width), height: Int(maskRect.height)), !layerMask.isEnabled)
                 channels.append((-2, mask!.data))
             }
         }
 
-        var header = Writer()
+        var header = PSDBinaryWriter()
         header.int32(Int(rect.minY))
         header.int32(Int(rect.minX))
         header.int32(Int(rect.maxY))
@@ -147,12 +153,12 @@ enum PSDWriter {
         }
         header.ascii("8BIM")
         header.ascii(blendKey(layer.blendMode))
-        header.uint8(Int((min(max(layer.opacity, 0), 1) * 255).rounded()))
+        header.uint8(Int((min(max(opacity, 0), 1) * 255).rounded()))
         header.uint8(layer.isClipped ? 1 : 0)
         header.uint8(layer.isVisible ? 0 : 2)
         header.uint8(0)
 
-        var extra = Writer()
+        var extra = PSDBinaryWriter()
         if let mask {
             extra.uint32(20)
             extra.int32(Int(mask.rect.minY))
@@ -168,13 +174,14 @@ enum PSDWriter {
         extra.uint32(0)
         extra.pascalName(layer.name)
         extra.unicodeName(layer.name)
+        for block in blocks { extra.taggedBlock(block.key, block.data) }
         header.uint32(extra.data.count)
         header.bytes(extra.data)
         return Record(header: header.data, channels: channels.flatMap(\.data))
     }
 
     private static func folderRecord(name: String, opacity: Double, isVisible: Bool, type: Int) -> Record {
-        var header = Writer()
+        var header = PSDBinaryWriter()
         header.zeros(16)
         header.uint16(4)
         for id in [-1, 0, 1, 2] {
@@ -187,7 +194,7 @@ enum PSDWriter {
         header.uint8(0)
         header.uint8(isVisible ? 0 : 2)
         header.uint8(0)
-        var extra = Writer()
+        var extra = PSDBinaryWriter()
         extra.uint32(0)
         extra.uint32(0)
         extra.pascalName(name)
@@ -251,7 +258,7 @@ enum PSDWriter {
     /// One channel, PackBits-compressed row by row.
     private static func channelData(_ plane: [UInt8], width: Int, height: Int) -> [UInt8] {
         let rows = packRows(plane, width: width, height: height)
-        var out = Writer()
+        var out = PSDBinaryWriter()
         out.uint16(1)
         for row in rows { out.uint16(row.count) }
         for row in rows { out.bytes(row) }
@@ -316,44 +323,75 @@ enum PSDWriter {
         case .luminosity: return "lum "
         }
     }
+}
 
-    /// Big-endian bytes, as Photoshop stores them.
-    private struct Writer {
-        var data: [UInt8] = []
+/// Big-endian bytes, as Photoshop files are written.
+struct PSDBinaryWriter {
+    var data: [UInt8] = []
 
-        mutating func bytes(_ bytes: [UInt8]) { data += bytes }
-        mutating func zeros(_ count: Int) { data += [UInt8](repeating: 0, count: count) }
-        mutating func ascii(_ string: String) { data += Array(string.utf8) }
-        mutating func uint8(_ value: Int) { data.append(UInt8(truncatingIfNeeded: value)) }
-        mutating func uint16(_ value: Int) { data += [UInt8(truncatingIfNeeded: value >> 8), UInt8(truncatingIfNeeded: value)] }
-        mutating func int16(_ value: Int) { uint16(value & 0xFFFF) }
-        mutating func uint32(_ value: Int) {
-            data += [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: value >> $0) }
-        }
-        mutating func int32(_ value: Int) { uint32(value & 0xFFFF_FFFF) }
+    mutating func bytes(_ bytes: [UInt8]) { data += bytes }
+    mutating func zeros(_ count: Int) { data += [UInt8](repeating: 0, count: count) }
+    mutating func ascii(_ string: String) { data += Array(string.utf8) }
+    mutating func uint8(_ value: Int) { data.append(UInt8(truncatingIfNeeded: value)) }
+    mutating func uint16(_ value: Int) { data += [UInt8(truncatingIfNeeded: value >> 8), UInt8(truncatingIfNeeded: value)] }
+    mutating func int16(_ value: Int) { uint16(value & 0xFFFF) }
+    mutating func uint32(_ value: Int) {
+        data += [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: value >> $0) }
+    }
+    mutating func int32(_ value: Int) { uint32(value & 0xFFFF_FFFF) }
 
-        /// A Pascal name, at most 255 bytes, padded to four.
-        mutating func pascalName(_ name: String) {
-            var bytes = Array(name.utf8.prefix(255))
-            // Photoshop reads this as Mac Roman; plain ASCII stays readable.
-            bytes = bytes.map { $0 < 128 ? $0 : UInt8(ascii: "?") }
-            let start = data.count
-            data.append(UInt8(bytes.count))
-            data += bytes
-            while (data.count - start) % 4 != 0 { data.append(0) }
-        }
+    /// A Pascal name, at most 255 bytes, padded to four.
+    mutating func pascalName(_ name: String) {
+        var bytes = Array(name.utf8.prefix(255))
+        // Photoshop reads this as Mac Roman; plain ASCII stays readable.
+        bytes = bytes.map { $0 < 128 ? $0 : UInt8(ascii: "?") }
+        let start = data.count
+        data.append(UInt8(bytes.count))
+        data += bytes
+        while (data.count - start) % 4 != 0 { data.append(0) }
+    }
 
-        /// The name in full, as UTF-16.
-        mutating func unicodeName(_ name: String) {
-            let units = Array(name.utf16)
-            ascii("8BIM")
-            ascii("luni")
-            let length = 4 + units.count * 2
-            let padded = (length + 3) / 4 * 4
-            uint32(padded)
-            uint32(units.count)
-            for unit in units { uint16(Int(unit)) }
-            zeros(padded - length)
-        }
+    /// The name in full, as UTF-16.
+    mutating func unicodeName(_ name: String) {
+        let units = Array(name.utf16)
+        ascii("8BIM")
+        ascii("luni")
+        let length = 4 + units.count * 2
+        let padded = (length + 3) / 4 * 4
+        uint32(padded)
+        uint32(units.count)
+        for unit in units { uint16(Int(unit)) }
+        zeros(padded - length)
     }
 }
+
+extension PSDBinaryWriter {
+    mutating func uint64(_ value: Int) {
+        uint32(Int(UInt64(value) >> 32))
+        uint32(value & 0xFFFF_FFFF)
+    }
+
+    mutating func float64(_ value: Double) {
+        let bits = value.bitPattern
+        data += [56, 48, 40, 32, 24, 16, 8, 0].map { UInt8(truncatingIfNeeded: bits >> UInt64($0)) }
+    }
+
+    /// A length-prefixed UTF-16 string, ending in a zero unit, as
+    /// descriptors write names and text.
+    mutating func unicodeString(_ string: String) {
+        let units = Array(string.utf16) + [0]
+        uint32(units.count)
+        for unit in units { uint16(Int(unit)) }
+    }
+
+    /// A tagged block: signature, key, length and data, padded to `padding`.
+    mutating func taggedBlock(_ key: String, _ body: [UInt8], padding: Int = 2) {
+        ascii("8BIM")
+        ascii(key)
+        let padded = (body.count + padding - 1) / padding * padding
+        uint32(padded)
+        bytes(body)
+        zeros(padded - body.count)
+    }
+}
+

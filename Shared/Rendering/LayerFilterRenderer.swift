@@ -10,6 +10,11 @@ extension LayerFilter {
         let unit = max(extent.width, extent.height) / 1000
         let output: CIImage
         switch kind {
+        // Settings from a Photoshop file come first, drawn its way.
+        case .brightness where hasPhotoshopSettings, .contrast where hasPhotoshopSettings, .hsl where hasPhotoshopSettings:
+            output = applyPhotoshopSettings(to: input)
+        case .levels where hasChannelTones, .curves where hasChannelTones:
+            output = applyChannelTones(to: input)
         case .blackAndWhite:
             let filter = CIFilter.colorControls()
             filter.inputImage = input

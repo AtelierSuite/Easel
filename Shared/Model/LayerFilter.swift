@@ -156,6 +156,33 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     var gamma: Double?
     /// Curves: the output at inputs 0, ¼, ½, ¾ and 1.
     var curve: [Double]?
+    /// Levels set channel by channel, from a Photoshop file: for the
+    /// combined channel, then red, green and blue, the input black and
+    /// white, output black and white, and gamma. See `ChannelTones`.
+    var levelsChannels: [[Double]]?
+    /// Curves set channel by channel, from a Photoshop file: for the
+    /// combined channel, then red, green and blue, points as input and
+    /// output pairs, flattened. An empty list is a straight line.
+    var curvePoints: [[Double]]?
+    /// Photoshop's own Brightness/Contrast settings, from a Photoshop file,
+    /// kept so it looks and saves as it did there. Any change in Easel
+    /// lets go of them.
+    var photoshopBrightness: Double?
+    var photoshopContrast: Double?
+    /// Photoshop's own Hue/Saturation settings, from a Photoshop file: the
+    /// master hue, saturation and lightness, then for each of its six
+    /// ranges the four limits in degrees and its hue, saturation and
+    /// lightness.
+    var photoshopHueSaturation: [Double]?
+
+    /// The filter with any settings kept from a Photoshop file let go of.
+    var withoutPhotoshopSettings: LayerFilter {
+        var copy = self
+        copy.photoshopBrightness = nil
+        copy.photoshopContrast = nil
+        copy.photoshopHueSaturation = nil
+        return copy
+    }
     /// Colour balance: how far the midtones lean to red, green and blue,
     /// each from -1 (cyan, magenta, yellow) to 1.
     var balance: [Double]?

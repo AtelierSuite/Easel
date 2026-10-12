@@ -508,13 +508,22 @@ extension EditorState {
     }
 
     func updateFilter(_ id: LayerFilter.ID, _ change: (inout LayerFilter) -> Void) {
+        // Settings kept from a Photoshop file give way to any made here,
+        // other than turning the filter on or off.
+        func changed(_ filter: LayerFilter) -> LayerFilter {
+            var edited = filter
+            change(&edited)
+            var compared = edited
+            compared.isEnabled = filter.isEnabled
+            return compared == filter ? edited : edited.withoutPhotoshopSettings
+        }
         updateActiveLayer { layer in
-            if layer.adjustment?.id == id {
-                change(&layer.adjustment!)
+            if let adjustment = layer.adjustment, adjustment.id == id {
+                layer.adjustment = changed(adjustment)
                 return
             }
             guard let index = layer.filters.firstIndex(where: { $0.id == id }) else { return }
-            change(&layer.filters[index])
+            layer.filters[index] = changed(layer.filters[index])
         }
     }
 

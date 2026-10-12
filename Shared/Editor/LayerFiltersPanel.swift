@@ -138,7 +138,11 @@ struct FilterRow: View {
                 if filter.kind == .replaceColor { replaceControls }
                 if filter.kind == .curves {
                     CurveEditor(values: filter.curve ?? LayerFilter.straightCurve, histogram: histogram) { values in
-                        state.updateFilter(filter.id) { $0.curve = values }
+                        state.updateFilter(filter.id) { filter in
+                            filter.curve = values
+                            // The combined curve now follows the five points.
+                            if filter.curvePoints != nil { filter.curvePoints?[0] = [] }
+                        }
                     }
                     .frame(height: 200)
                     .accessibilityIdentifier("curveEditor")

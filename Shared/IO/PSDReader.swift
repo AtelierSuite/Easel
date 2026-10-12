@@ -119,6 +119,9 @@ enum PSDReader {
         /// divider below them.
         var sectionType = 0
         var mask: MaskRecord?
+        /// Tagged blocks kept for what they say about the layer beyond its
+        /// pixels: adjustments, styles, smart objects.
+        var blocks: [String: [UInt8]] = [:]
 
         var width: Int { right - left }
         var height: Int { bottom - top }
@@ -179,6 +182,28 @@ enum PSDReader {
                 groups[index].isExpanded = record.sectionType == 1
                 continue
             }
+            if record.blocks.keys.contains(where: PSDAdjustments.adjustmentKeys.contains) {
+                // An adjustment layer: no pixels, a setting and a mask over
+                // the whole canvas. Kinds Easel has nothing like are left out.
+                var whole = record
+                (whole.left, whole.top, whole.right, whole.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
+                for filter in PSDAdjustments.filters(from: record.blocks) {
+                    var layer = Layer(
+                        name: record.name.isEmpty ? filter.kind.label : record.name,
+                        image: LayerImage(Bitmap.solid(size: canvas, color: .clear)), canvasSize: canvas
+                    )
+                    layer.adjustment = filter
+                    layer.opacity = Double(record.opacity) / 255
+                    layer.blendMode = blendMode(record.blendKey)
+                    layer.isVisible = !record.isHidden
+                    layer.isClipped = record.isClipped
+                    layer.groupID = open.last
+                    layer.mask = record.mask.flatMap { makeMask($0, plane: planes[-2], layer: whole) }
+                        ?? .revealingAll(size: canvas)
+                    layers.append(layer)
+                }
+                continue
+            }
             guard !record.isGroupBoundary, record.width > 0, record.height > 0,
                   let image = makeImage(planes, width: record.width, height: record.height, format: format)
             else { continue }
@@ -202,6 +227,8 @@ enum PSDReader {
         }
         return (layers, groups)
     }
+
+    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys)
 
     private static func readRecord(_ reader: inout BigEndianReader, isLarge: Bool) throws -> LayerRecord {
         var record = LayerRecord()
@@ -269,7 +296,7 @@ enum PSDReader {
                 record.isGroupBoundary = (1...3).contains(type)
                 record.sectionType = Int(type)
             default:
-                break
+                if keptBlocks.contains(key) { record.blocks[key] = try reader.bytes(length) }
             }
             guard reader.seek(to: blockEnd) else { break }
             // Blocks are padded to an even length.
