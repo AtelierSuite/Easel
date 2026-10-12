@@ -130,6 +130,7 @@ struct FilterRow: View {
                 if filter.kind == .levels { levelsControls }
                 if filter.kind == .colorBalance { balanceControls }
                 if filter.kind == .gradientMap { gradientControls }
+                if filter.kind == .lensCorrection { lensControls }
                 if filter.kind == .curves {
                     CurveEditor(values: filter.curve ?? LayerFilter.straightCurve) { values in
                         state.updateFilter(filter.id) { $0.curve = values }
@@ -207,6 +208,23 @@ struct FilterRow: View {
         LabeledSlider(
             label: "LayerFilters.White", value: optionalBinding(\.white, default: 1), range: 0.1...1,
             valueText: "\(Int(((filter.white ?? 1) * 255).rounded()))"
+        )
+    }
+
+    @ViewBuilder
+    private var lensControls: some View {
+        LabeledSlider(
+            label: "LayerFilters.Distortion", value: binding(\.amount), range: -1...1,
+            valueText: "\(Int((filter.amount * 100).rounded()))"
+        )
+        .accessibilityIdentifier("lensDistortion")
+        LabeledSlider(
+            label: "LayerFilters.Fringing", value: optionalBinding(\.fringing, default: 0), range: -1...1,
+            valueText: "\(Int(((filter.fringing ?? 0) * 100).rounded()))"
+        )
+        LabeledSlider(
+            label: "LayerFilters.VignetteFix", value: optionalBinding(\.vignetteFix, default: 0), range: -1...1,
+            valueText: "\(Int(((filter.vignetteFix ?? 0) * 100).rounded()))"
         )
     }
 

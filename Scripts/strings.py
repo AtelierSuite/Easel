@@ -589,6 +589,10 @@ S = {
 "Crop.Mode.Straighten": ("Straighten: draw along the horizon", "角度補正：水平線に沿ってドラッグ", "수평 맞추기: 수평선을 따라 그리기", "拉直：沿地平线绘制", "拉直：沿地平線繪製"),
 "Crop.Mode.Perspective": ("Perspective Crop", "遠近法の切り抜き", "원근 자르기", "透视裁剪", "透視裁切"),
 "Crop.Mode": ("Crop Mode", "切り抜きモード", "자르기 모드", "裁剪模式", "裁切模式"),
+"LayerFilter.LensCorrection": ("Lens Correction", "レンズ補正", "렌즈 보정", "镜头校正", "鏡頭校正"),
+"LayerFilters.Distortion": ("Distortion", "ゆがみ", "왜곡", "扭曲", "扭曲"),
+"LayerFilters.Fringing": ("Color Fringing", "色収差", "색 수차", "色差", "色差"),
+"LayerFilters.VignetteFix": ("Vignette", "周辺光量", "비네트", "晕影", "暈影"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

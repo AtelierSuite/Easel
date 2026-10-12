@@ -9,6 +9,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case blackAndWhite, sepia, saturation, brightness, contrast
         case levels, curves, colorBalance, gradientMap
         case gaussianBlur, motionBlur, zoomBlur, lensBlur, noiseReduction, mosaic
+        /// Undoes a lens's bowing, colour fringes and dark corners.
+        case lensCorrection
 
         var id: String { rawValue }
 
@@ -18,6 +20,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             [.blackAndWhite, .sepia, .saturation, .brightness, .contrast],
             [.levels, .curves, .colorBalance, .gradientMap],
             [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic],
+            [.lensCorrection],
         ]
 
         var label: String {
@@ -37,6 +40,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .lensBlur: return String(localized: "LayerFilter.LensBlur")
             case .noiseReduction: return String(localized: "LayerFilter.NoiseReduction")
             case .mosaic: return String(localized: "LayerFilter.Mosaic")
+            case .lensCorrection: return String(localized: "LayerFilter.LensCorrection")
             }
         }
 
@@ -57,6 +61,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .lensBlur: return "camera.aperture"
             case .noiseReduction: return "wand.and.stars"
             case .mosaic: return "square.grid.3x3.fill"
+            case .lensCorrection: return "camera.metering.center.weighted"
             }
         }
 
@@ -64,7 +69,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// middle; the rest run from nothing to full strength.
         var amountRange: ClosedRange<Double> {
             switch self {
-            case .saturation, .brightness, .contrast: return -1...1
+            case .saturation, .brightness, .contrast, .lensCorrection: return -1...1
             default: return 0...1
             }
         }
@@ -77,6 +82,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .brightness: return 0.2
             case .contrast: return 0.3
             case .gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic: return 0.3
+            case .lensCorrection: return 0
             }
         }
 
@@ -86,7 +92,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
 
         var hasAngle: Bool { self == .motionBlur }
         /// Filters set with their own controls rather than one amount.
-        var hasAmount: Bool { ![.levels, .curves, .colorBalance].contains(self) }
+        var hasAmount: Bool { ![.levels, .curves, .colorBalance, .lensCorrection].contains(self) }
         var hasCenter: Bool { self == .zoomBlur }
     }
 
@@ -114,6 +120,11 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     /// Gradient map: the colours the darkest and lightest shades become.
     var shadowColor: RGBAColor?
     var highlightColor: RGBAColor?
+    /// Lens correction: `amount` straightens bowing — towards 1 for lines
+    /// bulging outwards, towards -1 for lines pinched in — while these pull
+    /// red and blue fringes back into line and lighten or darken corners.
+    var fringing: Double?
+    var vignetteFix: Double?
 
     static let straightCurve = [0, 0.25, 0.5, 0.75, 1.0]
     static let neutralBalance = [0.0, 0, 0]

@@ -133,6 +133,8 @@ extension LayerFilter {
             filter.noiseLevel = Float(amount * 0.1)
             filter.sharpness = 0.4
             output = filter.outputImage ?? input
+        case .lensCorrection:
+            output = correctLens(input, extent: extent)
         case .mosaic:
             let filter = CIFilter.pixellate()
             filter.inputImage = input.clampedToExtent()
@@ -141,6 +143,54 @@ extension LayerFilter {
             output = filter.outputImage ?? input
         }
         return output.cropped(to: extent)
+    }
+
+    /// Bowing pulled straight, fringes lined up and corners evened out,
+    /// each about the middle of the picture.
+    private func correctLens(_ input: CIImage, extent: CGRect) -> CIImage {
+        let center = CGPoint(x: extent.midX, y: extent.midY)
+        let reach = hypot(extent.width, extent.height) / 2
+        var image = input
+        if abs(amount) > 0.001 {
+            // Pinching undoes a bulge, and bulging undoes a pinch.
+            let filter = CIFilter.bumpDistortion()
+            filter.inputImage = image.clampedToExtent()
+            filter.center = center
+            filter.radius = Float(reach)
+            filter.scale = Float(-amount * 0.5)
+            image = (filter.outputImage ?? image).cropped(to: extent)
+        }
+        if let fringing, abs(fringing) > 0.001 {
+            // Red and blue are scaled a little apart about the middle, as a
+            // lens spreads them, and joined back with green.
+            func channel(_ vector: CIVector, scale: Double) -> CIImage {
+                let matrix = CIFilter.colorMatrix()
+                matrix.inputImage = image
+                matrix.rVector = vector.x == 1 ? CIVector(x: 1, y: 0, z: 0, w: 0) : CIVector(x: 0, y: 0, z: 0, w: 0)
+                matrix.gVector = vector.y == 1 ? CIVector(x: 0, y: 1, z: 0, w: 0) : CIVector(x: 0, y: 0, z: 0, w: 0)
+                matrix.bVector = vector.z == 1 ? CIVector(x: 0, y: 0, z: 1, w: 0) : CIVector(x: 0, y: 0, z: 0, w: 0)
+                let separated = (matrix.outputImage ?? image).clampedToExtent()
+                return separated.transformed(by: CGAffineTransform(translationX: center.x, y: center.y)
+                    .scaledBy(x: scale, y: scale).translatedBy(x: -center.x, y: -center.y))
+            }
+            let spread = fringing * 0.006
+            let red = channel(CIVector(x: 1, y: 0, z: 0), scale: 1 + spread)
+            let green = channel(CIVector(x: 0, y: 1, z: 0), scale: 1)
+            let blue = channel(CIVector(x: 0, y: 0, z: 1), scale: 1 - spread)
+            image = red.applyingFilter("CIMaximumCompositing", parameters: [kCIInputBackgroundImageKey: green])
+                .applyingFilter("CIMaximumCompositing", parameters: [kCIInputBackgroundImageKey: blue])
+                .cropped(to: extent)
+        }
+        if let vignetteFix, abs(vignetteFix) > 0.001 {
+            let filter = CIFilter.vignetteEffect()
+            filter.inputImage = image
+            filter.center = center
+            filter.radius = Float(reach * 0.85)
+            filter.intensity = Float(-vignetteFix)
+            filter.falloff = 0.7
+            image = (filter.outputImage ?? image).cropped(to: extent)
+        }
+        return image
     }
 
     /// A chain of filters, run in order.
