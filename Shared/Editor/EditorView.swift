@@ -96,6 +96,7 @@ struct EditorView<Actions: View>: View {
                 // Undimmed, so the picture the panel is changing can be seen.
                 .presentationBackgroundInteraction(panel.keepsCanvasVisible ? .enabled(upThrough: .medium) : .disabled)
                 .presentationDragIndicator(.visible)
+                .presentationContentInteraction(.scrolls)
                 .presentationBackground(.regularMaterial)
                 // A sheet covers the editor, so what goes wrong in a panel
                 // is told from the panel.

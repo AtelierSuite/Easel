@@ -217,6 +217,7 @@ struct ExportPresetsSheet: View {
             }
             .sheet(isPresented: $isAdding) {
                 NewExportPresetForm { library.save($0) }
+                    .presentationContentInteraction(.scrolls)
             }
             .alert(
                 "Alert.Error.Title",

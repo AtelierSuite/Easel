@@ -28,6 +28,7 @@ struct DocumentView: View {
             .sensoryFeedback(.success, trigger: savedToPhotos)
             .sheet(isPresented: $isExportingWithPresets) {
                 ExportPresetsSheet(composition: document.composition, name: name)
+                    .presentationContentInteraction(.scrolls)
             }
     }
 
