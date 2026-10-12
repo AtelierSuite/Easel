@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// A change to the whole selection that needs a size: how far to feather,
-/// grow or shrink it, or how wide a band to refine along its edge.
+/// grow or shrink it, how wide a line to stroke it with.
 enum SelectionEdit: Identifiable, Hashable, Sendable {
     case modify(SelectionModification)
     case refine
+    case stroke
 
     var id: Self { self }
 
@@ -12,10 +13,13 @@ enum SelectionEdit: Identifiable, Hashable, Sendable {
         switch self {
         case .modify(let modification): return modification.label
         case .refine: return "Select.RefineEdge"
+        case .stroke: return "Select.Stroke"
         }
     }
 
-    var fieldLabel: LocalizedStringKey { "Select.Radius" }
+    var fieldLabel: LocalizedStringKey {
+        self == .stroke ? "Select.Width" : "Select.Radius"
+    }
 }
 
 extension EditorState {
@@ -41,6 +45,7 @@ extension EditorState {
     func defaultSize(for edit: SelectionEdit) -> Double {
         let longest = max(composition.size.width, composition.size.height)
         switch edit {
+        case .stroke: return max(2, (longest / 400).rounded())
         case .refine: return max(4, (longest / 150).rounded())
         case .modify: return max(2, (longest / 200).rounded())
         }
@@ -56,6 +61,24 @@ extension EditorState {
         case .refine:
             let picture = CompositionRenderer.render(composition)
             replaceSelection { selection.refined(along: picture, radius: size) }
+        case .stroke:
+            strokeSelection(width: size)
+        }
+    }
+
+    /// Paints a line in the brush colour along the selection's edge, onto
+    /// the active layer.
+    func strokeSelection(width: Double) {
+        if let blocker = paintingBlocker() {
+            errorMessage = blocker
+            return
+        }
+        guard let selection, let layerID = activeLayerID else { return }
+        let color = color
+        editPixels(of: layerID) { image, size in
+            let band = selection.edgeBand(width: width, canvasSize: size)
+            guard let line = SelectionMask(bytes: band, width: image.width, height: image.height) else { return nil }
+            return Painter.fill(Selection(shape: .mask(line)), with: color, onto: image)
         }
     }
 }

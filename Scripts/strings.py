@@ -542,6 +542,8 @@ S = {
 "Select.Border": ("Border", "境界線", "테두리", "边界", "邊框"),
 "Select.Radius": ("Radius in pixels", "半径（ピクセル）", "반경(픽셀)", "半径（像素）", "半徑（像素）"),
 "Select.RefineEdge": ("Refine Edge", "境界線を調整", "가장자리 다듬기", "调整边缘", "調整邊緣"),
+"Select.Stroke": ("Stroke Selection", "選択範囲の境界線を描く", "선택 영역 획", "描边选区", "筆畫選取範圍"),
+"Select.Width": ("Width in pixels", "幅（ピクセル）", "폭(픽셀)", "宽度（像素）", "寬度（像素）"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

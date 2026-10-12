@@ -856,6 +856,7 @@ struct SelectionMenuItems: View {
                 }
             }
             Button("Select.RefineEdge", systemImage: "wand.and.sparkles") { state.pendingSelectionEdit = .refine }
+            Button("Select.Stroke", systemImage: "pencil.and.outline") { state.pendingSelectionEdit = .stroke }
         }
         .disabled(!hasSelection)
         Section {

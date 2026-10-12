@@ -133,6 +133,17 @@ extension Selection {
         let bytes = SelectionImages.bytes(of: refined, width: width, height: height)
         return SelectionMask(bytes: bytes, width: width, height: height).map { Selection(shape: .mask($0)) }
     }
+
+    /// A band `width` pixels wide along the selection's edge, centred on it,
+    /// 0...255 a pixel, for stroking.
+    func edgeBand(width lineWidth: Double, canvasSize size: CGSize) -> [UInt8] {
+        let width = Int(size.width.rounded()), height = Int(size.height.rounded())
+        let input = SelectionImages.image(coverage(width: width, height: height), width: width, height: height)
+        let outer = SelectionImages.dilate(input, lineWidth / 2)
+        let inner = SelectionImages.erode(input, lineWidth / 2)
+        let band = outer.applyingFilter("CIDifferenceBlendMode", parameters: [kCIInputBackgroundImageKey: inner])
+        return SelectionImages.bytes(of: band, width: width, height: height)
+    }
 }
 
 /// Selections as grey Core Image pictures, white where selected.

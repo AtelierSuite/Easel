@@ -76,6 +76,13 @@ struct SelectionOperationTests {
         #expect(coverage(smooth, x: 20, y: 10) == 255)
     }
 
+    @Test func theEdgeBandStrokesAlongTheOutline() {
+        let band = rect(10, 2, 20, 16).edgeBand(width: 4, canvasSize: size)
+        #expect(band[10 * 40 + 10] > 200)
+        #expect(band[10 * 40 + 20] == 0)
+        #expect(band[10 * 40 + 2] == 0)
+    }
+
     @Test func refiningFollowsThePicturesEdges() throws {
         // Red on the left, blue on the right; a rough selection of the
         // left half spills over the edge and is pulled back to it.
