@@ -454,6 +454,36 @@ extension EditorState {
     }
 }
 
+// MARK: - Image Trace
+
+/// A traced layer, worked out off the main thread.
+private struct TracedLayer: Sendable {
+    var sourceID: Layer.ID
+    var layer: Layer
+}
+
+extension EditorState {
+    /// Traces the active layer into vector shapes in up to `colors`
+    /// colours, as a layer above it; the original is hidden, not lost.
+    func traceImage(colors: Int) {
+        guard let source = activeLayer, !source.isAdjustment else { return }
+        let size = composition.size
+        enqueue({ () -> TracedLayer? in
+            let flat = source.rasterized(in: size)
+            let paths = ImageTracer.trace(flat.image.cgImage, colors: colors)
+            guard !paths.isEmpty else { return nil }
+            return TracedLayer(sourceID: source.id, layer: Layer.vector(paths, name: String(localized: "Trace.LayerName \(source.name)")))
+        }, apply: { [weak self] traced in
+            guard let self else { return }
+            self.update { composition in
+                composition.insert(traced.layer, above: traced.sourceID)
+                composition[traced.sourceID]?.isVisible = false
+            }
+            self.activeLayerID = traced.layer.id
+        })
+    }
+}
+
 // MARK: - Path operations
 
 extension EditorState {

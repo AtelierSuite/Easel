@@ -199,6 +199,16 @@ struct LayersPanel: View {
             if layer.isText || layer.isVector {
                 Button("Layers.Rasterize", systemImage: "square.grid.3x3.square") { state.rasterizeLayer(layer.id) }
             }
+            if !layer.isVector && !layer.isAdjustment {
+                Menu("Trace.Title", systemImage: "scribble.variable") {
+                    ForEach(ImageTracer.colorCounts, id: \.self) { colors in
+                        Button(colors == 2 ? String(localized: "Trace.BlackAndWhite") : String(localized: "Trace.Colors \(colors)")) {
+                            state.activeLayerID = layer.id
+                            state.traceImage(colors: colors)
+                        }
+                    }
+                }
+            }
             if layer.hasActiveFilters {
                 Button("LayerFilters.ApplyAll", systemImage: "square.and.arrow.down.on.square") {
                     state.applyFilters(of: layer.id)

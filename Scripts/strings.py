@@ -689,6 +689,10 @@ S = {
 "ShapeBuilder.Merge": ("Merge Picked Regions", "選んだ領域を結合", "선택한 영역 병합", "合并所选区域", "合併所選區域"),
 "ShapeBuilder.Delete": ("Delete Picked Regions", "選んだ領域を削除", "선택한 영역 삭제", "删除所选区域", "刪除所選區域"),
 "ShapeBuilder.Hint": ("Tap or drag across regions", "領域をタップまたはドラッグ", "영역을 탭하거나 드래그", "轻点或拖过区域", "點一下或拖過區域"),
+"Trace.Title": ("Image Trace", "画像トレース", "이미지 추적", "图像描摹", "影像描圖"),
+"Trace.BlackAndWhite": ("Black and White", "白黒", "흑백", "黑白", "黑白"),
+"Trace.Colors %lld": ("%lld Colors", "%lld色", "%lld색", "%lld 种颜色", "%lld 種顏色"),
+"Trace.LayerName %@": ("%@ (Traced)", "%@（トレース）", "%@(추적됨)", "%@（描摹）", "%@（描圖）"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]
