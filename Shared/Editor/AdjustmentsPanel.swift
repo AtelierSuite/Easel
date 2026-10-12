@@ -25,6 +25,14 @@ struct AdjustmentsPanel: View {
                 }
             }
             Section {
+                Button(state.isPickingNeutral ? "Adjust.PickingNeutral" : "Adjust.PickNeutral", systemImage: "eyedropper") {
+                    pickNeutral()
+                }
+                .accessibilityIdentifier("pickNeutral")
+            } footer: {
+                Text("Adjust.PickNeutral.Footer")
+            }
+            Section {
                 Button("Adjust.Reset", role: .destructive) { adjustments = Adjustments() }
                     .disabled(adjustments.isIdentity)
             }
@@ -39,6 +47,8 @@ struct AdjustmentsPanel: View {
         }
         .onDisappear {
             if !isApplied { state.cancelPreview() }
+            state.isPickingNeutral = false
+            state.neutralPick = nil
         }
         .interactiveDismissDisabled(!adjustments.isIdentity)
         .panelActions(
@@ -56,6 +66,23 @@ struct AdjustmentsPanel: View {
             },
             confirmIdentifier: "applyAdjustments"
         )
+    }
+}
+
+extension AdjustmentsPanel {
+    /// Waits for a tap on something that should be grey, then sets warmth
+    /// and tint to make it so.
+    private func pickNeutral() {
+        state.isPickingNeutral = true
+        state.neutralPick = { color in
+            Task {
+                let balance = await Task.detached(priority: .userInitiated) {
+                    Adjustments.neutralBalance(for: color)
+                }.value
+                adjustments.temperature = balance.temperature
+                adjustments.tint = balance.tint
+            }
+        }
     }
 }
 

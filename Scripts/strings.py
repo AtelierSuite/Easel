@@ -609,6 +609,9 @@ S = {
 "Select.Contiguous": ("Touching Color Only", "隣接する色のみ", "인접한 색상만", "仅连续颜色", "僅相連的顏色"),
 "Select.Anywhere": ("This Color Anywhere", "同じ色をすべて", "모든 곳의 같은 색상", "所有相同颜色", "所有相同顏色"),
 "Select.ColorRange": ("Select Brush Color", "ブラシカラーを選択", "브러시 색상 선택", "选择画笔颜色", "選取筆刷顏色"),
+"Adjust.PickNeutral": ("Pick a Neutral Gray", "グレーの点を指定", "중간 회색 선택", "选取中性灰", "選取中性灰"),
+"Adjust.PickingNeutral": ("Tap Something Gray…", "グレーのものをタップ…", "회색인 곳을 탭하십시오…", "轻点灰色的地方…", "點一下灰色的地方…"),
+"Adjust.PickNeutral.Footer": ("Tap something in the picture that should be gray or white to balance its colors.", "グレーや白であるべき箇所をタップすると、色のバランスを整えます。", "회색이나 흰색이어야 하는 곳을 탭하여 색상 균형을 맞추십시오.", "轻点图片中应为灰色或白色的地方以平衡颜色。", "點一下圖片中應為灰色或白色的地方以平衡顏色。"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

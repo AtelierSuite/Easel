@@ -19,6 +19,47 @@ struct Adjustments: Equatable, Sendable {
 
     var isIdentity: Bool { self == Adjustments() }
 
+    /// The warmth and tint that turn `color` grey, found by narrowing in on
+    /// the pair that leaves it least colourful.
+    static func neutralBalance(for color: RGBAColor) -> (temperature: Double, tint: Double) {
+        let space = CGColorSpace(name: CGColorSpace.extendedSRGB)!
+        let sample = CIImage(color: CIColor(red: color.red, green: color.green, blue: color.blue, alpha: 1, colorSpace: space)
+            ?? CIColor(red: color.red, green: color.green, blue: color.blue))
+            .cropped(to: CGRect(x: 0, y: 0, width: 1, height: 1))
+        func chroma(_ temperature: Double, _ tint: Double) -> Double {
+            var adjustments = Adjustments()
+            adjustments.temperature = temperature
+            adjustments.tint = tint
+            var pixel = [Float](repeating: 0, count: 4)
+            ImageProcessing.context.render(
+                adjustments.apply(to: sample), toBitmap: &pixel, rowBytes: 16,
+                bounds: CGRect(x: 0, y: 0, width: 1, height: 1), format: .RGBAf, colorSpace: space
+            )
+            let r = Double(pixel[0]), g = Double(pixel[1]), b = Double(pixel[2])
+            let mean = (r + g + b) / 3
+            return abs(r - mean) + abs(g - mean) + abs(b - mean)
+        }
+        var best = (temperature: 0.0, tint: 0.0)
+        var span = 1.0
+        for _ in 0..<4 {
+            var bestScore = Double.infinity
+            let center = best
+            for i in -4...4 {
+                for j in -4...4 {
+                    let temperature = min(max(center.temperature + Double(i) / 4 * span, -1), 1)
+                    let tint = min(max(center.tint + Double(j) / 4 * span, -1), 1)
+                    let score = chroma(temperature, tint)
+                    if score < bestScore {
+                        bestScore = score
+                        best = (temperature, tint)
+                    }
+                }
+            }
+            span /= 4
+        }
+        return best
+    }
+
     enum Key: String, CaseIterable, Identifiable, Sendable {
         case exposure, brightness, contrast, highlights, shadows
         case saturation, vibrance, temperature, tint, hue

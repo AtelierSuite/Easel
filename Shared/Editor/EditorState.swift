@@ -97,6 +97,10 @@ final class EditorState {
     var pendingSelectionEdit: SelectionEdit?
     /// How different a colour may be and still be picked by magic select.
     var selectionTolerance = 0.15
+    /// Set while the Adjustments panel waits for a tap on something that
+    /// should be grey, to balance the picture's colour by it.
+    @ObservationIgnored var neutralPick: ((RGBAColor) -> Void)?
+    var isPickingNeutral = false
     /// Whether magic select picks only the run of colour touching the tap,
     /// or that colour anywhere in the picture.
     var selectsContiguously = true
@@ -611,6 +615,12 @@ final class EditorState {
     ) {
         // Touching down ends a hover.
         hoverPoint = nil
+        if isPickingNeutral {
+            isPickingNeutral = false
+            if let color = CompositionRenderer.color(at: point, in: composition) { neutralPick?(color) }
+            neutralPick = nil
+            return
+        }
         // An adjustment being tried stands in for the layer; painting under
         // it would be hidden, then lost when it is applied.
         guard layerPreview == nil else { return }
