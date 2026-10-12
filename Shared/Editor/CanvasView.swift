@@ -96,16 +96,7 @@ struct CanvasView: View {
     }
 
     private func layerStack(_ viewport: CanvasViewport) -> some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(composition.displayLayers.clippingUnits) { unit in
-                let clipped = unit.clipped.filter(\.isVisible)
-                if unit.base.isVisible, clipped.isEmpty {
-                    layerView(unit.base, viewport)
-                } else if unit.base.isVisible {
-                    clippingGroup(unit.base, clipped: clipped, viewport)
-                }
-            }
-        }
+        stacked(composition.displayLayers.clippingUnits[...], viewport)
         .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
         // Blend modes mix with the layers beneath, not with the checkerboard.
         .compositingGroup()
@@ -115,6 +106,75 @@ struct CanvasView: View {
                 .offset(x: viewport.canvasFrame.minX, y: viewport.canvasFrame.minY)
         }
         .allowsHitTesting(false)
+    }
+
+    /// Layers drawn bottom first. An adjustment layer changes everything
+    /// drawn before it, so the stack is split at the topmost one.
+    private func stacked(_ units: ArraySlice<ClippingUnit>, _ viewport: CanvasViewport) -> AnyView {
+        if let index = units.lastIndex(where: { $0.base.isVisible && $0.base.isActiveAdjustment }) {
+            return AnyView(ZStack(alignment: .topLeading) {
+                adjusted(stacked(units[..<index], viewport), by: units[index].base, viewport)
+                stacked(units[(index + 1)...], viewport)
+            }
+            .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading))
+        }
+        return AnyView(ZStack(alignment: .topLeading) {
+            ForEach(Array(units)) { unit in
+                let clipped = unit.clipped.filter(\.isVisible)
+                if unit.base.isVisible, clipped.isEmpty {
+                    layerView(unit.base, viewport)
+                } else if unit.base.isVisible, !unit.base.isAdjustment {
+                    clippingGroup(unit.base, clipped: clipped, viewport)
+                }
+            }
+        }
+        .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading))
+    }
+
+    /// Layers clipped to a base, over `bottom`, split at adjustment layers
+    /// as `stacked` does.
+    private func stackedClipped(_ bottom: AnyView, _ layers: ArraySlice<Layer>, _ viewport: CanvasViewport) -> AnyView {
+        if let index = layers.lastIndex(where: \.isActiveAdjustment) {
+            let below = stackedClipped(bottom, layers[..<index], viewport)
+            return stackedClipped(AnyView(adjusted(below, by: layers[index], viewport)), layers[(index + 1)...], viewport)
+        }
+        return AnyView(ZStack(alignment: .topLeading) {
+            bottom
+            ForEach(Array(layers)) { layer in
+                layerView(layer, viewport)
+            }
+        }
+        .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading))
+    }
+
+    /// `below`, and over it `below` as an adjustment layer changes it, where
+    /// the adjustment's mask shows, mixed in as the layer says. Strokes on
+    /// their way into the mask show as they are drawn.
+    private func adjusted(_ below: AnyView, by layer: Layer, _ viewport: CanvasViewport) -> some View {
+        let cube = layer.adjustment.map(ColorCube.image(for:)) ?? Bitmap.empty
+        var maskLayer = layer.with(opacity: 1, blendMode: .normal)
+        maskLayer.mask = nil
+        return ZStack(alignment: .topLeading) {
+            below
+            below
+                .colorEffect(ShaderLibrary.colorCube(
+                    .image(Image(decorative: cube, scale: 1)), .float(Float(ColorCube.size))
+                ))
+                .mask(alignment: .topLeading) {
+                    if let mask = layer.activeMask {
+                        LayerView(
+                            layer: maskLayer, displayed: mask.image.cgImage, masksItself: false,
+                            strokes: strokes(on: layer.id, mask: true), maskStrokes: [], retouch: nil,
+                            canvasSize: composition.size, viewport: viewport, displayScale: displayScale
+                        )
+                    } else {
+                        Rectangle()
+                    }
+                }
+                .opacity(layer.opacity)
+                .blendMode(layer.blendMode.swiftUI)
+        }
+        .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
     }
 
     /// Which part of a layer with effects to show; see `StyledLayer`.
@@ -186,14 +246,10 @@ struct CanvasView: View {
         let plain = base.with(opacity: 1, blendMode: .normal)
         return ZStack(alignment: .topLeading) {
             layerView(plain, viewport, part: .behind)
-            ZStack(alignment: .topLeading) {
-                layerView(plain, viewport, part: .content)
-                    .colorEffect(ShaderLibrary.opaqueColor())
-                ForEach(clipped) { layer in
-                    layerView(layer, viewport)
-                }
-            }
-            .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
+            stackedClipped(
+                AnyView(layerView(plain, viewport, part: .content).colorEffect(ShaderLibrary.opaqueColor())),
+                clipped[...], viewport
+            )
             .compositingGroup()
             .mask(alignment: .topLeading) { layerView(plain, viewport, part: .content) }
             layerView(plain, viewport, part: .front)

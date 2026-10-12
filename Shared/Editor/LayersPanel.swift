@@ -89,6 +89,11 @@ struct LayersPanel: View {
 
     @ViewBuilder
     private func layerSections(_ layer: Layer) -> some View {
+            if let adjustment = layer.adjustment {
+                Section("Layers.Section.Adjustment") {
+                    FilterRow(filter: adjustment, state: state, isAdjustment: true)
+                }
+            }
             Section("Layers.Section.Appearance") {
                 LabeledSlider(
                     label: "Layers.Opacity",
@@ -122,6 +127,7 @@ struct LayersPanel: View {
                 ))
                 .disabled(!layer.isClipped && !composition.canClip(layer.id))
                 .accessibilityIdentifier("clipToBelow")
+                if !layer.isAdjustment {
                 Button {
                     open(.filters)
                 } label: {
@@ -142,6 +148,7 @@ struct LayersPanel: View {
                     }
                 }
                 .accessibilityIdentifier("layerEffects")
+                }
             }
             MaskSection(layer: layer, state: state)
     }
@@ -240,18 +247,24 @@ private struct LayerRow: View {
                     .frame(width: 12)
                     .accessibilityLabel("Layers.Clipped")
             }
-            let thumbnail = layer.image.thumbnail()
             ZStack {
-                Checkerboard(squareSize: 5)
-                Image(decorative: thumbnail, scale: 1)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+                if let adjustment = layer.adjustment {
+                    Color.secondary.opacity(0.12)
+                    Image(systemName: adjustment.kind.symbolName)
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color.accentColor)
+                } else {
+                    Checkerboard(squareSize: 5)
+                    Image(decorative: layer.image.thumbnail(), scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                }
             }
             .frame(width: 44, height: 44)
             .clipShape(.rect(cornerRadius: 6))
             .overlay {
                 // Outlined is what painting goes into: the layer or its mask.
-                let target = isActive && !isEditingMask
+                let target = isActive && !isEditingMask && !layer.isAdjustment
                 RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(target ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: target ? 2 : 1)
             }
@@ -267,8 +280,8 @@ private struct LayerRow: View {
                         .overlay {
                             RoundedRectangle(cornerRadius: 6)
                                 .strokeBorder(
-                                    isEditingMask ? Color.accentColor : Color.secondary.opacity(0.3),
-                                    lineWidth: isEditingMask ? 2 : 1
+                                    maskIsTarget ? Color.accentColor : Color.secondary.opacity(0.3),
+                                    lineWidth: maskIsTarget ? 2 : 1
                                 )
                         }
                         .overlay {
@@ -334,6 +347,8 @@ private struct LayerRow: View {
         }
     }
 
+    private var maskIsTarget: Bool { isEditingMask || (isActive && layer.isAdjustment) }
+
     private var detail: String? {
         var parts: [String] = []
         if layer.blendMode != .normal { parts.append(layer.blendMode.label) }
@@ -355,6 +370,20 @@ struct LayerActionsBar: View {
                 GlassGroup {
                     GlassMenuButton(symbol: "plus", label: "Layers.Add") {
                         Button("Layers.NewLayer", systemImage: "square.badge.plus") { state.addEmptyLayer() }
+                        Menu("Layers.NewAdjustment", systemImage: "circle.lefthalf.filled") {
+                            ForEach(LayerFilter.Kind.allCases.filter(\.isPerPixel)) { kind in
+                                Button {
+                                    state.addAdjustmentLayer(kind)
+                                } label: {
+                                    Label {
+                                        Text(verbatim: kind.label)
+                                    } icon: {
+                                        Image(systemName: kind.symbolName)
+                                    }
+                                }
+                                .accessibilityIdentifier("addAdjustment.\(kind.rawValue)")
+                            }
+                        }
                         // The picker is presented from outside the menu,
                         // which is gone by the time a picker inside it would show.
                         Button("Layers.ImportPhotos", systemImage: "photo.on.rectangle") { isPickingPhotos = true }
@@ -432,8 +461,10 @@ private struct MaskSection: View {
     var body: some View {
         Section {
             if let mask = layer.mask {
-                Toggle("Mask.Edit", systemImage: "paintbrush.pointed", isOn: $state.isEditingMask)
-                    .accessibilityIdentifier("editMask")
+                if !layer.isAdjustment {
+                    Toggle("Mask.Edit", systemImage: "paintbrush.pointed", isOn: $state.isEditingMask)
+                        .accessibilityIdentifier("editMask")
+                }
                 Toggle("Mask.Enabled", isOn: Binding(get: { mask.isEnabled }, set: { state.setMaskEnabled($0) }))
                 Menu {
                     Section {
@@ -442,10 +473,13 @@ private struct MaskSection: View {
                     }
                     .disabled(state.selection == nil)
                     Button("Mask.Invert", systemImage: "circle.lefthalf.filled.inverse") { state.invertMask() }
-                    Section {
-                        Button("Mask.Apply", systemImage: "square.and.arrow.down.on.square") { state.applyMask() }
-                            .disabled(layer.isLocked)
-                        Button("Mask.Delete", systemImage: "trash", role: .destructive) { state.deleteMask() }
+                    // An adjustment layer is nothing but its mask.
+                    if !layer.isAdjustment {
+                        Section {
+                            Button("Mask.Apply", systemImage: "square.and.arrow.down.on.square") { state.applyMask() }
+                                .disabled(layer.isLocked)
+                            Button("Mask.Delete", systemImage: "trash", role: .destructive) { state.deleteMask() }
+                        }
                     }
                 } label: {
                     Label("Mask.Actions", systemImage: "ellipsis.circle")
@@ -461,11 +495,13 @@ private struct MaskSection: View {
                 .disabled(layer.isLocked)
                 .accessibilityIdentifier("addMask")
             }
-            Button("Mask.RemoveBackground", systemImage: "person.and.background.dotted") {
-                state.removeBackground()
+            if !layer.isAdjustment {
+                Button("Mask.RemoveBackground", systemImage: "person.and.background.dotted") {
+                    state.removeBackground()
+                }
+                .disabled(layer.isLocked)
+                .accessibilityIdentifier("removeBackground")
             }
-            .disabled(layer.isLocked)
-            .accessibilityIdentifier("removeBackground")
         } header: {
             Text("Mask.Title")
         } footer: {

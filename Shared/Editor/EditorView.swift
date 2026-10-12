@@ -190,7 +190,7 @@ struct EditorView<Actions: View>: View {
                 .accessibilityLabel("Canvas.FitToScreen")
                 .accessibilityIdentifier("zoomLevel")
             }
-            if state.editsMask {
+            if state.editsMask, state.activeLayer?.isAdjustment != true {
                 Button {
                     state.isEditingMask = false
                 } label: {

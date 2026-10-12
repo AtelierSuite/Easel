@@ -14,6 +14,9 @@ struct Layer: Identifiable, Equatable, Sendable {
     /// Vector layers keep their paths, so they can be edited again; their
     /// `image` is always the paths drawn out.
     var vector: VectorContent?
+    /// Set on an adjustment layer, which has no pixels of its own: it
+    /// changes everything beneath it with this filter, where its mask shows.
+    var adjustment: LayerFilter?
     /// Run over `image` whenever the layer is drawn, in order; the pixels
     /// themselves are never changed by them.
     var filters: [LayerFilter] = []
@@ -61,6 +64,9 @@ struct Layer: Identifiable, Equatable, Sendable {
     }
 
     var isText: Bool { text != nil }
+    var isAdjustment: Bool { adjustment != nil }
+    /// An adjustment layer that changes anything.
+    var isActiveAdjustment: Bool { adjustment?.isEnabled == true }
 
     /// Maps the layer's own pixels onto the canvas.
     var affineTransform: CGAffineTransform {

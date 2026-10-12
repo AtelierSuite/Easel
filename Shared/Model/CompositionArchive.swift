@@ -47,6 +47,7 @@ enum CompositionArchive {
         var vector: VectorContent?
         var filters: [LayerFilter]?
         var effects: [LayerEffect]?
+        var adjustment: LayerFilter?
         var maskFile: String?
         var maskEnabled: Bool?
         var transform: LayerTransform
@@ -149,6 +150,7 @@ enum CompositionArchive {
                 id: layer.id, name: layer.name, file: file, text: layer.text, vector: layer.vector,
                 filters: layer.filters.isEmpty ? nil : layer.filters,
                 effects: layer.effects.isEmpty ? nil : layer.effects,
+                adjustment: layer.adjustment,
                 maskFile: maskFile, maskEnabled: layer.mask.map(\.isEnabled), transform: layer.transform,
                 opacity: layer.opacity, blendMode: layer.blendMode, isClipped: layer.isClipped ? true : nil,
                 isVisible: layer.isVisible, isLocked: layer.isLocked,
@@ -196,6 +198,7 @@ enum CompositionArchive {
             layer.groupID = record.groupID
             layer.isClipped = record.isClipped ?? false
             layer.effects = record.effects ?? []
+            layer.adjustment = record.adjustment
             return layer
         }
         var composition = Composition(

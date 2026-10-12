@@ -527,6 +527,8 @@ S = {
 "LayerEffects.Size": ("Size", "サイズ", "크기", "大小", "大小"),
 "LayerEffects.Distance": ("Distance", "距離", "거리", "距离", "距離"),
 "History.Effects": ("Layer Styles", "レイヤースタイル", "레이어 스타일", "图层样式", "圖層樣式"),
+"Layers.NewAdjustment": ("New Adjustment Layer", "新規調整レイヤー", "새로운 조정 레이어", "新建调整图层", "新增調整圖層"),
+"Layers.Section.Adjustment": ("Adjustment", "調整", "조정", "调整", "調整"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

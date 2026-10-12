@@ -80,6 +80,10 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             }
         }
 
+        /// Filters that change each pixel by its colour alone, which can
+        /// also be adjustment layers changing everything beneath them.
+        var isPerPixel: Bool { Self.groups[0].contains(self) || Self.groups[1].contains(self) }
+
         var hasAngle: Bool { self == .motionBlur }
         /// Filters set with their own controls rather than one amount.
         var hasAmount: Bool { ![.levels, .curves, .colorBalance].contains(self) }

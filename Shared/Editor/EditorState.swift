@@ -556,7 +556,8 @@ final class EditorState {
     }
 
     /// Whether painting goes into a mask right now.
-    var editsMask: Bool { isEditingMask && activeLayer?.mask != nil }
+    /// An adjustment layer has nothing else to paint on.
+    var editsMask: Bool { (isEditingMask || activeLayer?.isAdjustment == true) && activeLayer?.mask != nil }
 
     /// A mask is painted where it lines up with the canvas, so the stroke
     /// shown under the finger matches what is painted. Lines it up first.

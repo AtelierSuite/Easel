@@ -10,6 +10,14 @@ extension EditorState {
         activeLayerID = layer.id
     }
 
+    /// Adds an adjustment layer above the active one, changing everything
+    /// beneath it until painting on its mask holds it back.
+    func addAdjustmentLayer(_ kind: LayerFilter.Kind) {
+        let layer = read().adjustmentLayer(kind)
+        update { $0.insert(layer, above: activeLayerID) }
+        activeLayerID = layer.id
+    }
+
     func canDelete(_ id: Layer.ID) -> Bool {
         read().layers.count > 1 && read()[id] != nil
     }
@@ -444,6 +452,10 @@ extension EditorState {
 
     func updateFilter(_ id: LayerFilter.ID, _ change: (inout LayerFilter) -> Void) {
         updateActiveLayer { layer in
+            if layer.adjustment?.id == id {
+                change(&layer.adjustment!)
+                return
+            }
             guard let index = layer.filters.firstIndex(where: { $0.id == id }) else { return }
             change(&layer.filters[index])
         }

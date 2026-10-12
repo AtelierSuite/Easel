@@ -23,6 +23,11 @@ enum CompositionRenderer {
         for unit in layers.clippingUnits where unit.base.isVisible && unit.base.opacity > 0 {
             let clipped = unit.clipped.filter { $0.isVisible && $0.opacity > 0 }
             let base = unit.base
+            if base.isAdjustment {
+                // With no pixels of its own, nothing clipped to it shows.
+                adjust(context, with: base)
+                continue
+            }
             let styled = base.styledImage
             guard !clipped.isEmpty else {
                 draw(base, image: styled.composite, padding: styled.padding, in: context)
@@ -37,25 +42,78 @@ enum CompositionRenderer {
             context.beginTransparencyLayer(auxiliaryInfo: nil)
             let plain = base.with(opacity: 1, blendMode: .normal)
             if let behind = styled.behind { draw(plain, image: behind, padding: styled.padding, in: context) }
-            context.saveGState()
-            context.beginTransparencyLayer(auxiliaryInfo: nil)
-            // Drawing the base's shape over the group below only cuts
-            // within the image's own edges; past them, the clip does.
-            context.addLines(between: plain.corners(padding: styled.padding))
-            context.closePath()
-            context.clip()
-            draw(plain, image: opaque(styled.content), padding: styled.padding, in: context)
-            for layer in clipped {
-                let image = layer.styledImage
-                draw(layer, image: image.composite, padding: image.padding, in: context)
+            // Drawn apart, so adjustment layers clipped to the base see
+            // only the group beneath them.
+            let group = offscreen(like: context) { group in
+                // Drawing the base's shape over the group only cuts within
+                // the image's own edges; past them, the clip does.
+                group.addLines(between: plain.corners(padding: styled.padding))
+                group.closePath()
+                group.clip()
+                draw(plain, image: opaque(styled.content), padding: styled.padding, in: group)
+                for layer in clipped {
+                    if layer.isAdjustment {
+                        adjust(group, with: layer)
+                    } else {
+                        let image = layer.styledImage
+                        draw(layer, image: image.composite, padding: image.padding, in: group)
+                    }
+                }
+                draw(plain, image: styled.content, padding: styled.padding, in: group, blendMode: .destinationIn)
             }
-            draw(plain, image: styled.content, padding: styled.padding, in: context, blendMode: .destinationIn)
-            context.endTransparencyLayer()
-            context.restoreGState()
+            if let group { drawInDeviceSpace(group, in: context) }
             if let front = styled.front { draw(plain, image: front, padding: styled.padding, in: context) }
             context.endTransparencyLayer()
             context.restoreGState()
         }
+    }
+
+    /// Changes what is drawn in `context` so far with an adjustment layer's
+    /// filter, where its mask shows, mixed in at its opacity and blend mode.
+    private static func adjust(_ context: CGContext, with layer: Layer) {
+        guard let filter = layer.adjustment, filter.isEnabled, let backdrop = context.makeImage() else { return }
+        // The mask where the layer sits, in the context's own pixels.
+        let mask = layer.activeMask.flatMap { mask in
+            offscreen(like: context) { masked in
+                masked.concatenate(layer.affineTransform)
+                Bitmap.draw(mask.image.cgImage, in: CGRect(origin: .zero, size: layer.image.size), context: masked)
+            }
+        }
+        let adjusted = ImageProcessing.apply({ input in
+            let changed = filter.apply(to: input)
+            guard let mask else { return changed }
+            let masked = CIFilter.blendWithAlphaMask()
+            masked.inputImage = changed
+            masked.backgroundImage = CIImage.empty()
+            masked.maskImage = CIImage(cgImage: mask)
+            return masked.outputImage ?? changed
+        }, to: backdrop)
+        context.saveGState()
+        context.setAlpha(layer.opacity)
+        context.setBlendMode(layer.blendMode.cgBlendMode)
+        drawInDeviceSpace(adjusted, in: context)
+        context.restoreGState()
+    }
+
+    /// A transparent bitmap the size of `context`'s, drawn into through the
+    /// same transform. Nil for contexts that are not bitmaps.
+    private static func offscreen(like context: CGContext, _ draw: (CGContext) -> Void) -> CGImage? {
+        guard context.width > 0, context.height > 0, let made = CGContext(
+            data: nil, width: context.width, height: context.height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: Bitmap.colorSpace, bitmapInfo: Bitmap.bitmapInfo
+        ) else { return nil }
+        made.concatenate(context.ctm)
+        made.interpolationQuality = .high
+        draw(made)
+        return made.makeImage()
+    }
+
+    /// Draws an image covering the whole of a bitmap context, pixel for pixel.
+    private static func drawInDeviceSpace(_ image: CGImage, in context: CGContext) {
+        context.saveGState()
+        context.concatenate(context.ctm.inverted())
+        context.draw(image, in: CGRect(x: 0, y: 0, width: context.width, height: context.height))
+        context.restoreGState()
     }
 
     /// Draws `image`, the layer's pixels with `padding` of the image's own

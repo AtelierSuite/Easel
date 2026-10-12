@@ -80,12 +80,14 @@ struct LayerFiltersPanel: View {
     }
 }
 
-/// One filter: what it is, whether it is on, and its settings.
-private struct FilterRow: View {
+/// One filter: what it is, whether it is on, and its settings. An
+/// adjustment layer's filter is shown the same way, without the moves.
+struct FilterRow: View {
     let filter: LayerFilter
     let state: EditorState
-    let canMoveUp: Bool
-    let canMoveDown: Bool
+    var canMoveUp = false
+    var canMoveDown = false
+    var isAdjustment = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -96,6 +98,7 @@ private struct FilterRow: View {
                 Text(verbatim: filter.kind.label)
                     .font(.headline)
                 Spacer()
+                if !isAdjustment {
                 Menu {
                     menuItems
                 } label: {
@@ -108,6 +111,7 @@ private struct FilterRow: View {
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Layers.More")
                 .accessibilityIdentifier("filterMenu.\(filter.kind.rawValue)")
+                }
                 // An eye, as for layers: a switch in a reorderable row loses
                 // its taps to the row.
                 Button {
@@ -168,6 +172,11 @@ private struct FilterRow: View {
 
     @ViewBuilder
     private var menuItems: some View {
+        if !isAdjustment { filterMenuItems }
+    }
+
+    @ViewBuilder
+    private var filterMenuItems: some View {
         Section {
             Button("Layers.MoveUp", systemImage: "arrow.up") { move(by: -1) }
                 .disabled(!canMoveUp)

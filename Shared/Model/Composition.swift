@@ -91,6 +91,15 @@ struct Composition: Equatable, Sendable {
         )
     }
 
+    /// An adjustment layer the size of the canvas, changing everything
+    /// beneath it with a filter of this kind, its mask showing all of it.
+    func adjustmentLayer(_ kind: LayerFilter.Kind) -> Layer {
+        var layer = emptyLayer(named: kind.label)
+        layer.adjustment = LayerFilter(kind: kind)
+        layer.mask = .revealingAll(size: size)
+        return layer
+    }
+
     /// A layer showing `image` in the middle of the canvas, shrunk to fit if
     /// it is larger: scaled rather than resampled, so the pixels stay as sharp
     /// as they came until something is painted on them.
