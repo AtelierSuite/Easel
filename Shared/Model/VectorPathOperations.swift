@@ -37,4 +37,29 @@ extension VectorPath {
         if !isClosed, result?.fill == nil { result?.fill = stroke }
         return result
     }
+
+    /// The path's line as a filled shape, dashes, ends and width profile
+    /// as they are drawn, so it can be edited point by point.
+    func outlinedStroke() -> VectorPath? {
+        guard let color = stroke, strokeWidth > 0 else { return nil }
+        let style = strokeStyleOrDefault
+        let outline: CGPath
+        if style.profile != .uniform {
+            outline = profiledOutline(width: strokeWidth)
+        } else {
+            var line: CGPath = cgPath
+            let dashes = style.dashLengths(width: strokeWidth)
+            if !dashes.isEmpty { line = line.copy(dashingWithPhase: 0, lengths: dashes) }
+            let cap: CGLineCap = style.dash == .dotted ? .round : style.cap.cgLineCap
+            outline = line.copy(strokingWithWidth: strokeWidth, lineCap: cap, lineJoin: style.join.cgLineJoin, miterLimit: 10)
+                .normalized(using: .winding)
+        }
+        guard var result = replacingOutline(with: outline) else { return nil }
+        result.fill = color
+        result.fillGradient = nil
+        result.stroke = nil
+        result.strokeStyle = nil
+        result.text = nil
+        return result
+    }
 }

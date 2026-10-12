@@ -994,7 +994,7 @@ struct SelectionMenuItems: View {
     }
 }
 
-/// Growing and shrinking the picked paths.
+/// Growing, shrinking and outlining the picked paths.
 private struct PathOperationsMenu: View {
     let state: EditorState
     let hasStroke: Bool
@@ -1008,6 +1008,8 @@ private struct PathOperationsMenu: View {
                 offsetText = "\(Int(max(4, (max(size.width, size.height) / 200).rounded())))"
                 isAskingOffset = true
             }
+            Button("Vector.OutlineStroke", systemImage: "pencil.and.outline") { state.outlineStrokes() }
+                .disabled(!hasStroke)
         }
         .accessibilityIdentifier("pathOperations")
         .alert("Vector.OffsetPath", isPresented: $isAskingOffset) {

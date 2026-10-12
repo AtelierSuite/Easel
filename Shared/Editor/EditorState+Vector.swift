@@ -421,6 +421,11 @@ extension EditorState {
         let scale = activeLayer?.transform.uniformScale ?? 1
         replacePaths { $0.offset(distance: distance / max(scale, 0.0001)) }
     }
+
+    /// Turns the paths' lines into filled shapes.
+    func outlineStrokes() {
+        replacePaths { $0.outlinedStroke() }
+    }
 }
 
 // MARK: - Text on a path

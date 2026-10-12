@@ -655,6 +655,7 @@ S = {
 "Vector.OffsetPath": ("Offset Path", "パスのオフセット", "패스 이동", "偏移路径", "位移路徑"),
 "Vector.OffsetPath.Distance": ("Distance in pixels", "距離（ピクセル）", "거리(픽셀)", "距离（像素）", "距離（像素）"),
 "Vector.OffsetPath.Message": ("Positive grows the shape; negative shrinks it.", "正の値で拡大、負の値で縮小します。", "양수는 모양을 키우고 음수는 줄입니다.", "正值扩大形状，负值缩小形状。", "正值放大形狀，負值縮小形狀。"),
+"Vector.OutlineStroke": ("Outline Stroke", "パスのアウトライン", "획 윤곽선", "轮廓化描边", "外框筆畫"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]
