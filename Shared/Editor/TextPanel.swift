@@ -5,15 +5,30 @@ struct TextPanel: View {
     @Bindable var state: EditorState
     @FocusState private var isEditing: Bool
     @State private var isPickingFont = false
+    @State private var selection: TextSelection?
+    /// The characters picked for styling, kept while a control is used
+    /// and the text field gives up its selection.
+    @State private var pickedRange: NSRange?
 
     var body: some View {
         Form {
             if let text = state.activeLayer?.text {
                 Section {
-                    TextField("Text.Placeholder", text: binding(\.string), axis: .vertical)
+                    TextField("Text.Placeholder", text: Binding(
+                        get: { text.string },
+                        set: { value in
+                            state.updateText { $0.setString(value) }
+                        }
+                    ), selection: $selection, axis: .vertical)
                         .lineLimit(1...6)
                         .focused($isEditing)
                         .accessibilityIdentifier("textContent")
+                        .onChange(of: selection) { _, selection in pick(selection, in: text.string) }
+                } footer: {
+                    if pickedRange == nil { Text("Text.Selection.Footer") }
+                }
+                if let range = pickedRange, NSMaxRange(range) <= text.string.utf16.count {
+                    CharacterStyleSection(text: text, range: range, state: state) { pickedRange = nil }
                 }
                 Section {
                     Button {
@@ -209,6 +224,15 @@ struct TextPanel: View {
         .panelActions(confirm: { state.presentedPanel = nil })
     }
 
+    /// Picks characters for styling when some are selected; a caret alone
+    /// lets go of them.
+    private func pick(_ selection: TextSelection?, in string: String) {
+        guard let selection else { return }
+        guard case .selection(let range) = selection.indices,
+              range.lowerBound >= string.startIndex, range.upperBound <= string.endIndex else { return }
+        pickedRange = range.isEmpty ? nil : NSRange(range, in: string)
+    }
+
     /// Black or white, whichever stands out against the text's colour, as a
     /// starting point for an outline or background.
     private static func contrasting(_ color: RGBAColor) -> RGBAColor {
@@ -223,3 +247,78 @@ struct TextPanel: View {
         )
     }
 }
+
+/// Styling for the characters picked in the text, over the layer's own.
+private struct CharacterStyleSection: View {
+    let text: TextContent
+    let range: NSRange
+    let state: EditorState
+    let done: () -> Void
+
+    var body: some View {
+        let style = text.style(in: range)
+        Section {
+            ColorPicker("Text.Color", selection: Binding(
+                get: { (style.color ?? text.color).color },
+                set: { value in restyle { $0.color = RGBAColor(value) } }
+            ))
+            HStack {
+                Toggle("Text.Bold", systemImage: "bold", isOn: Binding(
+                    get: { style.isBold ?? text.isBold }, set: { value in restyle { $0.isBold = value } }
+                ))
+                Toggle("Text.Italic", systemImage: "italic", isOn: Binding(
+                    get: { style.isItalic ?? text.isItalic }, set: { value in restyle { $0.isItalic = value } }
+                ))
+                Toggle("Text.Underline", systemImage: "underline", isOn: Binding(
+                    get: { style.isUnderlined ?? false }, set: { value in restyle { $0.isUnderlined = value ? true : nil } }
+                ))
+            }
+            .toggleStyle(.button)
+            .labelStyle(.iconOnly)
+            LabeledSlider(
+                label: "Text.Size",
+                value: Binding(
+                    get: { log2(style.sizeScale ?? 1) },
+                    set: { value in restyle { $0.sizeScale = abs(value) < 0.02 ? nil : pow(2, value) } }
+                ),
+                range: -2...2,
+                valueText: "\(Int(((style.sizeScale ?? 1) * 100).rounded()))%"
+            )
+            LabeledSlider(
+                label: "Text.Selection.Kerning",
+                value: Binding(
+                    get: { style.kerning ?? 0 },
+                    set: { value in restyle { $0.kerning = abs(value) < 0.005 ? nil : value } }
+                ),
+                range: -0.3...1,
+                valueText: "\(Int(((style.kerning ?? 0) * 1000).rounded()))"
+            )
+            .accessibilityIdentifier("characterKerning")
+            LabeledSlider(
+                label: "Text.Selection.Baseline",
+                value: Binding(
+                    get: { style.baselineShift ?? 0 },
+                    set: { value in restyle { $0.baselineShift = abs(value) < 0.01 ? nil : value } }
+                ),
+                range: -1...1,
+                valueText: "\(Int(((style.baselineShift ?? 0) * text.fontSize).rounded())) px"
+            )
+            Button("Text.Selection.Clear", systemImage: "eraser") {
+                state.updateText { $0.clearStyle(range) }
+            }
+        } header: {
+            HStack {
+                Text("Text.Selection")
+                Spacer()
+                Button("Common.Done", action: done)
+                    .font(.footnote)
+            }
+        }
+        .accessibilityIdentifier("characterStyle")
+    }
+
+    private func restyle(_ change: @escaping (inout TextRun.Style) -> Void) {
+        state.updateText { $0.restyle(range, change) }
+    }
+}
+

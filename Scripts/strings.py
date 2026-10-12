@@ -570,6 +570,13 @@ S = {
 "Text.Box": ("Paragraph Box", "段落テキスト", "단락 상자", "段落文本框", "段落文字框"),
 "Text.Box.Width": ("Box Width", "ボックスの幅", "상자 폭", "文本框宽度", "文字框寬度"),
 "Text.Box.Footer": ("In a box, lines wrap to its width.", "ボックス内では、行がボックスの幅で折り返されます。", "상자 안에서는 행이 상자 폭에 맞춰 줄 바꿈됩니다.", "在文本框中，文本行会按文本框宽度换行。", "在文字框中，文字行會依文字框寬度換行。"),
+"Text.Selection": ("Selected Characters", "選択した文字", "선택한 문자", "所选字符", "所選字元"),
+"Text.Selection.Footer": ("Select characters to style them on their own.", "文字を選択すると、その文字だけにスタイルを設定できます。", "문자를 선택하여 해당 문자에만 스타일을 적용하십시오.", "选择字符以单独设置其样式。", "選取字元以單獨設定其樣式。"),
+"Text.Selection.Kerning": ("Kerning", "カーニング", "커닝", "字偶间距", "字距微調"),
+"Text.Selection.Baseline": ("Baseline Shift", "ベースラインシフト", "기준선 이동", "基线偏移", "基線位移"),
+"Text.Selection.Clear": ("Clear Character Styling", "文字のスタイルを消去", "문자 스타일 지우기", "清除字符样式", "清除字元樣式"),
+"Text.Underline": ("Underline", "下線", "밑줄", "下划线", "底線"),
+"Common.Done": ("Done", "完了", "완료", "完成", "完成"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

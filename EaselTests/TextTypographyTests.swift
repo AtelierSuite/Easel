@@ -91,3 +91,80 @@ struct ParagraphTextTests {
         #expect(composition.layers[0].text?.boxWidth == 600)
     }
 }
+
+@Suite("Character styling")
+struct CharacterStyleTests {
+    private func content(_ string: String = "Hello World") -> TextContent {
+        TextContent(string: string, fontSize: 40, color: .black)
+    }
+
+    @Test func restylingAffectsOnlyThePickedCharacters() {
+        var text = content()
+        text.restyle(NSRange(location: 6, length: 5)) { $0.color = RGBAColor(red: 1, green: 0, blue: 0) }
+        #expect(text.runs == [TextRun(location: 6, length: 5, style: .init(color: RGBAColor(red: 1, green: 0, blue: 0)))])
+        #expect(text.style(in: NSRange(location: 0, length: 5)).color == nil)
+        #expect(text.style(in: NSRange(location: 7, length: 2)).color == RGBAColor(red: 1, green: 0, blue: 0))
+        // Mixed picks share nothing.
+        #expect(text.style(in: NSRange(location: 4, length: 4)).color == nil)
+    }
+
+    @Test func neighbouringRunsAlikeJoin() {
+        var text = content()
+        text.restyle(NSRange(location: 0, length: 3)) { $0.isBold = true }
+        text.restyle(NSRange(location: 3, length: 2)) { $0.isBold = true }
+        #expect(text.runs?.count == 1)
+        #expect(text.runs?.first?.length == 5)
+    }
+
+    @Test func clearingTakesStylingOff() {
+        var text = content()
+        text.restyle(NSRange(location: 0, length: 5)) { $0.isUnderlined = true }
+        text.clearStyle(NSRange(location: 0, length: 5))
+        #expect(text.runs == nil)
+    }
+
+    @Test func typingKeepsRunsOnTheirCharacters() {
+        var text = content()
+        text.restyle(NSRange(location: 6, length: 5)) { $0.isBold = true }
+        // Typed before the run: it moves along.
+        text.setString("Oh Hello World")
+        #expect(text.runs?.first?.location == 9)
+        #expect(text.runs?.first?.length == 5)
+        // Typed inside it: the run grows.
+        text.setString("Oh Hello Wonderful World".replacingOccurrences(of: "Wonderful World", with: "Worrrld"))
+        #expect(text.runs?.first?.location == 9)
+        #expect(text.runs?.first?.length == 7)
+        // Deleted: the run shrinks to what is left.
+        text.setString("Oh Hello Wo")
+        #expect(text.runs?.first?.length == 2)
+    }
+
+    @Test func styledCharactersDrawDifferently() {
+        let plain = content("WWWW")
+        var big = plain
+        big.restyle(NSRange(location: 0, length: 2)) { $0.sizeScale = 2 }
+        #expect(TextRenderer.render(big).width > TextRenderer.render(plain).width + 40)
+        var red = plain
+        red.restyle(NSRange(location: 0, length: 4)) { $0.color = RGBAColor(red: 1, green: 0, blue: 0) }
+        let image = TextRenderer.render(red)
+        let sawRed = (0..<image.height).contains { y in (0..<image.width).contains { x in TestImages.isRed(image, x: x, y: y) } }
+        #expect(sawRed)
+    }
+
+    @Test func kerningMovesLettersApart() {
+        let plain = content("ABCD")
+        var kerned = plain
+        kerned.restyle(NSRange(location: 1, length: 1)) { $0.kerning = 1 }
+        #expect(TextRenderer.render(kerned).width > TextRenderer.render(plain).width + 30)
+    }
+
+    @Test func runsAreSaved() throws {
+        var text = content()
+        text.restyle(NSRange(location: 0, length: 5)) { $0.baselineShift = 0.3; $0.isItalic = true }
+        let layer = Layer(name: "Text", image: LayerImage(TextRenderer.render(text)), text: text,
+                          transform: LayerTransform(position: CGPoint(x: 50, y: 50)))
+        let composition = Composition(size: CGSize(width: 100, height: 100), layers: [layer])
+        let read = try CompositionArchive.composition(from: try CompositionArchive.fileWrapper(for: composition))
+        #expect(read.layers[0].text?.runs == text.runs)
+    }
+}

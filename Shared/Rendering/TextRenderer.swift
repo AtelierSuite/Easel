@@ -50,7 +50,30 @@ enum TextRenderer {
         if let tracking = text.tracking { attributes[.tracking] = tracking * text.fontSize }
         // A kern of zero turns the font's pair kerning off.
         if text.usesKerning == false { attributes[.kern] = 0 }
-        return NSAttributedString(string: string, attributes: attributes)
+        let attributed = NSMutableAttributedString(string: string, attributes: attributes)
+        for run in text.runs ?? [] where NSMaxRange(run.range) <= attributed.length {
+            attributed.addAttributes(self.attributes(of: run.style, over: text), range: run.range)
+        }
+        return attributed
+    }
+
+    /// What a run's style changes from the layer's own.
+    private static func attributes(of style: TextRun.Style, over text: TextContent) -> [NSAttributedString.Key: Any] {
+        var attributes: [NSAttributedString.Key: Any] = [:]
+        if style.sizeScale != nil || style.isBold != nil || style.isItalic != nil {
+            var face = text
+            face.fontSize = text.fontSize * (style.sizeScale ?? 1)
+            face.isBold = style.isBold ?? text.isBold
+            face.isItalic = style.isItalic ?? text.isItalic
+            attributes[.font] = font(for: face)
+        }
+        if let color = style.color {
+            attributes[.foregroundColor] = UIColor(red: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
+        }
+        if style.isUnderlined == true { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        if let kerning = style.kerning { attributes[.kern] = kerning * text.fontSize }
+        if let shift = style.baselineShift { attributes[.baselineOffset] = shift * text.fontSize }
+        return attributes
     }
 
     /// The text drawn on a transparent image just large enough to hold it,

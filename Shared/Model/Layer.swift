@@ -293,6 +293,8 @@ struct TextContent: Codable, Equatable, Sendable {
     /// Set for paragraph text: lines wrap to fit this width, in canvas
     /// pixels. Nil lets each line run as long as it is.
     var boxWidth: Double?
+    /// Characters styled apart from the rest; see `TextRun`.
+    var runs: [TextRun]?
     /// A line drawn around each letter; nil for none. Optional so files
     /// saved before outlines existed still open.
     var outline: Outline?
