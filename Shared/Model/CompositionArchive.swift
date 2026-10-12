@@ -37,6 +37,13 @@ enum CompositionArchive {
         var groups: [LayerGroup]?
         var guides: [Guide]?
         var swatches: [RGBAColor]?
+        var patterns: [PatternRecord]?
+    }
+
+    struct PatternRecord: Codable {
+        var id: UUID
+        var name: String
+        var file: String
     }
 
     struct LayerRecord: Codable {
@@ -158,11 +165,18 @@ enum CompositionArchive {
                 isBlank: layer.image.isBlank ? true : nil
             ))
         }
+        var patterns: [PatternRecord] = []
+        for pattern in composition.patterns {
+            let file = "pattern-\(pattern.id.uuidString).png"
+            try write(file, try pattern.image.pngData())
+            patterns.append(PatternRecord(id: pattern.id, name: pattern.name, file: file))
+        }
         return Manifest(
             version: currentVersion, width: composition.size.width, height: composition.size.height, layers: records,
             groups: composition.groups.isEmpty ? nil : composition.groups,
             guides: composition.guides.isEmpty ? nil : composition.guides,
-            swatches: composition.swatches.isEmpty ? nil : composition.swatches
+            swatches: composition.swatches.isEmpty ? nil : composition.swatches,
+            patterns: patterns.isEmpty ? nil : patterns
         )
     }
 
@@ -206,6 +220,10 @@ enum CompositionArchive {
         )
         composition.guides = manifest.guides ?? []
         composition.swatches = manifest.swatches ?? []
+        composition.patterns = try (manifest.patterns ?? []).map { record in
+            guard let data = read(record.file) else { throw Failure.missingLayer(record.file) }
+            return PatternSwatch(id: record.id, name: record.name, image: LayerImage(try ImageCodec.decode(data), encoded: data))
+        }
         composition.normalizeGroups()
         return composition
     }

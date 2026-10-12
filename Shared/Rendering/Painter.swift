@@ -91,6 +91,34 @@ enum Painter {
         return pixels.makeImage()
     }
 
+    /// Fills the run of similar colour around `seed` with a pattern instead
+    /// of a colour. Nil when the seed is off the image.
+    static func floodFill(
+        _ image: CGImage, at seed: CGPoint, with pattern: PatternChoice, swatches: [PatternSwatch], tolerance: Double,
+        clip: Selection?
+    ) -> CGImage? {
+        guard let pixels = Bitmap.pixels(of: image) else { return nil }
+        let seedX = Int(seed.x.rounded(.down)), seedY = Int(seed.y.rounded(.down))
+        guard (0..<pixels.width).contains(seedX), (0..<pixels.height).contains(seedY) else { return nil }
+        var region = floodRegion(in: pixels, seedX: seedX, seedY: seedY, tolerance: tolerance)
+        if let clip {
+            let allowed = clip.coverage(width: pixels.width, height: pixels.height)
+            for index in region.indices { region[index] = min(region[index], allowed[index]) }
+        }
+        guard let mask = SelectionMask(bytes: region, width: pixels.width, height: pixels.height) else { return image }
+        return fill(Selection(shape: .mask(mask)), with: pattern, swatches: swatches, onto: image)
+    }
+
+    /// Fills the selected area with a pattern, tiled from the canvas's top left.
+    static func fill(_ selection: Selection, with pattern: PatternChoice, swatches: [PatternSwatch], onto image: CGImage) -> CGImage {
+        let size = CGSize(width: image.width, height: image.height)
+        return Bitmap.render(size: size) { context in
+            Bitmap.draw(image, in: CGRect(origin: .zero, size: size), context: context)
+            selection.clip(context, canvasSize: size)
+            pattern.draw(in: context, rect: selection.bounds(in: size), swatches: swatches)
+        }
+    }
+
     /// Which pixels a flood from the seed reaches, by scanline: each run is
     /// filled across in one go and only the rows above and below are queued.
     static func floodRegion(in pixels: PixelBuffer, seedX: Int, seedY: Int, tolerance: Double) -> [UInt8] {

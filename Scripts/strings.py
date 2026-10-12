@@ -669,6 +669,20 @@ S = {
 "Align.DistributeDown": ("Distribute Vertically", "垂直方向に分布", "수직으로 분산", "垂直分布", "垂直分佈"),
 "Export.SVG": ("SVG (Vectors)", "SVG（ベクター）", "SVG(벡터)", "SVG（矢量）", "SVG（向量）"),
 "Export.PDF": ("PDF (Vectors)", "PDF（ベクター）", "PDF(벡터)", "PDF（矢量）", "PDF（向量）"),
+"Pattern.Fill": ("Fill With", "塗りつぶし", "채우기", "填充内容", "填色內容"),
+"Pattern.UsePattern": ("Use a Pattern", "パターンを使用", "패턴 사용", "使用图案", "使用圖樣"),
+"Pattern.BuiltIn": ("Patterns", "パターン", "패턴", "图案", "圖樣"),
+"Pattern.Document": ("This Picture's Patterns", "この画像のパターン", "이 그림의 패턴", "此图片的图案", "此圖片的圖樣"),
+"Pattern.Scale": ("Tile Size", "タイルのサイズ", "타일 크기", "拼贴大小", "拼貼大小"),
+"Pattern.Define": ("Define Pattern", "パターンを定義", "패턴 정의", "定义图案", "定義圖樣"),
+"Pattern.CustomName %lld": ("Pattern %lld", "パターン %lld", "패턴 %lld", "图案 %lld", "圖樣 %lld"),
+"Pattern.Dots": ("Dots", "ドット", "점", "圆点", "圓點"),
+"Pattern.Stripes": ("Stripes", "ストライプ", "줄무늬", "条纹", "條紋"),
+"Pattern.Checker": ("Checkerboard", "市松模様", "체크무늬", "棋盘格", "棋盤格"),
+"Pattern.Grid": ("Grid", "グリッド", "격자", "网格", "格線"),
+"Pattern.Diagonal": ("Diagonal Lines", "斜線", "사선", "斜线", "斜線"),
+"Pattern.Waves": ("Waves", "波", "물결", "波浪", "波浪"),
+"History.Patterns": ("Patterns", "パターン", "패턴", "图案", "圖樣"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

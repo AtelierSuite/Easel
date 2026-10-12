@@ -17,6 +17,8 @@ struct Composition: Equatable, Sendable {
     var guides: [Guide] = []
     /// Colours kept with the picture, to paint with again.
     var swatches: [RGBAColor] = []
+    /// Pattern tiles made from the picture, to fill with again.
+    var patterns: [PatternSwatch] = []
 
     static let defaultSize = CGSize(width: 2048, height: 1536)
 

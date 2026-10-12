@@ -125,12 +125,17 @@ struct ToolOptionsBar: View {
     }
 
     private var fillOptions: some View {
-        GlassGroup(scrollsHorizontally: true) {
-            ColorWell(state: state)
-            OptionSlider(
-                value: $state.fillTolerance, label: "Options.Tolerance",
-                valueText: "\(Int((state.fillTolerance * 100).rounded()))%"
-            )
+        Group {
+            GlassGroup(scrollsHorizontally: true) {
+                ColorWell(state: state)
+                OptionSlider(
+                    value: $state.fillTolerance, label: "Options.Tolerance",
+                    valueText: "\(Int((state.fillTolerance * 100).rounded()))%"
+                )
+            }
+            GlassGroup(scrollsHorizontally: true) {
+                PatternMenu(state: state)
+            }
         }
     }
 
@@ -989,6 +994,7 @@ struct SelectionMenuItems: View {
             Button("Select.CopyToLayer", systemImage: "square.on.square") { state.copySelectionToNewLayer(cut: false) }
             Button("Select.CutToLayer", systemImage: "scissors") { state.copySelectionToNewLayer(cut: true) }
             Button("Select.Fill", systemImage: "drop.fill") { state.fillSelection() }
+            Button("Pattern.Define", systemImage: "square.grid.3x3.square") { state.definePattern() }
             Button("Select.FillFromSurroundings", systemImage: "bandage") { state.fillSelectionFromSurroundings() }
             Button("Select.Clear", systemImage: "trash", role: .destructive) { state.clearSelection() }
         }
@@ -1010,6 +1016,51 @@ struct SelectionMenuItems: View {
             Button("Select.CropToSelection", systemImage: "crop") { state.cropToSelection() }
                 .disabled(!hasSelection)
         }
+    }
+}
+
+/// Whether fills lay down the brush colour or a pattern, which pattern,
+/// and how large its tiles are.
+struct PatternMenu: View {
+    @Bindable var state: EditorState
+
+    var body: some View {
+        GlassMenuButton(
+            symbol: state.fillsWithPattern ? (state.fillPattern.preset?.symbolName ?? "photo.stack") : "drop.fill",
+            label: "Pattern.Fill"
+        ) {
+            Toggle("Pattern.UsePattern", systemImage: "square.grid.3x3.fill", isOn: $state.fillsWithPattern)
+            Section("Pattern.BuiltIn") {
+                ForEach(PatternChoice.Preset.allCases) { preset in
+                    Button {
+                        state.fillPattern.preset = preset
+                        state.fillPattern.swatchID = nil
+                        state.fillsWithPattern = true
+                    } label: {
+                        Label(LocalizedStringKey(preset.labelKey), systemImage: preset.symbolName)
+                    }
+                    .accessibilityIdentifier("pattern.\(preset.rawValue)")
+                }
+            }
+            if !state.composition.patterns.isEmpty {
+                Section("Pattern.Document") {
+                    ForEach(state.composition.patterns) { swatch in
+                        Button(swatch.name, systemImage: "photo") {
+                            state.fillPattern.preset = nil
+                            state.fillPattern.swatchID = swatch.id
+                            state.fillsWithPattern = true
+                        }
+                    }
+                }
+            }
+            Picker("Pattern.Scale", selection: $state.fillPattern.scale) {
+                ForEach([0.5, 1, 2, 4], id: \.self) { scale in
+                    Text(verbatim: "\(Int(scale * 100))%").tag(scale)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        .accessibilityIdentifier("patternMenu")
     }
 }
 

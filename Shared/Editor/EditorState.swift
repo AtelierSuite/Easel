@@ -61,6 +61,10 @@ final class EditorState {
     /// Whether the next tap picks the clone stamp's source.
     var isPickingCloneSource = false
     var fillTolerance = 0.12
+    /// Whether the fill tool and Fill Selection lay down a pattern rather
+    /// than the brush colour.
+    var fillsWithPattern = false
+    var fillPattern = PatternChoice()
     /// Whether the brush and eraser paint mirrored copies of each stroke.
     var symmetry: Symmetry = .off
     /// The straightedge strokes run along, when it is out.
@@ -1274,6 +1278,14 @@ final class EditorState {
         let color = color
         let tolerance = fillTolerance
         let selection = selection
+        if fillsWithPattern {
+            let pattern = currentFillPattern
+            let swatches = composition.patterns
+            editPixels(of: layerID) { image, size in
+                Painter.floodFill(image, at: point, with: pattern, swatches: swatches, tolerance: tolerance, clip: selection)
+            }
+            return
+        }
         editPixels(of: layerID) { image, size in
             Painter.floodFill(image, at: point, with: color, tolerance: tolerance, clip: selection)
         }

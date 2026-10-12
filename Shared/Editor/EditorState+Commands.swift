@@ -259,9 +259,36 @@ extension EditorState {
             return
         }
         let color = color
+        if fillsWithPattern {
+            let pattern = currentFillPattern
+            let swatches = composition.patterns
+            editPixels(of: layerID) { image, _ in
+                Painter.fill(selection, with: pattern, swatches: swatches, onto: image)
+            }
+            return
+        }
         editPixels(of: layerID) { image, size in
             Painter.fill(selection, with: color, onto: image)
         }
+    }
+
+    /// The fill pattern in the brush colour, for built-in tiles.
+    var currentFillPattern: PatternChoice {
+        var pattern = fillPattern
+        pattern.color = color
+        return pattern
+    }
+
+    /// Keeps the selected part of the active layer as a pattern tile, and
+    /// starts filling with it.
+    func definePattern() {
+        guard selection != nil, let image = copiedImage(), image.width > 1, image.height > 1 else { return }
+        let swatch = PatternSwatch(
+            name: String(localized: "Pattern.CustomName \(read().patterns.count + 1)"), image: LayerImage(image)
+        )
+        update { $0.patterns.append(swatch) }
+        fillPattern = PatternChoice(preset: nil, swatchID: swatch.id, scale: 1)
+        fillsWithPattern = true
     }
 
     /// Lifts the selected part of the active layer onto a layer of its own,
