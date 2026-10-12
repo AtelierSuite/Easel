@@ -40,3 +40,40 @@ struct StraightenTests {
         }
     }
 }
+
+@Suite("Perspective crop")
+struct PerspectiveCropTests {
+    private let quad = [CGPoint(x: 60, y: 20), CGPoint(x: 140, y: 20), CGPoint(x: 180, y: 140), CGPoint(x: 20, y: 140)]
+
+    /// A red trapezoid, as a sign seen from below, on blue.
+    private func sign() -> Composition {
+        let size = CGSize(width: 200, height: 160)
+        let image = Bitmap.render(size: size) { context in
+            context.setFillColor(RGBAColor(red: 0, green: 0, blue: 1).cgColor)
+            context.fill(CGRect(origin: .zero, size: size))
+            context.setFillColor(RGBAColor(red: 1, green: 0, blue: 0).cgColor)
+            context.addLines(between: quad)
+            context.closePath()
+            context.fillPath()
+        }
+        return Composition(size: size, layers: [Layer(name: "Sign", image: LayerImage(image), canvasSize: size)])
+    }
+
+    @Test func theQuadIsFlattenedToFillTheCanvas() {
+        var composition = sign()
+        composition.perspectiveCrop(to: quad)
+        // As wide as the longer of top and bottom, as tall as the sides.
+        #expect(composition.size == CGSize(width: 160, height: (hypot(40.0, 120.0) as Double).rounded()))
+        let image = CompositionRenderer.render(composition)
+        for (x, y) in [(4, 4), (image.width - 5, 4), (image.width / 2, image.height / 2), (4, image.height - 5)] {
+            #expect(TestImages.isRed(image, x: x, y: y))
+        }
+    }
+
+    @Test func masksAreFlattenedWithTheirLayers() {
+        var composition = sign()
+        composition.layers[0].mask = .revealingAll(size: composition.size)
+        composition.perspectiveCrop(to: quad)
+        #expect(composition.layers[0].mask?.image.size == composition.size)
+    }
+}

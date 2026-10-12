@@ -141,8 +141,15 @@ final class EditorState {
     /// The crop tool's frame, in canvas pixels; nil until the tool is picked.
     var cropRect: CGRect?
     var cropMode: CropMode = .frame {
-        didSet { draftStraighten = nil }
+        didSet {
+            draftStraighten = nil
+            perspectiveQuad = cropMode == .perspective ? Self.startingQuad(in: read().canvasRect) : nil
+        }
     }
+    /// The four corners a perspective crop flattens, clockwise from the top
+    /// left, in canvas pixels.
+    var perspectiveQuad: [CGPoint]?
+    @ObservationIgnored private var quadDrag: (corner: Int, start: CGPoint, origin: CGPoint)?
     /// The line being drawn to straighten the picture along.
     var draftStraighten: (start: CGPoint, end: CGPoint)?
     /// The layer the Transform tool is bending, and how.
@@ -679,6 +686,12 @@ final class EditorState {
         case .crop:
             if cropMode == .straighten {
                 draftStraighten = (point, point)
+            } else if cropMode == .perspective, let quad = perspectiveQuad {
+                // The nearest corner follows the finger.
+                let nearest = quad.indices.min {
+                    hypot(quad[$0].x - point.x, quad[$0].y - point.y) < hypot(quad[$1].x - point.x, quad[$1].y - point.y)
+                } ?? 0
+                quadDrag = (nearest, point, quad[nearest])
             } else {
                 beginCropDrag(at: point)
             }
@@ -771,6 +784,12 @@ final class EditorState {
         case .crop:
             if draftStraighten != nil {
                 draftStraighten?.end = last.location
+            } else if let drag = quadDrag {
+                let canvas = read().canvasRect
+                perspectiveQuad?[drag.corner] = CGPoint(
+                    x: min(max(drag.origin.x + last.location.x - drag.start.x, canvas.minX), canvas.maxX),
+                    y: min(max(drag.origin.y + last.location.y - drag.start.y, canvas.minY), canvas.maxY)
+                )
             } else {
                 continueCropDrag(to: last.location)
             }
@@ -860,6 +879,7 @@ final class EditorState {
             applyGradient(from: draft.start, to: draft.end)
         case .crop:
             cropDrag = nil
+            quadDrag = nil
             if let line = draftStraighten {
                 draftStraighten = nil
                 guard hypot(line.end.x - line.start.x, line.end.y - line.start.y) > 4 else { return }
@@ -1049,6 +1069,10 @@ final class EditorState {
     }
 
     func applyCrop() {
+        if cropMode == .perspective, let quad = perspectiveQuad {
+            applyPerspectiveCrop(quad)
+            return
+        }
         guard let rect = cropRect?.integral else { return }
         let canvas = read().canvasRect
         guard rect != canvas else { return }
@@ -1072,7 +1096,35 @@ final class EditorState {
         fitCanvas()
     }
 
+    /// Flattens what lies within `quad` square-on, off the main thread.
+    func applyPerspectiveCrop(_ quad: [CGPoint]) {
+        let composition = read()
+        enqueue({ () -> Composition? in
+            var cropped = composition
+            cropped.perspectiveCrop(to: quad)
+            return cropped.size == composition.size && cropped.layers == composition.layers ? nil : cropped
+        }, apply: { [weak self] cropped in
+            guard let self else { return }
+            self.write(cropped)
+            self.selection = nil
+            self.cropMode = .frame
+            self.cropRect = cropped.canvasRect
+            self.fitCanvas()
+        })
+    }
+
+    /// Where a perspective crop's corners start: a little in from the
+    /// canvas's own.
+    static func startingQuad(in canvas: CGRect) -> [CGPoint] {
+        let inset = canvas.insetBy(dx: canvas.width * 0.1, dy: canvas.height * 0.1)
+        return [
+            CGPoint(x: inset.minX, y: inset.minY), CGPoint(x: inset.maxX, y: inset.minY),
+            CGPoint(x: inset.maxX, y: inset.maxY), CGPoint(x: inset.minX, y: inset.maxY),
+        ]
+    }
+
     func resetCrop() {
+        if cropMode == .perspective { perspectiveQuad = Self.startingQuad(in: read().canvasRect) }
         cropAspect = .free
         cropRect = read().canvasRect
     }

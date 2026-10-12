@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreImage
 import Foundation
 
 /// A whole picture: a canvas size and the layers stacked on it.
@@ -324,6 +325,64 @@ struct Composition: Equatable, Sendable {
             x: ((size.width - kept.width) / 2).rounded(.up), y: ((size.height - kept.height) / 2).rounded(.up),
             width: kept.width, height: kept.height
         ))
+    }
+
+    /// Keeps only what lies within `quad` — four canvas points, clockwise
+    /// from the top left — flattened square-on into a rectangle as wide and
+    /// tall as the quad's longer sides. Every layer becomes plain pixels.
+    mutating func perspectiveCrop(to quad: [CGPoint]) {
+        guard quad.count == 4 else { return }
+        func distance(_ a: CGPoint, _ b: CGPoint) -> Double { hypot(b.x - a.x, b.y - a.y) }
+        let newSize = CGSize(
+            width: max(distance(quad[0], quad[1]), distance(quad[3], quad[2])).rounded(),
+            height: max(distance(quad[0], quad[3]), distance(quad[1], quad[2])).rounded()
+        )
+        guard newSize.width >= 2, newSize.height >= 2,
+              newSize.width <= Double(Bitmap.maximumDimension), newSize.height <= Double(Bitmap.maximumDimension)
+        else { return }
+        let oldSize = size
+        func flattened(_ image: CGImage) -> CGImage {
+            Self.flatten(image, quad: quad, canvasSize: oldSize, to: newSize)
+        }
+        layers = layers.map { layer in
+            var flat = layer.aligned(in: oldSize)
+            flat.image = LayerImage(flattened(flat.image.cgImage))
+            if let mask = flat.mask { flat.mask?.image = LayerImage(flattened(mask.image.cgImage)) }
+            flat.transform = LayerTransform(position: CGPoint(x: newSize.width / 2, y: newSize.height / 2))
+            return flat
+        }
+        size = newSize
+        guides = []
+    }
+
+    /// `image`, the size of a canvas of `canvasSize`, with `quad` pulled out
+    /// to fill an image of `newSize`.
+    private static func flatten(_ image: CGImage, quad: [CGPoint], canvasSize: CGSize, to newSize: CGSize) -> CGImage {
+        let scaleX = Double(image.width) / canvasSize.width, scaleY = Double(image.height) / canvasSize.height
+        // Core Image counts y up from the bottom.
+        func ci(_ point: CGPoint) -> CGPoint {
+            CGPoint(x: point.x * scaleX, y: Double(image.height) - point.y * scaleY)
+        }
+        let input = CIImage(cgImage: image)
+        guard let corrected = CIFilter(name: "CIPerspectiveCorrection", parameters: [
+            kCIInputImageKey: input,
+            "inputTopLeft": CIVector(cgPoint: ci(quad[0])),
+            "inputTopRight": CIVector(cgPoint: ci(quad[1])),
+            "inputBottomRight": CIVector(cgPoint: ci(quad[2])),
+            "inputBottomLeft": CIVector(cgPoint: ci(quad[3])),
+            "inputCrop": true,
+        ])?.outputImage, corrected.extent.width > 0, corrected.extent.height > 0 else {
+            return Bitmap.solid(size: newSize, color: .clear)
+        }
+        let fitted = corrected
+            .transformed(by: CGAffineTransform(translationX: -corrected.extent.minX, y: -corrected.extent.minY))
+            .transformed(by: CGAffineTransform(
+                scaleX: newSize.width / corrected.extent.width, y: newSize.height / corrected.extent.height
+            ))
+        let rect = CGRect(origin: .zero, size: newSize)
+        return ImageProcessing.context.createCGImage(
+            fitted.cropped(to: rect), from: rect, format: .RGBA8, colorSpace: Bitmap.colorSpace
+        ) ?? Bitmap.solid(size: newSize, color: .clear)
     }
 
     /// The turn that makes a line drawn from `start` to `end` level, or

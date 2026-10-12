@@ -106,7 +106,9 @@ struct CanvasOverlay: View {
             context.stroke(ring, with: .color(.white), lineWidth: 1)
         }
 
-        if let crop = state.cropRect {
+        if let quad = state.perspectiveQuad, state.tool == .crop {
+            drawQuad(quad.map { $0.applying(transform) }, in: &context)
+        } else if let crop = state.cropRect {
             drawCrop(crop.applying(transform), in: &context)
         }
     }
@@ -253,6 +255,32 @@ struct CanvasOverlay: View {
         marker.addLine(to: CGPoint(x: center.x, y: center.y + arm))
         context.stroke(marker, with: .color(.black.opacity(0.5)), lineWidth: 3)
         context.stroke(marker, with: .color(.white), lineWidth: 1.5)
+    }
+
+    /// A perspective crop's corners, with a grid across what it flattens.
+    private func drawQuad(_ quad: [CGPoint], in context: inout GraphicsContext) {
+        var outline = Path()
+        outline.addLines(quad)
+        outline.closeSubpath()
+        var shade = Path(viewport.canvasFrame)
+        shade.addPath(outline)
+        context.fill(shade, with: .color(.black.opacity(0.5)), style: FillStyle(eoFill: true))
+        func mix(_ a: CGPoint, _ b: CGPoint, _ t: Double) -> CGPoint { CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t) }
+        var grid = Path()
+        for step in 1...3 {
+            let t = Double(step) / 4
+            grid.move(to: mix(quad[0], quad[1], t))
+            grid.addLine(to: mix(quad[3], quad[2], t))
+            grid.move(to: mix(quad[0], quad[3], t))
+            grid.addLine(to: mix(quad[1], quad[2], t))
+        }
+        context.stroke(grid, with: .color(.white.opacity(0.5)), lineWidth: 0.5)
+        context.stroke(outline, with: .color(.white), lineWidth: 1.5)
+        for corner in quad {
+            let knob = Path(ellipseIn: CGRect(x: corner.x - 9, y: corner.y - 9, width: 18, height: 18))
+            context.fill(knob, with: .color(.white))
+            context.stroke(knob, with: .color(.accentColor), lineWidth: 2)
+        }
     }
 
     private func drawCrop(_ rect: CGRect, in context: inout GraphicsContext) {

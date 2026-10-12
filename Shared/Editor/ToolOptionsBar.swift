@@ -245,12 +245,15 @@ struct ToolOptionsBar: View {
     private var cropOptions: some View {
         Group {
             GlassGroup(scrollsHorizontally: true) {
-                ForEach(CropMode.allCases) { mode in
-                    GlassIconButton(symbol: mode.symbolName, label: mode.label, isOn: state.cropMode == mode) {
-                        state.cropMode = mode
+                GlassMenuButton(symbol: state.cropMode.symbolName, label: "Crop.Mode") {
+                    Picker("Crop.Mode", selection: $state.cropMode) {
+                        ForEach(CropMode.allCases) { mode in
+                            Label(mode.label, systemImage: mode.symbolName).tag(mode)
+                                .accessibilityIdentifier("cropMode.\(mode.rawValue)")
+                        }
                     }
-                    .accessibilityIdentifier("cropMode.\(mode.rawValue)")
                 }
+                .accessibilityIdentifier("cropMode")
             }
             GlassGroup(scrollsHorizontally: true) {
                 GlassMenuButton(symbol: "aspectratio", label: "Options.AspectRatio") {
@@ -277,7 +280,7 @@ struct ToolOptionsBar: View {
                 GlassIconButton(symbol: "checkmark", label: "Options.CropApply", isOn: true) {
                     state.applyCrop()
                 }
-                .disabled(state.cropRect?.integral == state.composition.canvasRect)
+                .disabled(state.cropMode != .perspective && state.cropRect?.integral == state.composition.canvasRect)
                 .accessibilityIdentifier("applyCrop")
             }
         }

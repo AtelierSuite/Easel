@@ -587,6 +587,8 @@ S = {
 "Tone.Soften": ("Blur", "ぼかし", "흐리게", "模糊", "模糊"),
 "Crop.Mode.Frame": ("Crop Frame", "切り抜き枠", "자르기 테두리", "裁剪框", "裁切框"),
 "Crop.Mode.Straighten": ("Straighten: draw along the horizon", "角度補正：水平線に沿ってドラッグ", "수평 맞추기: 수평선을 따라 그리기", "拉直：沿地平线绘制", "拉直：沿地平線繪製"),
+"Crop.Mode.Perspective": ("Perspective Crop", "遠近法の切り抜き", "원근 자르기", "透视裁剪", "透視裁切"),
+"Crop.Mode": ("Crop Mode", "切り抜きモード", "자르기 모드", "裁剪模式", "裁切模式"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

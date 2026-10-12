@@ -208,6 +208,9 @@ enum CropMode: String, CaseIterable, Identifiable, Sendable {
     case frame
     /// Draws a line along something that should be level.
     case straighten
+    /// Drags four corners round something seen at an angle, which is then
+    /// flattened square-on.
+    case perspective
 
     var id: String { rawValue }
 
@@ -215,6 +218,7 @@ enum CropMode: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .frame: return "Crop.Mode.Frame"
         case .straighten: return "Crop.Mode.Straighten"
+        case .perspective: return "Crop.Mode.Perspective"
         }
     }
 
@@ -222,6 +226,7 @@ enum CropMode: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .frame: return "crop"
         case .straighten: return "level"
+        case .perspective: return "perspective"
         }
     }
 }
