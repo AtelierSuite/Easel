@@ -126,6 +126,36 @@ extension EditorState {
     }
 
     /// Back to the layer's own size, in the middle of the canvas.
+    /// The layers aligning and distributing move: a picked group's, or the
+    /// active layer.
+    private var arrangedLayerIDs: [Layer.ID] {
+        if let groupID = activeGroupID {
+            return read().layers(in: groupID).filter { !read().isLocked($0) }.map(\.id)
+        }
+        guard let layer = activeLayer, !read().isLocked(layer) else { return [] }
+        return [layer.id]
+    }
+
+    /// Lines the active layer up with the canvas's edge or middle, or a
+    /// picked group's layers up with one another.
+    func align(_ edge: AlignEdge) {
+        let ids = arrangedLayerIDs
+        guard !ids.isEmpty else { return }
+        update { composition in
+            let target = ids.count > 1
+                ? ids.compactMap { composition[$0]?.bounds }.reduce(CGRect.null) { $0.union($1) }
+                : composition.canvasRect
+            composition.align(ids, edge, to: target)
+        }
+    }
+
+    /// Spaces a picked group's layers evenly, across or down.
+    func distribute(horizontally: Bool) {
+        let ids = arrangedLayerIDs
+        guard ids.count > 2 else { return }
+        update { $0.distribute(ids, horizontally: horizontally) }
+    }
+
     func resetTransform() {
         let center = CGPoint(x: read().size.width / 2, y: read().size.height / 2)
         updateTransform { $0 = LayerTransform(position: center) }

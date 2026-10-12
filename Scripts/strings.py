@@ -656,6 +656,17 @@ S = {
 "Vector.OffsetPath.Distance": ("Distance in pixels", "距離（ピクセル）", "거리(픽셀)", "距离（像素）", "距離（像素）"),
 "Vector.OffsetPath.Message": ("Positive grows the shape; negative shrinks it.", "正の値で拡大、負の値で縮小します。", "양수는 모양을 키우고 음수는 줄입니다.", "正值扩大形状，负值缩小形状。", "正值放大形狀，負值縮小形狀。"),
 "Vector.OutlineStroke": ("Outline Stroke", "パスのアウトライン", "획 윤곽선", "轮廓化描边", "外框筆畫"),
+"Align.Title": ("Align", "整列", "정렬", "对齐", "對齊"),
+"Align.ToCanvas": ("To the Canvas", "カンバスに整列", "캔버스에 정렬", "对齐画布", "對齊畫布"),
+"Align.ToEachOther": ("To Each Other", "互いに整列", "서로 정렬", "彼此对齐", "彼此對齊"),
+"Align.Left": ("Left Edges", "左端揃え", "왼쪽 가장자리", "左边缘", "左邊緣"),
+"Align.CenterX": ("Horizontal Centers", "水平方向中央揃え", "수평 중앙", "水平居中", "水平居中"),
+"Align.Right": ("Right Edges", "右端揃え", "오른쪽 가장자리", "右边缘", "右邊緣"),
+"Align.Top": ("Top Edges", "上端揃え", "위쪽 가장자리", "顶边缘", "頂邊緣"),
+"Align.CenterY": ("Vertical Centers", "垂直方向中央揃え", "수직 중앙", "垂直居中", "垂直居中"),
+"Align.Bottom": ("Bottom Edges", "下端揃え", "아래쪽 가장자리", "底边缘", "底邊緣"),
+"Align.DistributeAcross": ("Distribute Horizontally", "水平方向に分布", "수평으로 분산", "水平分布", "水平分佈"),
+"Align.DistributeDown": ("Distribute Vertically", "垂直方向に分布", "수직으로 분산", "垂直分布", "垂直分佈"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

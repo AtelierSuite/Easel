@@ -190,6 +190,25 @@ struct ToolOptionsBar: View {
                 }
             }
             GlassGroup(scrollsHorizontally: true) {
+                GlassMenuButton(symbol: "align.horizontal.center", label: "Align.Title") {
+                    Section(state.activeGroupID == nil ? "Align.ToCanvas" : "Align.ToEachOther") {
+                        ForEach(AlignEdge.allCases) { edge in
+                            Button(edge.label, systemImage: edge.symbolName) { state.align(edge) }
+                                .accessibilityIdentifier("align.\(edge.rawValue)")
+                        }
+                    }
+                    if state.activeGroupID != nil {
+                        Section {
+                            Button("Align.DistributeAcross", systemImage: "distribute.horizontal.center") {
+                                state.distribute(horizontally: true)
+                            }
+                            Button("Align.DistributeDown", systemImage: "distribute.vertical.center") {
+                                state.distribute(horizontally: false)
+                            }
+                        }
+                    }
+                }
+                .accessibilityIdentifier("align")
                 GlassIconButton(symbol: "squareshape.dotted.split.2x2", label: "Options.Snap", isOn: state.snaps) {
                     state.snaps.toggle()
                 }
