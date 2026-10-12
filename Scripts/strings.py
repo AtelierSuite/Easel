@@ -701,6 +701,13 @@ S = {
 "Comps.Export": ("Export Each Comp", "各カンプを書き出す", "각 구성 내보내기", "导出每个复合", "輸出每個構圖"),
 "Comps.Footer": ("A comp remembers which layers show, where they sit and how they blend. Tap one to bring it back.", "カンプはレイヤーの表示、位置、描画モードを記憶します。タップすると元に戻ります。", "구성은 표시되는 레이어, 위치 및 혼합 방식을 기억합니다. 탭하여 되돌리십시오.", "复合会记住哪些图层可见、它们的位置以及混合方式。轻点即可恢复。", "構圖會記住哪些圖層可見、位置及混合方式。點一下即可恢復。"),
 "History.Comps": ("Layer Comps", "レイヤーカンプ", "레이어 구성", "图层复合", "圖層構圖"),
+"Panel.Artboards.Title": ("Artboards", "アートボード", "대지", "画板", "工作區域"),
+"Artboards.DefaultName": ("Artboard", "アートボード", "대지", "画板", "工作區域"),
+"Artboards.Add": ("Add Artboard", "アートボードを追加", "대지 추가", "添加画板", "加入工作區域"),
+"Artboards.Rename": ("Rename Artboard", "アートボードの名前を変更", "대지 이름 변경", "重命名画板", "重新命名工作區域"),
+"Artboards.Export": ("Export Each Artboard", "各アートボードを書き出す", "각 대지 내보내기", "导出每个画板", "輸出每個工作區域"),
+"Artboards.Footer": ("A new artboard covers the selection, the crop frame, or the whole canvas.", "新しいアートボードは選択範囲、切り抜き枠、またはカンバス全体になります。", "새로운 대지는 선택 영역, 자르기 테두리 또는 전체 캔버스를 덮습니다.", "新画板会覆盖选区、裁剪框或整个画布。", "新的工作區域會涵蓋選取範圍、裁切框或整個畫布。"),
+"History.Artboards": ("Artboards", "アートボード", "대지", "画板", "工作區域"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

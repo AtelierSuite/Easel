@@ -90,6 +90,16 @@ struct CanvasOverlay: View {
             drawVectorEditing(layer, in: &context, transform: transform)
         }
 
+        for artboard in composition.artboards {
+            let rect = artboard.rect.applying(transform)
+            context.stroke(Path(rect), with: .color(.black.opacity(0.35)), lineWidth: 2.5)
+            context.stroke(Path(rect), with: .color(.white), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+            context.draw(
+                Text(artboard.name).font(.caption2.weight(.semibold)).foregroundStyle(Color.secondary),
+                at: CGPoint(x: rect.minX + 2, y: rect.minY - 3), anchor: .bottomLeading
+            )
+        }
+
         drawGuides(composition.guides + [state.draftGuide].compactMap { $0 }, in: &context, transform: transform)
 
         if !state.snapLines.isEmpty {

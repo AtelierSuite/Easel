@@ -247,6 +247,8 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
     case history
     /// Saved arrangements of the layers.
     case comps
+    /// Parts of the canvas exported on their own.
+    case artboards
 
     var id: String { rawValue }
 
@@ -261,6 +263,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
         case .imageSize: return "Panel.ImageSize.Title"
         case .history: return "Panel.History.Title"
         case .comps: return "Panel.Comps.Title"
+        case .artboards: return "Panel.Artboards.Title"
         }
     }
 
@@ -275,6 +278,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
         case .imageSize: return "arrow.up.left.and.arrow.down.right"
         case .history: return "clock.arrow.circlepath"
         case .comps: return "square.stack.3d.forward.dottedline"
+        case .artboards: return "rectangle.split.2x1"
         }
     }
 
@@ -282,7 +286,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
     /// they stop at half height and the canvas moves into the top half.
     var keepsCanvasVisible: Bool {
         switch self {
-        case .layers, .adjustments, .filters, .effects, .looks, .text, .history, .comps: return true
+        case .layers, .adjustments, .filters, .effects, .looks, .text, .history, .comps, .artboards: return true
         case .imageSize: return false
         }
     }

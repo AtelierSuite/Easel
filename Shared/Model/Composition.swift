@@ -21,6 +21,8 @@ struct Composition: Equatable, Sendable {
     var patterns: [PatternSwatch] = []
     /// Saved arrangements of the layers; see `LayerComp`.
     var layerComps: [LayerComp] = []
+    /// Parts of the canvas exported as pictures of their own.
+    var artboards: [Artboard] = []
 
     static let defaultSize = CGSize(width: 2048, height: 1536)
 
@@ -199,6 +201,11 @@ struct Composition: Equatable, Sendable {
                                           flipX: Bool = false, flipY: Bool = false) {
         size = newSize
         guides = guides.compactMap { $0.applying(transform, in: newSize) }
+        artboards = artboards.compactMap { artboard in
+            var moved = artboard
+            moved.rect = artboard.rect.applying(transform).standardized.intersection(CGRect(origin: .zero, size: newSize))
+            return moved.rect.width >= 1 && moved.rect.height >= 1 ? moved : nil
+        }
         for index in layers.indices {
             var placement = layers[index].transform
             placement.position = placement.position.applying(transform)
