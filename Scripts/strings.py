@@ -668,6 +668,7 @@ S = {
 "Align.DistributeAcross": ("Distribute Horizontally", "水平方向に分布", "수평으로 분산", "水平分布", "水平分佈"),
 "Align.DistributeDown": ("Distribute Vertically", "垂直方向に分布", "수직으로 분산", "垂直分布", "垂直分佈"),
 "Export.SVG": ("SVG (Vectors)", "SVG（ベクター）", "SVG(벡터)", "SVG（矢量）", "SVG（向量）"),
+"Export.PDF": ("PDF (Vectors)", "PDF（ベクター）", "PDF(벡터)", "PDF（矢量）", "PDF（向量）"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

@@ -77,7 +77,8 @@ enum ImageAutomation {
             return try PSDWriter.data(for: Composition(image: image, name: String(localized: "Layer.DefaultName.Background")))
         case .svg:
             return SVGWriter.data(for: Composition(image: image, name: String(localized: "Layer.DefaultName.Background")))
-
+        case .pdf:
+            return PDFWriter.data(for: Composition(image: image, name: String(localized: "Layer.DefaultName.Background")))
         }
     }
 

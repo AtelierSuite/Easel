@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// once a destination is picked.
 struct CompositionExport: Transferable, Sendable {
     enum Format: String, CaseIterable, Identifiable, Sendable {
-        case png, jpeg, heic, psd, svg, easel
+        case png, jpeg, heic, psd, svg, pdf, easel
 
         var id: String { rawValue }
 
@@ -18,6 +18,7 @@ struct CompositionExport: Transferable, Sendable {
             case .heic: return .heic
             case .psd: return .photoshopImage
             case .svg: return .svg
+            case .pdf: return .pdf
             case .easel: return .easelImage
             }
         }
@@ -29,6 +30,7 @@ struct CompositionExport: Transferable, Sendable {
             case .heic: return "heic"
             case .psd: return "psd"
             case .svg: return "svg"
+            case .pdf: return "pdf"
             case .easel: return "easel"
             }
         }
@@ -40,6 +42,7 @@ struct CompositionExport: Transferable, Sendable {
             case .heic: return "Export.HEIC"
             case .psd: return "Export.PSD"
             case .svg: return "Export.SVG"
+            case .pdf: return "Export.PDF"
             case .easel: return "Export.Easel"
             }
         }
@@ -55,6 +58,7 @@ struct CompositionExport: Transferable, Sendable {
         representation(for: .heic)
         representation(for: .psd)
         representation(for: .svg)
+        representation(for: .pdf)
         representation(for: .easel)
     }
 
@@ -78,7 +82,8 @@ struct CompositionExport: Transferable, Sendable {
             try PSDWriter.data(for: composition).write(to: url, options: .atomic)
         } else if format == .svg {
             try SVGWriter.data(for: composition).write(to: url, options: .atomic)
-
+        } else if format == .pdf {
+            try PDFWriter.data(for: composition).write(to: url, options: .atomic)
         } else {
             try ImageCodec.encode(CompositionRenderer.render(composition), as: format.contentType)
                 .write(to: url, options: .atomic)

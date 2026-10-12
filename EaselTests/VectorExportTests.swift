@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import Easel
 
-@Suite("SVG export")
+@Suite("SVG and PDF export")
 struct VectorExportTests {
     private let size = CGSize(width: 200, height: 100)
 
@@ -47,5 +47,22 @@ struct VectorExportTests {
         composition.layers[1].filters = [LayerFilter(kind: .gaussianBlur)]
         let svg = try #require(String(data: SVGWriter.data(for: composition), encoding: .utf8))
         #expect(!svg.contains("fill=\"#FF0000\""))
+    }
+
+    @Test func pdfIsOnePageThatLooksLikeThePicture() throws {
+        let data = PDFWriter.data(for: sample())
+        let document = try #require(CGPDFDocument(CGDataProvider(data: data as CFData)!))
+        #expect(document.numberOfPages == 1)
+        let page = try #require(document.page(at: 1))
+        #expect(page.getBoxRect(.mediaBox).size == size)
+        // Drawn back, the red box is where it was.
+        let image = Bitmap.render(size: size) { context in
+            context.translateBy(x: 0, y: size.height)
+            context.scaleBy(x: 1, y: -1)
+            context.drawPDFPage(page)
+        }
+        let box = TestImages.pixel(image, x: 50, y: 50)
+        #expect(box.red > 200 && box.green < 120)
+        #expect(TestImages.pixel(image, x: 190, y: 90).red > 240)
     }
 }

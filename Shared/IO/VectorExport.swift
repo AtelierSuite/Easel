@@ -239,3 +239,50 @@ extension VectorPath {
         return style.alignment == .inside ? ring.intersection(shape, using: .winding) : ring.subtracting(shape, using: .winding)
     }
 }
+
+// MARK: - PDF
+
+enum PDFWriter {
+    /// One page the canvas's size, vector layers as paths and text as words.
+    static func data(for composition: Composition) -> Data {
+        let data = NSMutableData()
+        var box = CGRect(origin: .zero, size: composition.size)
+        guard let consumer = CGDataConsumer(data: data as CFMutableData),
+              let context = CGContext(consumer: consumer, mediaBox: &box, nil) else { return Data() }
+        context.beginPDFPage(nil)
+        // PDF pages count y up from the bottom; the canvas counts it down.
+        context.translateBy(x: 0, y: composition.size.height)
+        context.scaleBy(x: 1, y: -1)
+        for item in VectorExportItem.plan(for: composition) {
+            context.saveGState()
+            switch item {
+            case .vector(let layer):
+                place(layer, in: context)
+                VectorRenderer.draw(layer.vector!, in: context)
+                context.endTransparencyLayer()
+            case .text(let layer):
+                place(layer, in: context)
+                TextRenderer.draw(layer.text!, in: context, size: layer.image.size)
+                context.endTransparencyLayer()
+            case .raster(let image, let rect, let transform, let opacity, let blendMode):
+                context.setAlpha(opacity)
+                context.setBlendMode(blendMode.cgBlendMode)
+                context.concatenate(transform)
+                Bitmap.draw(image, in: rect, context: context)
+            }
+            context.restoreGState()
+        }
+        context.endPDFPage()
+        context.closePDF()
+        return data as Data
+    }
+
+    private static func place(_ layer: Layer, in context: CGContext) {
+        context.setAlpha(layer.opacity)
+        context.setBlendMode(layer.blendMode.cgBlendMode)
+        context.concatenate(layer.affineTransform)
+        // The layer's fills and lines become one before its opacity and
+        // blend mode apply, as on the canvas; the caller ends the group.
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+    }
+}
