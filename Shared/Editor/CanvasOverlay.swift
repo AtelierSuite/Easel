@@ -74,7 +74,17 @@ struct CanvasOverlay: View {
             }
         }
 
-        if state.tool == .pen, let target = state.penPath, let layer = composition[target.layerID] {
+        if let builder = state.shapeBuilder, let layer = composition[builder.layerID] {
+            let toScreen = layer.affineTransform.concatenating(transform)
+            for (index, face) in builder.faces.enumerated() {
+                let path = Path(face.path).applying(toScreen)
+                if builder.picked.contains(index) {
+                    context.fill(path, with: .color(.accentColor.opacity(0.45)), style: FillStyle(eoFill: true))
+                }
+                context.stroke(path, with: .color(.white), lineWidth: 2.5)
+                context.stroke(path, with: .color(.accentColor), style: StrokeStyle(lineWidth: 1.2, dash: [5, 3]))
+            }
+        } else if state.tool == .pen, let target = state.penPath, let layer = composition[target.layerID] {
             drawVectorEditing(layer, in: &context, transform: transform)
         } else if state.tool == .nodes, let layer = state.activeLayer, layer.isVector, layer.isVisible {
             drawVectorEditing(layer, in: &context, transform: transform)

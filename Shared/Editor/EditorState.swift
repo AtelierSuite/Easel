@@ -148,6 +148,8 @@ final class EditorState {
     var additionalNodes: [VectorNodeRef] = []
     /// Whether tapping a point adds it to those picked.
     var isSelectingMultiplePoints = false
+    /// The Shape Builder at work on a vector layer's overlapping shapes.
+    var shapeBuilder: ShapeBuilderSession?
     @ObservationIgnored var vectorDrag: VectorDrag?
     var draftSelection: Selection?
     var draftShape: ShapeSpec?
@@ -509,6 +511,7 @@ final class EditorState {
     // MARK: - Tools
 
     private func toolDidChange(from old: Tool) {
+        shapeBuilder = nil
         guard tool != old else { return }
         penPath = nil
         activeStroke = nil
@@ -692,6 +695,10 @@ final class EditorState {
         case .pen:
             penBegan(at: point)
         case .nodes:
+            if shapeBuilder != nil {
+                pickShapeBuilderFace(at: point)
+                return
+            }
             nodesBegan(at: point)
         case .transform:
             transformBegan(at: point)
@@ -795,6 +802,10 @@ final class EditorState {
         case .pen:
             penMoved(to: last.location)
         case .nodes:
+            if shapeBuilder != nil {
+                for point in points { pickShapeBuilderFace(at: point.location) }
+                return
+            }
             nodesMoved(to: last.location)
         case .transform:
             transformMoved(to: last.location)
@@ -881,6 +892,7 @@ final class EditorState {
         case .pen:
             vectorDrag = nil
         case .nodes:
+            guard shapeBuilder == nil else { return }
             nodesEnded(isTap: isTap, at: point)
         case .transform:
             transformEnded()

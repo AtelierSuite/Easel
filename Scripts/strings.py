@@ -685,6 +685,10 @@ S = {
 "History.Patterns": ("Patterns", "パターン", "패턴", "图案", "圖樣"),
 "Options.PatternFill": ("Pattern Fill", "パターンで塗りつぶし", "패턴 채우기", "图案填充", "圖樣填色"),
 "Options.NoPattern": ("No Pattern", "パターンなし", "패턴 없음", "无图案", "無圖樣"),
+"ShapeBuilder.Title": ("Shape Builder", "シェイプ形成", "도형 구성", "形状生成器", "形狀建立程式"),
+"ShapeBuilder.Merge": ("Merge Picked Regions", "選んだ領域を結合", "선택한 영역 병합", "合并所选区域", "合併所選區域"),
+"ShapeBuilder.Delete": ("Delete Picked Regions", "選んだ領域を削除", "선택한 영역 삭제", "删除所选区域", "刪除所選區域"),
+"ShapeBuilder.Hint": ("Tap or drag across regions", "領域をタップまたはドラッグ", "영역을 탭하거나 드래그", "轻点或拖过区域", "點一下或拖過區域"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

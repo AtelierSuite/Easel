@@ -399,6 +399,61 @@ extension EditorState {
     }
 }
 
+// MARK: - Shape Builder
+
+/// The regions of a vector layer's overlapping shapes, and those picked so
+/// far by tapping or dragging across them.
+struct ShapeBuilderSession {
+    var layerID: Layer.ID
+    var faces: [ShapeBuilderFace]
+    var picked: Set<Int> = []
+}
+
+extension EditorState {
+    /// Cuts the active vector layer's overlapping shapes into regions to
+    /// pick from.
+    func startShapeBuilder() {
+        guard let layer = activeLayer, let content = layer.vector, !composition.isLocked(layer) else { return }
+        let faces = ShapeBuilder.faces(of: content.paths)
+        guard faces.count > 1 else { return }
+        selectedNode = nil
+        additionalNodes = []
+        shapeBuilder = ShapeBuilderSession(layerID: layer.id, faces: faces)
+    }
+
+    func pickShapeBuilderFace(at point: CGPoint) {
+        guard var session = shapeBuilder, let layer = composition[session.layerID] else { return }
+        let local = layer.localPoint(point)
+        // The smallest region under the finger, so small ones can be reached.
+        let hits = session.faces.indices.filter { session.faces[$0].path.contains(local, using: .evenOdd) }
+        guard let hit = hits.min(by: { area(session.faces[$0].path) < area(session.faces[$1].path) }) else { return }
+        session.picked.insert(hit)
+        shapeBuilder = session
+    }
+
+    private func area(_ path: CGPath) -> Double {
+        let box = path.boundingBoxOfPath
+        return box.width * box.height
+    }
+
+    /// Joins the picked regions into one shape, or takes them away.
+    func applyShapeBuilder(deleting: Bool) {
+        guard let session = shapeBuilder, !session.picked.isEmpty else { return }
+        let built = deleting
+            ? ShapeBuilder.deleting(session.picked, of: session.faces)
+            : ShapeBuilder.merging(session.picked, of: session.faces)
+        updateVector(session.layerID) { content in
+            let open = content.paths.filter { !($0.isClosed && $0.nodes.count > 2) }
+            content.paths = built + open
+        }
+        shapeBuilder = nil
+    }
+
+    func cancelShapeBuilder() {
+        shapeBuilder = nil
+    }
+}
+
 // MARK: - Path operations
 
 extension EditorState {

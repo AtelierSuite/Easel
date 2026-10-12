@@ -422,6 +422,27 @@ struct ToolOptionsBar: View {
 
     @ViewBuilder
     private var nodeOptions: some View {
+        if let builder = state.shapeBuilder {
+            GlassGroup(scrollsHorizontally: true) {
+                GlassIconButton(symbol: "xmark", label: "Common.Cancel") { state.cancelShapeBuilder() }
+                GlassIconButton(symbol: "trash", label: "ShapeBuilder.Delete") { state.applyShapeBuilder(deleting: true) }
+                    .disabled(builder.picked.isEmpty)
+                    .accessibilityIdentifier("shapeBuilderDelete")
+                GlassIconButton(symbol: "checkmark", label: "ShapeBuilder.Merge", isOn: true) { state.applyShapeBuilder(deleting: false) }
+                    .disabled(builder.picked.isEmpty)
+                    .accessibilityIdentifier("shapeBuilderMerge")
+            }
+            Text("ShapeBuilder.Hint")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+        } else {
+            vectorNodeOptions
+        }
+    }
+
+    @ViewBuilder
+    private var vectorNodeOptions: some View {
         if state.styledVectorPath != nil {
             GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(
@@ -574,6 +595,10 @@ struct ToolOptionsBar: View {
                         }
                     }
                     .accessibilityIdentifier("combineShapes")
+                    GlassIconButton(symbol: "square.on.square.intersection.dashed", label: "ShapeBuilder.Title") {
+                        state.startShapeBuilder()
+                    }
+                    .accessibilityIdentifier("shapeBuilder")
                 }
             }
             if let node = state.selectedVectorNode {
