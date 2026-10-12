@@ -458,6 +458,13 @@ struct ToolOptionsBar: View {
                 .accessibilityIdentifier("vectorStroke")
                 if let stroke = path.stroke {
                     VectorColorWell(color: stroke) { color in state.updateVectorStyle { $0.stroke = color } }
+                    StrokeStyleMenu(style: path.strokeStyleOrDefault, isClosed: path.isClosed) { change in
+                        state.updateVectorStyle { path in
+                            var style = path.strokeStyleOrDefault
+                            change(&style)
+                            path.strokeStyle = style == VectorStrokeStyle() ? nil : style
+                        }
+                    }
                     OptionSlider(
                         value: Binding(
                             get: { BrushSizeScale.position(for: path.strokeWidth) },
@@ -949,6 +956,53 @@ struct SelectionMenuItems: View {
         Section {
             Button("Select.CropToSelection", systemImage: "crop") { state.cropToSelection() }
                 .disabled(!hasSelection)
+        }
+    }
+}
+
+/// The stroke's dashes, ends, corners, alignment, arrowheads and width
+/// profile, each a picker in one menu.
+private struct StrokeStyleMenu: View {
+    let style: VectorStrokeStyle
+    let isClosed: Bool
+    let change: ((inout VectorStrokeStyle) -> Void) -> Void
+
+    var body: some View {
+        GlassMenuButton(symbol: "line.3.horizontal.decrease", label: "Stroke.Style") {
+            picker("Stroke.Dash", \.dash)
+            picker("Stroke.Profile", \.profile)
+            picker("Stroke.Cap", \.cap)
+            picker("Stroke.Join", \.join)
+            if isClosed {
+                picker("Stroke.Align", \.alignment)
+            } else {
+                picker("Stroke.StartArrow", \.startArrow)
+                picker("Stroke.EndArrow", \.endArrow)
+            }
+        }
+        .accessibilityIdentifier("strokeStyle")
+    }
+
+    private func picker<Value: CaseIterable & Identifiable & Hashable & RawRepresentable>(
+        _ title: LocalizedStringKey, _ keyPath: WritableKeyPath<VectorStrokeStyle, Value>
+    ) -> some View where Value.AllCases: RandomAccessCollection, Value.RawValue == String {
+        Picker(title, selection: Binding(get: { style[keyPath: keyPath] }, set: { value in change { $0[keyPath: keyPath] = value } })) {
+            ForEach(Value.allCases) { value in
+                Text(LocalizedStringKey(Self.labelKey(value))).tag(value)
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    private static func labelKey(_ value: some RawRepresentable<String>) -> String {
+        switch value {
+        case let dash as VectorStrokeStyle.Dash: return dash.labelKey
+        case let cap as VectorStrokeStyle.Cap: return cap.labelKey
+        case let join as VectorStrokeStyle.Join: return join.labelKey
+        case let alignment as VectorStrokeStyle.Alignment: return alignment.labelKey
+        case let arrow as VectorStrokeStyle.Arrowhead: return arrow.labelKey
+        case let profile as VectorStrokeStyle.Profile: return profile.labelKey
+        default: return value.rawValue
         }
     }
 }

@@ -38,6 +38,8 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
     var gradientAngle: Double?
     var stroke: RGBAColor?
     var strokeWidth: Double
+    /// Dashes, ends, arrowheads and the like; nil for a plain round line.
+    var strokeStyle: VectorStrokeStyle?
     /// Words set along the path, following its curve.
     var text: PathText?
 
@@ -79,7 +81,7 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
     var bounds: CGRect {
         guard !nodes.isEmpty else { return .null }
         let box = cgPath.boundingBoxOfPath
-        var reach = stroke == nil ? 1 : strokeWidth / 2 + 1
+        var reach = stroke == nil ? 1 : strokeStyleOrDefault.reach(width: strokeWidth) + 1
         // Letters stand up to a font size off the line either way.
         if let text { reach = max(reach, text.fontSize * 1.2) }
         return box.insetBy(dx: -reach, dy: -reach)

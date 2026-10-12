@@ -38,10 +38,7 @@ enum VectorRenderer {
                 context.fillPath(using: .evenOdd)
             }
             if let stroke = path.stroke, path.strokeWidth > 0 {
-                context.addPath(cgPath)
-                context.setStrokeColor(stroke.cgColor)
-                context.setLineWidth(path.strokeWidth)
-                context.strokePath()
+                path.drawStroke(in: context, color: stroke)
             }
             if let text = path.text { PathTextRenderer.draw(text, along: path, in: context) }
         }
