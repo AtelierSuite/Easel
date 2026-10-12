@@ -56,7 +56,7 @@ enum PSDReader {
         let layerSectionEnd = reader.offset + layerSectionLength
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
-        if layerSectionLength > 0, let read = try? readLayers(&reader, isLarge: isLarge, format: format, canvas: canvas) {
+        if layerSectionLength > 0, let read = try? readLayers(&reader, isLarge: isLarge, format: format, canvas: canvas, sectionEnd: layerSectionEnd) {
             (layers, groups) = read
         }
         guard reader.seek(to: layerSectionEnd) else { throw Failure.damaged }
@@ -137,10 +137,11 @@ enum PSDReader {
     }
 
     private static func readLayers(
-        _ reader: inout BigEndianReader, isLarge: Bool, format: PixelFormat, canvas: CGSize
+        _ reader: inout BigEndianReader, isLarge: Bool, format: PixelFormat, canvas: CGSize, sectionEnd: Int
     ) throws -> (layers: [Layer], groups: [LayerGroup]) {
         let infoLength = isLarge ? Int(try reader.uint64()) : Int(try reader.uint32())
         guard infoLength > 0 else { return ([], []) }
+        let infoEnd = reader.offset + infoLength
         // Negative: the first alpha channel is the merged result's
         // transparency. The count is what matters.
         let count = abs(Int(try reader.int16()))
@@ -148,6 +149,10 @@ enum PSDReader {
         for _ in 0..<count {
             records.append(try readRecord(&reader, isLarge: isLarge))
         }
+        // Smart objects' contents come after all the layers' pixels.
+        let pixelsStart = reader.offset
+        let embedded = (try? embeddedFiles(&reader, from: infoEnd, to: sectionEnd, isLarge: isLarge)) ?? [:]
+        guard reader.seek(to: pixelsStart) else { throw Failure.damaged }
 
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
@@ -227,12 +232,67 @@ enum PSDReader {
             // Easel does. Files with several of one effect may keep them as
             // `lmfx` instead, laid out the same way.
             if let effects = record.blocks["lfx2"] ?? record.blocks["lmfx"] { layer.effects = PSDEffects.effects(from: effects) }
+            if let placed = record.blocks["SoLd"].flatMap(PSDSmartObjects.placement(from:)),
+               let file = embedded[placed.id], let contents = PSDSmartObjects.contents(from: file),
+               let transform = PSDSmartObjects.transform(corners: placed.corners, size: contents.size) {
+                // A smart object: its contents whole, drawn where its
+                // corners sit. Ones Easel cannot place stay as pixels.
+                let canvasMask = record.mask.flatMap { mask -> LayerMask? in
+                    var whole = record
+                    (whole.left, whole.top, whole.right, whole.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
+                    return makeMask(mask, plane: planes[-2], layer: whole)
+                }
+                layer.setSmartObjectContents(contents)
+                layer.transform = transform
+                layer.mask = canvasMask.map { mask in
+                    LayerMask(image: LayerImage(inLayerSpace(mask.image.cgImage, of: layer, outside: record.mask?.defaultColor ?? 255)),
+                              isEnabled: mask.isEnabled)
+                }
+            }
             layers.append(layer)
         }
         return (layers, groups)
     }
 
-    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx"])
+    /// A canvas-sized mask drawn where a moved layer's pixels are.
+    private static func inLayerSpace(_ mask: CGImage, of layer: Layer, outside: Int) -> CGImage {
+        let size = layer.image.size
+        let canvas = CGRect(x: 0, y: 0, width: mask.width, height: mask.height)
+        return Bitmap.render(size: size) { context in
+            context.setFillColor(RGBAColor.white.withAlpha(Double(outside) / 255).cgColor)
+            context.fill(CGRect(origin: .zero, size: size))
+            context.concatenate(layer.affineTransform.inverted())
+            context.clear(canvas)
+            Bitmap.draw(mask, in: canvas, context: context)
+        }
+    }
+
+    /// The files embedded in the document for its smart objects, by id,
+    /// from the tagged blocks after the layers.
+    private static func embeddedFiles(
+        _ reader: inout BigEndianReader, from infoEnd: Int, to sectionEnd: Int, isLarge: Bool
+    ) throws -> [String: [UInt8]] {
+        guard reader.seek(to: infoEnd + (infoEnd & 1)) else { return [:] }
+        try reader.skip(Int(try reader.uint32())) // The global mask.
+        var files: [String: [UInt8]] = [:]
+        while reader.offset + 12 <= sectionEnd {
+            let signature = try reader.ascii(4)
+            guard signature == "8BIM" || signature == "8B64" else { break }
+            let key = try reader.ascii(4)
+            let length = isLarge && longKeys.contains(key) ? Int(try reader.uint64()) : Int(try reader.uint32())
+            let start = reader.offset
+            if ["lnk2", "lnk3", "lnkD"].contains(key) {
+                files.merge(PSDSmartObjects.embeddedFiles(from: try reader.bytes(length))) { first, _ in first }
+            }
+            guard reader.seek(to: start + length + (4 - length % 4) % 4) else { break }
+        }
+        return files
+    }
+
+    /// Blocks whose length takes eight bytes in a large document.
+    private static let longKeys: Set<String> = ["LMsk", "Lr16", "Lr32", "Layr", "Mt16", "Mt32", "Mtrn", "Alph", "FMsk", "lnk2", "FEid", "FXid", "PxSD"]
+
+    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd"])
 
     private static func readRecord(_ reader: inout BigEndianReader, isLarge: Bool) throws -> LayerRecord {
         var record = LayerRecord()
@@ -285,7 +345,6 @@ enum PSDReader {
             let signature = try reader.ascii(4)
             guard signature == "8BIM" || signature == "8B64" else { break }
             let key = try reader.ascii(4)
-            let longKeys: Set<String> = ["LMsk", "Lr16", "Lr32", "Layr", "Mt16", "Mt32", "Mtrn", "Alph", "FMsk", "lnk2", "FEid", "FXid", "PxSD"]
             let length = isLarge && longKeys.contains(key) ? Int(try reader.uint64()) : Int(try reader.uint32())
             let blockEnd = reader.offset + length
             switch key {

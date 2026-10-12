@@ -130,16 +130,9 @@ struct PSDDescriptor: Equatable {
             for _ in 0..<count { values.append(try readDouble(&reader)) }
             return .unitFloats(unit, values)
         case "ObAr":
+            // An array of objects, kept as one descriptor of their values.
             _ = try reader.uint32()
-            _ = try readUnicode(&reader)
-            _ = try readKey(&reader)
-            let count = Int(try reader.uint32())
-            for _ in 0..<count {
-                _ = try readKey(&reader)
-                let itemType = try reader.ascii(4)
-                _ = try readValue(&reader, type: itemType)
-            }
-            return .unsupported
+            return .descriptor(try read(&reader))
         case "obj ":
             let count = Int(try reader.uint32())
             for _ in 0..<count {

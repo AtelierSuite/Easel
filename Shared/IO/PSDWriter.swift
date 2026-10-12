@@ -5,8 +5,10 @@ import Foundation
 /// with its name, opacity, blend mode, clipping, visibility and mask, groups
 /// as layer folders, and the flattened picture for apps that read only that.
 ///
-/// Text, vectors and filters are written as the pixels they show, so the
-/// file looks the same in Photoshop; they are not editable there.
+/// Adjustments Photoshop has, layer styles and smart objects are written as
+/// Photoshop's own, beside the pixels they show. Text, vectors and filters
+/// are written as those pixels only, so the file looks the same in
+/// Photoshop; they are not editable there.
 enum PSDWriter {
     static func data(for composition: Composition) throws -> Data {
         let width = Int(composition.size.width.rounded())
@@ -48,6 +50,11 @@ enum PSDWriter {
         section.uint32(info.data.count)
         section.bytes(info.data)
         section.uint32(0) // No global mask.
+        // The contents of smart objects, embedded once for the document.
+        let embedded = records.compactMap(\.embeddedFile)
+        if !embedded.isEmpty {
+            section.taggedBlock("lnk2", embedded.flatMap { $0 }, padding: 4)
+        }
         out.uint32(section.data.count)
         out.bytes(section.data)
 
@@ -67,6 +74,8 @@ enum PSDWriter {
     private struct Record {
         var header: [UInt8]
         var channels: [UInt8]
+        /// A smart object's contents, as an entry of the `lnk2` block.
+        var embeddedFile: [UInt8]?
     }
 
     /// Records bottom first, with group folders around their layers: a
@@ -103,6 +112,13 @@ enum PSDWriter {
         // Styles go as Photoshop's own effects, so the pixels go without them.
         let effects = adjustment == nil ? PSDEffects.block(for: layer.effects) : nil
         if let effects { blocks.append(("lfx2", effects)) }
+        // A smart object keeps its contents as a document of their own.
+        var embeddedFile: [UInt8]?
+        if adjustment == nil, let smart = layer.smartObject, let contents = try? data(for: smart.contents) {
+            let id = layer.id.uuidString.lowercased()
+            blocks += PSDSmartObjects.blocks(for: layer, id: id)
+            embeddedFile = PSDSmartObjects.embeddedFile(id: id, name: "\(layer.name).psd", data: [UInt8](contents))
+        }
         let opacity = layer.opacity * (adjustment?.opacity ?? 1)
         // The layer as it shows, without its mask, opacity or blend mode,
         // which are written as settings.
@@ -181,7 +197,7 @@ enum PSDWriter {
         for block in blocks { extra.taggedBlock(block.key, block.data) }
         header.uint32(extra.data.count)
         header.bytes(extra.data)
-        return Record(header: header.data, channels: channels.flatMap(\.data))
+        return Record(header: header.data, channels: channels.flatMap(\.data), embeddedFile: embeddedFile)
     }
 
     private static func folderRecord(name: String, opacity: Double, isVisible: Bool, type: Int) -> Record {
