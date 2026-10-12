@@ -135,6 +135,14 @@ extension LayerFilter {
             output = filter.outputImage ?? input
         case .lensCorrection:
             output = correctLens(input, extent: extent)
+        case .unsharpMask:
+            let filter = CIFilter.unsharpMask()
+            filter.inputImage = input.clampedToExtent()
+            filter.radius = Float(max(0.5, (radius ?? 0.3) * 10 * unit))
+            filter.intensity = Float(amount * 2)
+            output = filter.outputImage ?? input
+        case .highPass:
+            output = highPass(input, radius: max(0.5, amount * 20 * unit))
         case .mosaic:
             let filter = CIFilter.pixellate()
             filter.inputImage = input.clampedToExtent()
@@ -191,6 +199,32 @@ extension LayerFilter {
             image = (filter.outputImage ?? image).cropped(to: extent)
         }
         return image
+    }
+
+    /// Detail finer than `radius` on mid grey: the picture less a blurred
+    /// copy of it, which over the picture in Overlay sharpens it.
+    private func highPass(_ input: CIImage, radius: Double) -> CIImage {
+        // On shades as they look, so flat areas come out mid grey.
+        let shades = input.applyingFilter("CILinearToSRGBToneCurve")
+        let blur = CIFilter.gaussianBlur()
+        blur.inputImage = shades.clampedToExtent()
+        blur.radius = Float(radius)
+        guard let blurred = blur.outputImage?.cropped(to: input.extent) else { return input }
+        // Half the picture plus half the blur's inverse is grey wherever the
+        // two agree; doubled about grey, the difference shows at full strength.
+        let inverse = CIFilter.colorInvert()
+        inverse.inputImage = blurred
+        let mix = CIFilter.dissolveTransition()
+        mix.inputImage = shades
+        mix.targetImage = inverse.outputImage ?? blurred
+        mix.time = 0.5
+        let stretch = CIFilter.colorMatrix()
+        stretch.inputImage = mix.outputImage
+        stretch.rVector = CIVector(x: 2, y: 0, z: 0, w: 0)
+        stretch.gVector = CIVector(x: 0, y: 2, z: 0, w: 0)
+        stretch.bVector = CIVector(x: 0, y: 0, z: 2, w: 0)
+        stretch.biasVector = CIVector(x: -0.5, y: -0.5, z: -0.5, w: 0)
+        return stretch.outputImage?.applyingFilter("CISRGBToneCurveToLinear") ?? input
     }
 
     /// A chain of filters, run in order.

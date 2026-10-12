@@ -153,6 +153,12 @@ struct FilterRow: View {
                         valueText: "\(Int(filter.angle.rounded()))°"
                     )
                 }
+                if filter.kind.hasRadius {
+                    LabeledSlider(
+                        label: "LayerFilters.Radius", value: optionalBinding(\.radius, default: 0.3),
+                        valueText: "\(Int(((filter.radius ?? 0.3) * 100).rounded()))"
+                    )
+                }
                 if filter.kind.hasCenter {
                     LabeledSlider(
                         label: "LayerFilters.CenterX", value: binding(\.centerX),

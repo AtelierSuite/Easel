@@ -593,6 +593,9 @@ S = {
 "LayerFilters.Distortion": ("Distortion", "ゆがみ", "왜곡", "扭曲", "扭曲"),
 "LayerFilters.Fringing": ("Color Fringing", "色収差", "색 수차", "色差", "色差"),
 "LayerFilters.VignetteFix": ("Vignette", "周辺光量", "비네트", "晕影", "暈影"),
+"LayerFilter.UnsharpMask": ("Unsharp Mask", "アンシャープマスク", "언샵 마스크", "USM 锐化", "遮色片銳利化調整"),
+"LayerFilter.HighPass": ("High Pass", "ハイパス", "하이 패스", "高反差保留", "顏色快調"),
+"LayerFilters.Radius": ("Radius", "半径", "반경", "半径", "強度"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

@@ -11,6 +11,10 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case gaussianBlur, motionBlur, zoomBlur, lensBlur, noiseReduction, mosaic
         /// Undoes a lens's bowing, colour fringes and dark corners.
         case lensCorrection
+        /// Sharpens edges by how much they differ from a blurred copy.
+        case unsharpMask
+        /// Keeps only the fine detail, on grey, for blending over a copy.
+        case highPass
 
         var id: String { rawValue }
 
@@ -20,7 +24,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             [.blackAndWhite, .sepia, .saturation, .brightness, .contrast],
             [.levels, .curves, .colorBalance, .gradientMap],
             [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic],
-            [.lensCorrection],
+            [.unsharpMask, .highPass, .lensCorrection],
         ]
 
         var label: String {
@@ -41,6 +45,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .noiseReduction: return String(localized: "LayerFilter.NoiseReduction")
             case .mosaic: return String(localized: "LayerFilter.Mosaic")
             case .lensCorrection: return String(localized: "LayerFilter.LensCorrection")
+            case .unsharpMask: return String(localized: "LayerFilter.UnsharpMask")
+            case .highPass: return String(localized: "LayerFilter.HighPass")
             }
         }
 
@@ -62,6 +68,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .noiseReduction: return "wand.and.stars"
             case .mosaic: return "square.grid.3x3.fill"
             case .lensCorrection: return "camera.metering.center.weighted"
+            case .unsharpMask: return "triangle"
+            case .highPass: return "waveform.path"
             }
         }
 
@@ -83,6 +91,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .contrast: return 0.3
             case .gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic: return 0.3
             case .lensCorrection: return 0
+            case .unsharpMask: return 0.5
+            case .highPass: return 0.2
             }
         }
 
@@ -94,6 +104,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Filters set with their own controls rather than one amount.
         var hasAmount: Bool { ![.levels, .curves, .colorBalance, .lensCorrection].contains(self) }
         var hasCenter: Bool { self == .zoomBlur }
+        /// How far round each pixel a filter looks, set apart from its amount.
+        var hasRadius: Bool { self == .unsharpMask }
     }
 
     var id = UUID()
@@ -125,6 +137,9 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     /// red and blue fringes back into line and lighten or darken corners.
     var fringing: Double?
     var vignetteFix: Double?
+    /// Unsharp mask: how wide the edges it sharpens are, as a fraction of
+    /// the layer's longer side, from 0 to 1 (a hundredth of it).
+    var radius: Double?
 
     static let straightCurve = [0, 0.25, 0.5, 0.75, 1.0]
     static let neutralBalance = [0.0, 0, 0]
