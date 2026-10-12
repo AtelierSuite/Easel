@@ -123,6 +123,9 @@ struct EditorView<Actions: View>: View {
             .sensoryFeedback(.selection, trigger: state.tool)
             .errorAlert(state, isActive: !isCompact || state.presentedPanel == nil)
             .selectionEditAlert(state)
+            .fullScreenCover(item: $state.editingSmartObject) { editing in
+                SmartObjectEditor(state: state, layerID: editing.layerID)
+            }
             .onAppear(perform: attach)
             .onChange(of: composition) { _, new in state.sync(new) }
             #if DEBUG

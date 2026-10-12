@@ -150,6 +150,8 @@ final class EditorState {
     var isSelectingMultiplePoints = false
     /// The Shape Builder at work on a vector layer's overlapping shapes.
     var shapeBuilder: ShapeBuilderSession?
+    /// The smart object layer whose contents are open for editing.
+    var editingSmartObject: SmartObjectEditing?
     @ObservationIgnored var vectorDrag: VectorDrag?
     var draftSelection: Selection?
     var draftShape: ShapeSpec?
@@ -593,6 +595,9 @@ final class EditorState {
         if composition.isLocked(layer) { return String(localized: "Error.LayerLocked") }
         if editsMask, ![Tool.brush, .eraser, .gradient].contains(tool) {
             return String(localized: "Error.MaskTool")
+        }
+        if layer.isSmartObject, !editsMask, tool.paintsPixels {
+            return String(localized: "Error.SmartObject")
         }
         if !layer.isVisible || composition.ancestors(of: layer.groupID).contains(where: { !$0.isVisible }) {
             return String(localized: "Error.LayerHidden")

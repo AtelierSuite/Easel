@@ -57,6 +57,8 @@ enum CompositionArchive {
         var filters: [LayerFilter]?
         var effects: [LayerEffect]?
         var adjustment: LayerFilter?
+        /// A smart object's contents, kept as a file of their own.
+        var smartFile: String?
         var maskFile: String?
         var maskEnabled: Bool?
         var transform: LayerTransform
@@ -149,6 +151,12 @@ enum CompositionArchive {
                 try write(file, try layer.image.pngData())
                 written[ObjectIdentifier(layer.image)] = file
             }
+            var smartFile: String?
+            if let smart = layer.smartObject {
+                let name = "\(layer.id.uuidString)-contents.plist"
+                try write(name, try data(for: smart.contents, original: nil))
+                smartFile = name
+            }
             var maskFile: String?
             if let mask = layer.mask {
                 let name = "\(layer.id.uuidString)-mask.png"
@@ -160,6 +168,7 @@ enum CompositionArchive {
                 filters: layer.filters.isEmpty ? nil : layer.filters,
                 effects: layer.effects.isEmpty ? nil : layer.effects,
                 adjustment: layer.adjustment,
+                smartFile: smartFile,
                 maskFile: maskFile, maskEnabled: layer.mask.map(\.isEnabled), transform: layer.transform,
                 opacity: layer.opacity, blendMode: layer.blendMode, isClipped: layer.isClipped ? true : nil,
                 isVisible: layer.isVisible, isLocked: layer.isLocked,
@@ -217,6 +226,10 @@ enum CompositionArchive {
             layer.isClipped = record.isClipped ?? false
             layer.effects = record.effects ?? []
             layer.adjustment = record.adjustment
+            if let smartFile = record.smartFile {
+                guard let data = read(smartFile) else { throw Failure.missingLayer(smartFile) }
+                layer.smartObject = SmartObject(contents: try composition(from: data, original: nil))
+            }
             return layer
         }
         var composition = Composition(

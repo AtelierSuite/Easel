@@ -199,6 +199,18 @@ struct LayersPanel: View {
             if layer.isText || layer.isVector {
                 Button("Layers.Rasterize", systemImage: "square.grid.3x3.square") { state.rasterizeLayer(layer.id) }
             }
+            if layer.isSmartObject {
+                Button("SmartObject.Edit", systemImage: "square.and.pencil") {
+                    state.activeLayerID = layer.id
+                    state.editSmartObjectContents()
+                }
+                Button("Layers.Rasterize", systemImage: "square.grid.3x3.square") { state.rasterizeLayer(layer.id) }
+            } else if !layer.isAdjustment {
+                Button("SmartObject.Convert", systemImage: "shippingbox") {
+                    state.activeLayerID = layer.id
+                    state.convertToSmartObject()
+                }
+            }
             if !layer.isVector && !layer.isAdjustment {
                 Menu("Trace.Title", systemImage: "scribble.variable") {
                     ForEach(ImageTracer.colorCounts, id: \.self) { colors in
@@ -318,6 +330,11 @@ private struct LayerRow: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .accessibilityLabel("Layers.Vector")
+                    } else if layer.isSmartObject {
+                        Image(systemName: "shippingbox")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("SmartObject.Badge")
                     }
                     Text(layer.name)
                         .lineLimit(1)
@@ -591,6 +608,10 @@ private struct GroupRow: View {
         .contextMenu {
             Button("Groups.Ungroup", systemImage: "folder.badge.minus") { state.ungroup(group.id) }
             Button("Groups.Merge", systemImage: "square.2.layers.3d.bottom.filled") { state.mergeGroup(group.id) }
+            Button("SmartObject.Convert", systemImage: "shippingbox") {
+                state.activeGroupID = group.id
+                state.convertToSmartObject()
+            }
             Button("Groups.Delete", systemImage: "trash", role: .destructive) { state.deleteGroup(group.id) }
                 .disabled(!state.canDeleteGroup(group.id))
         }

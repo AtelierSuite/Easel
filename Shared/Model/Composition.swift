@@ -460,6 +460,8 @@ extension Layer {
         result.image = LayerImage(CompositionRenderer.render(layers: [placed], size: canvasSize))
         result.text = nil
         result.vector = nil
+        // Moved off its own pixels, it can no longer be drawn from its contents.
+        result.smartObject = nil
         result.transform = LayerTransform(position: CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2))
         if let mask {
             // Off the layer's old edges the mask shows everything, so paint
@@ -483,6 +485,7 @@ extension Layer {
     func rasterized(in canvasSize: CGSize) -> Layer {
         guard !isAligned(to: canvasSize) || hasActiveFilters || activeMask != nil || hasActiveEffects else {
             var result = self
+            result.smartObject = nil
             result.filters = []
             result.effects = []
             result.mask = nil
@@ -497,6 +500,7 @@ extension Layer {
         result.image = LayerImage(image)
         result.text = nil
         result.vector = nil
+        result.smartObject = nil
         result.filters = []
         result.effects = []
         result.mask = nil

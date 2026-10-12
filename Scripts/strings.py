@@ -708,6 +708,12 @@ S = {
 "Artboards.Export": ("Export Each Artboard", "各アートボードを書き出す", "각 대지 내보내기", "导出每个画板", "輸出每個工作區域"),
 "Artboards.Footer": ("A new artboard covers the selection, the crop frame, or the whole canvas.", "新しいアートボードは選択範囲、切り抜き枠、またはカンバス全体になります。", "새로운 대지는 선택 영역, 자르기 테두리 또는 전체 캔버스를 덮습니다.", "新画板会覆盖选区、裁剪框或整个画布。", "新的工作區域會涵蓋選取範圍、裁切框或整個畫布。"),
 "History.Artboards": ("Artboards", "アートボード", "대지", "画板", "工作區域"),
+"SmartObject.DefaultName": ("Smart Object", "スマートオブジェクト", "고급 개체", "智能对象", "智慧型物件"),
+"SmartObject.Convert": ("Convert to Smart Object", "スマートオブジェクトに変換", "고급 개체로 변환", "转换为智能对象", "轉換為智慧型物件"),
+"SmartObject.Edit": ("Edit Contents", "内容を編集", "내용 편집", "编辑内容", "編輯內容"),
+"SmartObject.Badge": ("Smart Object", "スマートオブジェクト", "고급 개체", "智能对象", "智慧型物件"),
+"SmartObject.Discard": ("Discard changes to the contents?", "内容の変更を破棄しますか？", "내용 변경 사항을 폐기하겠습니까?", "要放弃对内容的更改吗？", "要捨棄對內容的變更嗎？"),
+"Error.SmartObject": ("A smart object can’t be painted on. Edit its contents, or rasterize it first.", "スマートオブジェクトには直接描けません。内容を編集するか、先にラスタライズしてください。", "고급 개체에는 직접 그릴 수 없습니다. 내용을 편집하거나 먼저 래스터화하십시오.", "无法直接在智能对象上绘画。请编辑其内容，或先将其栅格化。", "無法直接在智慧型物件上繪畫。請編輯其內容，或先將其點陣化。"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

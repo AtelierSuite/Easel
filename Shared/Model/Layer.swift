@@ -17,6 +17,9 @@ struct Layer: Identifiable, Equatable, Sendable {
     /// Set on an adjustment layer, which has no pixels of its own: it
     /// changes everything beneath it with this filter, where its mask shows.
     var adjustment: LayerFilter?
+    /// Set on a smart object layer: the picture it keeps whole inside it,
+    /// which its `image` is drawn from.
+    var smartObject: SmartObject?
     /// Run over `image` whenever the layer is drawn, in order; the pixels
     /// themselves are never changed by them.
     var filters: [LayerFilter] = []

@@ -853,3 +853,49 @@ extension EditorState {
         if let mergedID { activeLayerID = mergedID }
     }
 }
+
+// MARK: - Smart objects
+
+extension EditorState {
+    /// Turns the active layer, or a picked group's layers, into one smart
+    /// object layer that keeps them whole inside it.
+    func convertToSmartObject() {
+        let ids: [Layer.ID]
+        if let groupID = activeGroupID {
+            ids = read().layers(in: groupID).map(\.id)
+        } else if let layer = activeLayer {
+            ids = [layer.id]
+        } else {
+            return
+        }
+        let groupID = activeGroupID
+        var newID: Layer.ID?
+        update { newID = $0.convertToSmartObject(ids, replacingGroup: groupID) }
+        if let newID { activeLayerID = newID }
+    }
+
+    /// Opens the active smart object's contents to edit.
+    func editSmartObjectContents() {
+        guard let layer = activeLayer, layer.isSmartObject else { return }
+        let editing = SmartObjectEditing(layerID: layer.id)
+        guard presentedPanel != nil else {
+            editingSmartObject = editing
+            return
+        }
+        // A panel's sheet goes down first; nothing else can come up over it.
+        presentedPanel = nil
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            editingSmartObject = editing
+        }
+    }
+
+    /// Takes in a smart object's edited contents and draws them out again.
+    func updateSmartObject(_ layerID: Layer.ID, contents: Composition) {
+        update { composition in
+            guard var layer = composition[layerID], layer.isSmartObject else { return }
+            layer.setSmartObjectContents(contents)
+            composition[layerID] = layer
+        }
+    }
+}
