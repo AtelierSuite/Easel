@@ -304,6 +304,39 @@ struct Composition: Equatable, Sendable {
         transformCanvas(to: rect.size, by: CGAffineTransform(translationX: -rect.minX, y: -rect.minY))
     }
 
+    /// Turns the picture `angle` radians clockwise about the canvas's middle,
+    /// then crops to the largest rectangle of the canvas's own proportions
+    /// the turned picture still fills, so no empty corners show.
+    mutating func straighten(by angle: Double) {
+        guard abs(angle) > 0.0001 else { return }
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let turn = CGAffineTransform(translationX: center.x, y: center.y)
+            .rotated(by: angle)
+            .translatedBy(x: -center.x, y: -center.y)
+        transformCanvas(to: size, by: turn, rotation: angle)
+        let cos = abs(Foundation.cos(angle)), sin = abs(Foundation.sin(angle))
+        let factor = min(
+            size.width / (size.width * cos + size.height * sin),
+            size.height / (size.width * sin + size.height * cos)
+        )
+        let kept = CGSize(width: (size.width * factor).rounded(.down), height: (size.height * factor).rounded(.down))
+        crop(to: CGRect(
+            x: ((size.width - kept.width) / 2).rounded(.up), y: ((size.height - kept.height) / 2).rounded(.up),
+            width: kept.width, height: kept.height
+        ))
+    }
+
+    /// The turn that makes a line drawn from `start` to `end` level, or
+    /// upright if it is nearer upright: what the Straighten tool applies.
+    static func straighteningAngle(from start: CGPoint, to end: CGPoint) -> Double {
+        var angle = atan2(end.y - start.y, end.x - start.x)
+        // Which way the line was drawn does not matter.
+        if angle > .pi / 2 { angle -= .pi }
+        if angle <= -.pi / 2 { angle += .pi }
+        if abs(angle) <= .pi / 4 { return -angle }
+        return (angle > 0 ? .pi / 2 : -.pi / 2) - angle
+    }
+
     /// The transform `rotate(clockwise:)` applies to canvas points.
     func rotationTransform(clockwise: Bool) -> CGAffineTransform {
         clockwise

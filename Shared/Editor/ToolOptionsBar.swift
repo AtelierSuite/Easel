@@ -245,6 +245,14 @@ struct ToolOptionsBar: View {
     private var cropOptions: some View {
         Group {
             GlassGroup(scrollsHorizontally: true) {
+                ForEach(CropMode.allCases) { mode in
+                    GlassIconButton(symbol: mode.symbolName, label: mode.label, isOn: state.cropMode == mode) {
+                        state.cropMode = mode
+                    }
+                    .accessibilityIdentifier("cropMode.\(mode.rawValue)")
+                }
+            }
+            GlassGroup(scrollsHorizontally: true) {
                 GlassMenuButton(symbol: "aspectratio", label: "Options.AspectRatio") {
                     Picker("Options.AspectRatio", selection: $state.cropAspect) {
                         ForEach(CropAspect.allCases) { aspect in

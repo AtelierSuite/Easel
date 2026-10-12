@@ -202,6 +202,30 @@ enum CropAspect: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// What dragging on the canvas does with the Crop tool.
+enum CropMode: String, CaseIterable, Identifiable, Sendable {
+    /// Moves and sizes the crop frame.
+    case frame
+    /// Draws a line along something that should be level.
+    case straighten
+
+    var id: String { rawValue }
+
+    var label: LocalizedStringKey {
+        switch self {
+        case .frame: return "Crop.Mode.Frame"
+        case .straighten: return "Crop.Mode.Straighten"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .frame: return "crop"
+        case .straighten: return "level"
+        }
+    }
+}
+
 /// A panel presented over the canvas: a sheet on iPhone, the inspector on iPad.
 enum EditorPanel: String, Identifiable, Hashable, Sendable {
     case layers

@@ -49,6 +49,14 @@ struct CanvasOverlay: View {
             }
         }
 
+        if let line = state.draftStraighten {
+            var path = Path()
+            path.move(to: line.start.applying(transform))
+            path.addLine(to: line.end.applying(transform))
+            context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            context.stroke(path, with: .color(.accentColor), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [6, 4]))
+        }
+
         if let gradient = state.draftGradient {
             let start = gradient.start.applying(transform)
             let end = gradient.end.applying(transform)

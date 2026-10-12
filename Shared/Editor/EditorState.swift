@@ -140,6 +140,11 @@ final class EditorState {
     var draftGradient: (start: CGPoint, end: CGPoint)?
     /// The crop tool's frame, in canvas pixels; nil until the tool is picked.
     var cropRect: CGRect?
+    var cropMode: CropMode = .frame {
+        didSet { draftStraighten = nil }
+    }
+    /// The line being drawn to straighten the picture along.
+    var draftStraighten: (start: CGPoint, end: CGPoint)?
     /// The layer the Transform tool is bending, and how.
     var transformDraft: TransformDraft?
     var transformMode: TransformMode = .distort
@@ -672,7 +677,11 @@ final class EditorState {
             guard paintingBlocker() == nil else { return }
             draftGradient = (point, point)
         case .crop:
-            beginCropDrag(at: point)
+            if cropMode == .straighten {
+                draftStraighten = (point, point)
+            } else {
+                beginCropDrag(at: point)
+            }
         case .eyedropper:
             sampleColor(at: point)
         case .fill, .text:
@@ -760,7 +769,11 @@ final class EditorState {
         case .gradient:
             draftGradient?.end = last.location
         case .crop:
-            continueCropDrag(to: last.location)
+            if draftStraighten != nil {
+                draftStraighten?.end = last.location
+            } else {
+                continueCropDrag(to: last.location)
+            }
         case .eyedropper:
             sampleColor(at: last.location)
         case .fill, .text:
@@ -847,6 +860,11 @@ final class EditorState {
             applyGradient(from: draft.start, to: draft.end)
         case .crop:
             cropDrag = nil
+            if let line = draftStraighten {
+                draftStraighten = nil
+                guard hypot(line.end.x - line.start.x, line.end.y - line.start.y) > 4 else { return }
+                straighten(by: Composition.straighteningAngle(from: line.start, to: line.end))
+            }
         case .fill:
             guard isTap else { return }
             floodFill(at: point)
@@ -868,6 +886,7 @@ final class EditorState {
         draftShape = nil
         draftGradient = nil
         cropDrag = nil
+        draftStraighten = nil
         snapLines = []
         draggedGuide = nil
         if let drag = transformDrag, var draft = transformDraft {
@@ -1039,6 +1058,17 @@ final class EditorState {
         }
         cropRect = read().canvasRect
         cropAspect = .free
+        fitCanvas()
+    }
+
+    /// Turns the picture and crops off the corners the turn leaves empty.
+    func straighten(by angle: Double) {
+        guard abs(angle) > 0.0001 else { return }
+        update { $0.straighten(by: angle) }
+        selection = nil
+        cropRect = read().canvasRect
+        cropAspect = .free
+        cropMode = .frame
         fitCanvas()
     }
 
