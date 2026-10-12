@@ -287,6 +287,8 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
 /// What the Tone tool does where it is dragged.
 enum ToneKind: String, CaseIterable, Identifiable, Sendable {
     case dodge, burn, saturate, desaturate, sharpen, soften
+    /// Takes the red glare out of eyes lit by a flash.
+    case redEye
 
     var id: String { rawValue }
 
@@ -298,6 +300,7 @@ enum ToneKind: String, CaseIterable, Identifiable, Sendable {
         case .desaturate: return "Tone.Desaturate"
         case .sharpen: return "Tone.Sharpen"
         case .soften: return "Tone.Soften"
+        case .redEye: return "Tone.RedEye"
         }
     }
 
@@ -309,6 +312,7 @@ enum ToneKind: String, CaseIterable, Identifiable, Sendable {
         case .desaturate: return "drop"
         case .sharpen: return "triangle"
         case .soften: return "aqi.medium"
+        case .redEye: return "eye"
         }
     }
 }

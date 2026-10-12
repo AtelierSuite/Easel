@@ -63,3 +63,24 @@ struct ToneToolTests {
         #expect(state.currentBrush == state.toneBrush)
     }
 }
+
+@Suite("Red eye")
+struct RedEyeTests {
+    private func fixed(_ color: RGBAColor) -> (red: Double, green: Double, blue: Double, alpha: Double) {
+        let image = TestImages.solid(color, width: 20, height: 20)
+        let effect = RetouchEffect.image(.tone(.redEye), settings: BrushSettings(size: 10), of: image)
+        return TestImages.pixel(effect, x: 10, y: 10)
+    }
+
+    @Test func glaringRedGoesDark() {
+        let pupil = fixed(RGBAColor(red: 0.9, green: 0.1, blue: 0.1))
+        #expect(pupil.red < 80)
+    }
+
+    @Test func skinIsLeftAlone() {
+        let skin = RGBAColor(red: 0.9, green: 0.72, blue: 0.6)
+        let before = TestImages.pixel(TestImages.solid(skin), x: 1, y: 1)
+        let after = fixed(skin)
+        #expect(abs(after.red - before.red) < 6)
+    }
+}

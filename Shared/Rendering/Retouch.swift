@@ -68,6 +68,17 @@ extension RetouchEffect {
                 filter.inputImage = input.clampedToExtent()
                 filter.radius = Float(1 + settings.size * 0.05)
                 return filter.outputImage ?? input
+            case .redEye:
+                // Red well above green and blue is glare: it becomes the
+                // dark of the other two, so pupils go black and skin stays.
+                return ColorTransforms.apply(input) { color in
+                    let others = (color.y + color.z) / 2
+                    let excess = color.x - max(color.y, color.z) * 1.3
+                    guard excess > 0 else { return color }
+                    let amount = min(1, excess * 4)
+                    let red = color.x + (others * 0.8 - color.x) * amount
+                    return SIMD3(red, color.y * (1 - amount * 0.2), color.z * (1 - amount * 0.2))
+                }
             }
         }, to: image)
     }

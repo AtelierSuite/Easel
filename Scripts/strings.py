@@ -612,6 +612,7 @@ S = {
 "Adjust.PickNeutral": ("Pick a Neutral Gray", "グレーの点を指定", "중간 회색 선택", "选取中性灰", "選取中性灰"),
 "Adjust.PickingNeutral": ("Tap Something Gray…", "グレーのものをタップ…", "회색인 곳을 탭하십시오…", "轻点灰色的地方…", "點一下灰色的地方…"),
 "Adjust.PickNeutral.Footer": ("Tap something in the picture that should be gray or white to balance its colors.", "グレーや白であるべき箇所をタップすると、色のバランスを整えます。", "회색이나 흰색이어야 하는 곳을 탭하여 색상 균형을 맞추십시오.", "轻点图片中应为灰色或白色的地方以平衡颜色。", "點一下圖片中應為灰色或白色的地方以平衡顏色。"),
+"Tone.RedEye": ("Red Eye", "赤目修正", "적목 현상", "红眼", "紅眼"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]
