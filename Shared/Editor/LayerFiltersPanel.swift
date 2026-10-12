@@ -90,6 +90,7 @@ struct FilterRow: View {
     var isAdjustment = false
     /// The colour band the HSL sliders change.
     @State private var band = 0
+    @State private var histogram: [Double] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -136,7 +137,7 @@ struct FilterRow: View {
                 if filter.kind == .hsl { hslControls }
                 if filter.kind == .replaceColor { replaceControls }
                 if filter.kind == .curves {
-                    CurveEditor(values: filter.curve ?? LayerFilter.straightCurve) { values in
+                    CurveEditor(values: filter.curve ?? LayerFilter.straightCurve, histogram: histogram) { values in
                         state.updateFilter(filter.id) { $0.curve = values }
                     }
                     .frame(height: 200)
@@ -179,6 +180,10 @@ struct FilterRow: View {
         }
         .padding(.vertical, 4)
         .contextMenu { menuItems }
+        .task(id: state.activeLayer?.image.id) {
+            guard filter.kind == .levels || filter.kind == .curves else { return }
+            histogram = state.histogramForActiveLayer()
+        }
     }
 
     @ViewBuilder
@@ -207,6 +212,9 @@ struct FilterRow: View {
 
     @ViewBuilder
     private var levelsControls: some View {
+        HistogramView(values: histogram)
+            .frame(height: 64)
+            .background(Color.secondary.opacity(0.08), in: .rect(cornerRadius: 6))
         LabeledSlider(
             label: "LayerFilters.Black", value: optionalBinding(\.black, default: 0), range: 0...0.9,
             valueText: "\(Int(((filter.black ?? 0) * 255).rounded()))"
@@ -392,6 +400,8 @@ struct AddFilterMenu<Label: View>: View {
 /// A tone curve with five points along it, each dragged up or down.
 struct CurveEditor: View {
     let values: [Double]
+    /// The picture's shades, drawn behind the curve.
+    var histogram: [Double] = []
     let change: ([Double]) -> Void
     @State private var dragging: Int?
 
@@ -436,6 +446,10 @@ struct CurveEditor: View {
                     context.fill(knob, with: .color(.white))
                     context.stroke(knob, with: .color(.accentColor), lineWidth: 2)
                 }
+            }
+            .background {
+                HistogramView(values: histogram)
+                    .padding(Self.inset)
             }
             .background(Color.secondary.opacity(0.08), in: .rect(cornerRadius: 8))
             .contentShape(.rect)
