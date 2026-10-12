@@ -529,6 +529,11 @@ S = {
 "History.Effects": ("Layer Styles", "レイヤースタイル", "레이어 스타일", "图层样式", "圖層樣式"),
 "Layers.NewAdjustment": ("New Adjustment Layer", "新規調整レイヤー", "새로운 조정 레이어", "新建调整图层", "新增調整圖層"),
 "Layers.Section.Adjustment": ("Adjustment", "調整", "조정", "调整", "調整"),
+"Select.Mode": ("Selection Mode", "選択モード", "선택 모드", "选区模式", "選取模式"),
+"Select.Mode.Replace": ("New Selection", "新規選択", "새로운 선택", "新选区", "新增選取範圍"),
+"Select.Mode.Add": ("Add to Selection", "選択範囲に追加", "선택 영역에 추가", "添加到选区", "增加至選取範圍"),
+"Select.Mode.Subtract": ("Subtract from Selection", "選択範囲から削除", "선택 영역에서 빼기", "从选区减去", "從選取範圍減去"),
+"Select.Mode.Intersect": ("Intersect with Selection", "選択範囲との共通範囲", "선택 영역과 교차", "与选区交叉", "與選取範圍相交"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

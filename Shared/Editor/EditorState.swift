@@ -83,6 +83,8 @@ final class EditorState {
     var shapeIsFilled = false
     var shapeLineWidth = 12.0
     var selectionKind: SelectionKind = .rectangle
+    /// How a new selection meets the one already there.
+    var selectionMode: SelectionMode = .replace
     /// How different a colour may be and still be picked by magic select.
     var selectionTolerance = 0.15
     /// The picture's edges, for magnetic select to cling to; worked out
@@ -805,9 +807,9 @@ final class EditorState {
                 guard isTap else { return }
                 if selectionKind == .object { selectObject(at: point) } else { magicSelect(at: point) }
             } else if isTap {
-                selection = nil
+                if selectionMode == .replace { selection = nil }
             } else if let draft = draftSelection, draft.isMeaningful {
-                selection = draft
+                select(draft)
             }
         case .pen:
             vectorDrag = nil

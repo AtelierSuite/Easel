@@ -183,6 +183,17 @@ struct ToolOptionsBar: View {
     private var selectOptions: some View {
         Group {
             GlassGroup(scrollsHorizontally: true) {
+                GlassMenuButton(symbol: state.selectionMode.symbolName, label: "Select.Mode") {
+                    Picker("Select.Mode", selection: $state.selectionMode) {
+                        ForEach(SelectionMode.allCases) { mode in
+                            Label(mode.label, systemImage: mode.symbolName).tag(mode)
+                                .accessibilityIdentifier("selectionMode.\(mode.rawValue)")
+                        }
+                    }
+                }
+                .accessibilityIdentifier("selectionMode")
+            }
+            GlassGroup(scrollsHorizontally: true) {
                 ForEach(SelectionKind.allCases) { kind in
                     GlassIconButton(symbol: kind.symbolName, label: kind.label, isOn: state.selectionKind == kind) {
                         state.selectionKind = kind

@@ -616,7 +616,7 @@ extension EditorState {
         enqueue({ () -> SelectionMask? in
             Self.colourRegion(in: composition, at: point, tolerance: tolerance)
         }, apply: { [weak self] mask in
-            self?.selection = Selection(shape: .mask(mask))
+            self?.select(Selection(shape: .mask(mask)))
         })
     }
 
@@ -649,7 +649,7 @@ extension EditorState {
             }
         }, apply: { [weak self] result in
             switch result {
-            case .success(let mask): self?.selection = Selection(shape: .mask(mask))
+            case .success(let mask): self?.select(Selection(shape: .mask(mask)))
             case .failure(let error): self?.errorMessage = error.message
             }
         })
