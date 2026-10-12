@@ -1,15 +1,17 @@
 import SwiftUI
 
 /// A change to the whole selection that needs a size: how far to feather,
-/// grow or shrink it.
+/// grow or shrink it, or how wide a band to refine along its edge.
 enum SelectionEdit: Identifiable, Hashable, Sendable {
     case modify(SelectionModification)
+    case refine
 
     var id: Self { self }
 
     var title: LocalizedStringKey {
         switch self {
         case .modify(let modification): return modification.label
+        case .refine: return "Select.RefineEdge"
         }
     }
 
@@ -39,6 +41,7 @@ extension EditorState {
     func defaultSize(for edit: SelectionEdit) -> Double {
         let longest = max(composition.size.width, composition.size.height)
         switch edit {
+        case .refine: return max(4, (longest / 150).rounded())
         case .modify: return max(2, (longest / 200).rounded())
         }
     }
@@ -50,6 +53,9 @@ extension EditorState {
         switch edit {
         case .modify(let modification):
             replaceSelection { selection.modified(modification, radius: size, canvasSize: canvasSize) }
+        case .refine:
+            let picture = CompositionRenderer.render(composition)
+            replaceSelection { selection.refined(along: picture, radius: size) }
         }
     }
 }

@@ -116,6 +116,23 @@ extension Selection {
         let bytes = SelectionImages.bytes(of: output, width: width, height: height)
         return SelectionMask(bytes: bytes, width: width, height: height).map { Selection(shape: .mask($0)) }
     }
+
+    /// The selection's edge pulled in to the picture's own edges, so it
+    /// follows hair and fur: each soft edge becomes as selected as the
+    /// colours there are like those inside.
+    func refined(along picture: CGImage, radius: Double) -> Selection? {
+        let width = picture.width, height = picture.height
+        let input = SelectionImages.image(coverage(width: width, height: height), width: width, height: height)
+        // A band either side of the edge is worked out again; the rest
+        // stays as it was.
+        let refined = SelectionImages.blur(input, radius / 4).applyingFilter("CIGuidedFilter", parameters: [
+            "inputGuideImage": CIImage(cgImage: picture),
+            "inputRadius": max(1, radius),
+            "inputEpsilon": 0.0005,
+        ])
+        let bytes = SelectionImages.bytes(of: refined, width: width, height: height)
+        return SelectionMask(bytes: bytes, width: width, height: height).map { Selection(shape: .mask($0)) }
+    }
 }
 
 /// Selections as grey Core Image pictures, white where selected.

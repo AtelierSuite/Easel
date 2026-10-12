@@ -76,6 +76,16 @@ struct SelectionOperationTests {
         #expect(coverage(smooth, x: 20, y: 10) == 255)
     }
 
+    @Test func refiningFollowsThePicturesEdges() throws {
+        // Red on the left, blue on the right; a rough selection of the
+        // left half spills over the edge and is pulled back to it.
+        let picture = TestImages.halves(width: 40, height: 20)
+        let rough = rect(0, 0, 24, 20)
+        let refined = try #require(rough.refined(along: picture, radius: 6))
+        #expect(coverage(refined, x: 5, y: 10) > 200)
+        #expect(coverage(refined, x: 23, y: 10) < coverage(rough, x: 23, y: 10))
+    }
+
     @MainActor @Test func theEditorCombinesNewSelectionsByMode() async throws {
         let state = EditorState()
         state.attach(to: Composition.blank(size: size)) { _ in }

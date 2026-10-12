@@ -855,6 +855,7 @@ struct SelectionMenuItems: View {
                     .accessibilityIdentifier("selectionModify.\(modification.rawValue)")
                 }
             }
+            Button("Select.RefineEdge", systemImage: "wand.and.sparkles") { state.pendingSelectionEdit = .refine }
         }
         .disabled(!hasSelection)
         Section {
