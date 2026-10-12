@@ -8,6 +8,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     enum Kind: String, Codable, CaseIterable, Identifiable, Sendable {
         case blackAndWhite, sepia, saturation, brightness, contrast
         case levels, curves, colorBalance, gradientMap
+        /// Hue, saturation and lightness changed colour by colour.
+        case hsl
         case gaussianBlur, motionBlur, zoomBlur, lensBlur, noiseReduction, mosaic
         /// Undoes a lens's bowing, colour fringes and dark corners.
         case lensCorrection
@@ -30,7 +32,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// the add menu groups them.
         static let groups: [[Kind]] = [
             [.blackAndWhite, .sepia, .saturation, .brightness, .contrast],
-            [.levels, .curves, .colorBalance, .gradientMap],
+            [.levels, .curves, .colorBalance, .gradientMap, .hsl],
             [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic],
             [.unsharpMask, .highPass, .lensCorrection],
             [.twirl, .pinch, .emboss, .halftone],
@@ -47,6 +49,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .curves: return String(localized: "LayerFilter.Curves")
             case .colorBalance: return String(localized: "LayerFilter.ColorBalance")
             case .gradientMap: return String(localized: "LayerFilter.GradientMap")
+            case .hsl: return String(localized: "LayerFilter.HSL")
             case .gaussianBlur: return String(localized: "LayerFilter.GaussianBlur")
             case .motionBlur: return String(localized: "LayerFilter.MotionBlur")
             case .zoomBlur: return String(localized: "LayerFilter.ZoomBlur")
@@ -74,6 +77,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .curves: return "point.bottomleft.forward.to.point.topright.scurvepath"
             case .colorBalance: return "paintpalette"
             case .gradientMap: return "swatchpalette"
+            case .hsl: return "paintpalette.fill"
             case .gaussianBlur: return "aqi.medium"
             case .motionBlur: return "wind"
             case .zoomBlur: return "scope"
@@ -102,7 +106,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Where a new filter starts: enough to see it working.
         var defaultAmount: Double {
             switch self {
-            case .blackAndWhite, .sepia, .levels, .curves, .colorBalance, .gradientMap: return 1
+            case .blackAndWhite, .sepia, .levels, .curves, .colorBalance, .gradientMap, .hsl: return 1
             case .saturation: return 0.5
             case .brightness: return 0.2
             case .contrast: return 0.3
@@ -123,7 +127,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
 
         var hasAngle: Bool { [.motionBlur, .emboss, .halftone].contains(self) }
         /// Filters set with their own controls rather than one amount.
-        var hasAmount: Bool { ![.levels, .curves, .colorBalance, .lensCorrection].contains(self) }
+        var hasAmount: Bool { ![.levels, .curves, .colorBalance, .lensCorrection, .hsl].contains(self) }
         var hasCenter: Bool { [.zoomBlur, .twirl, .pinch].contains(self) }
         /// How far round each pixel a filter looks, set apart from its amount.
         var hasRadius: Bool { self == .unsharpMask }
@@ -158,6 +162,14 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     /// red and blue fringes back into line and lighten or darken corners.
     var fringing: Double?
     var vignetteFix: Double?
+    /// HSL: for each band of `hslBandHues` in turn, how far its hue turns,
+    /// and how its saturation and lightness change, each -1...1.
+    var hslBands: [Double]?
+
+    /// The middle of each HSL band, as fractions of a turn: red, orange,
+    /// yellow, green, aqua, blue, purple and magenta.
+    static let hslBandHues: [Double] = [0, 30, 60, 120, 180, 240, 270, 300].map { $0 / 360 }
+    static let neutralHSL = [Double](repeating: 0, count: 24)
     /// Unsharp mask: how wide the edges it sharpens are, as a fraction of
     /// the layer's longer side, from 0 to 1 (a hundredth of it).
     var radius: Double?

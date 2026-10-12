@@ -600,6 +600,9 @@ S = {
 "LayerFilter.Pinch": ("Pinch", "つまむ", "핀치", "挤压", "擠壓"),
 "LayerFilter.Emboss": ("Emboss", "エンボス", "엠보스", "浮雕", "浮雕"),
 "LayerFilter.Halftone": ("Halftone", "ハーフトーン", "하프톤", "半调", "半色調"),
+"LayerFilter.HSL": ("Hue, Saturation & Lightness", "色相・彩度・輝度", "색조, 채도 및 밝기", "色相/饱和度/亮度", "色相、飽和度與亮度"),
+"LayerFilters.Hue": ("Hue", "色相", "색조", "色相", "色相"),
+"LayerFilters.Lightness": ("Lightness", "輝度", "밝기", "亮度", "明度"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

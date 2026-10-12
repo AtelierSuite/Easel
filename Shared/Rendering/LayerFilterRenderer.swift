@@ -94,6 +94,8 @@ extension LayerFilter {
             mix.targetImage = shaped
             mix.time = Float(min(max(amount, 0), 1))
             output = mix.outputImage ?? input
+        case .hsl:
+            output = adjustHSL(input)
         case .gaussianBlur:
             // Clamped first so the edges blur into themselves rather than
             // into transparency.
@@ -253,6 +255,29 @@ extension LayerFilter {
         stretch.bVector = CIVector(x: 0, y: 0, z: 2, w: 0)
         stretch.biasVector = CIVector(x: -0.5, y: -0.5, z: -0.5, w: 0)
         return stretch.outputImage?.applyingFilter("CISRGBToneCurveToLinear") ?? input
+    }
+
+    /// Each colour band's hue, saturation and lightness moved as set,
+    /// blending smoothly between neighbouring bands. Greys are left alone.
+    private func adjustHSL(_ input: CIImage) -> CIImage {
+        let bands = (hslBands?.count == 24 ? hslBands! : Self.neutralHSL).map { min(max($0, -1), 1) }
+        guard bands.contains(where: { $0 != 0 }) else { return input }
+        let hues = Self.hslBandHues
+        return ColorTransforms.apply(input) { color in
+            let hsl = ColorTransforms.hsl(color)
+            // Between the two band middles either side of the hue, mixed by
+            // how near each one is: exact at a middle, smooth in between.
+            let upper = hues.firstIndex { $0 > hsl.x } ?? hues.count
+            let lower = upper - 1
+            let lowerHue = lower >= 0 ? hues[lower] : hues[hues.count - 1] - 1
+            let upperHue = upper < hues.count ? hues[upper] : hues[0] + 1
+            let t = (hsl.x - lowerHue) / (upperHue - lowerHue)
+            let a = (lower + hues.count) % hues.count, b = upper % hues.count
+            func mixed(_ part: Int) -> Double { bands[a * 3 + part] * (1 - t) + bands[b * 3 + part] * t }
+            return ColorTransforms.shift(
+                color, hue: mixed(0) / 6, saturation: mixed(1), lightness: mixed(2), weight: min(1, hsl.y * 4)
+            )
+        }
     }
 
     /// The filter's centre, from its fractions of the layer, in Core

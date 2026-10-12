@@ -88,6 +88,8 @@ struct FilterRow: View {
     var canMoveUp = false
     var canMoveDown = false
     var isAdjustment = false
+    /// The colour band the HSL sliders change.
+    @State private var band = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -131,6 +133,7 @@ struct FilterRow: View {
                 if filter.kind == .colorBalance { balanceControls }
                 if filter.kind == .gradientMap { gradientControls }
                 if filter.kind == .lensCorrection { lensControls }
+                if filter.kind == .hsl { hslControls }
                 if filter.kind == .curves {
                     CurveEditor(values: filter.curve ?? LayerFilter.straightCurve) { values in
                         state.updateFilter(filter.id) { $0.curve = values }
@@ -215,6 +218,46 @@ struct FilterRow: View {
             label: "LayerFilters.White", value: optionalBinding(\.white, default: 1), range: 0.1...1,
             valueText: "\(Int(((filter.white ?? 1) * 255).rounded()))"
         )
+    }
+
+    @ViewBuilder
+    private var hslControls: some View {
+        let hues = LayerFilter.hslBandHues
+        HStack(spacing: 6) {
+            ForEach(hues.indices, id: \.self) { index in
+                Button {
+                    band = index
+                } label: {
+                    Circle()
+                        .fill(Color(hue: hues[index], saturation: 0.85, brightness: 0.95))
+                        .frame(width: 24, height: 24)
+                        .overlay(Circle().strokeBorder(Color.primary, lineWidth: band == index ? 2 : 0).padding(-3))
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(Text(verbatim: "\(Int(hues[index] * 360))°"))
+                .accessibilityIdentifier("hslBand.\(index)")
+            }
+        }
+        let labels: [LocalizedStringKey] = ["LayerFilters.Hue", "Adjust.Saturation", "LayerFilters.Lightness"]
+        ForEach(0..<3, id: \.self) { part in
+            LabeledSlider(
+                label: labels[part],
+                value: Binding(
+                    get: { (filter.hslBands ?? LayerFilter.neutralHSL)[band * 3 + part] },
+                    set: { value in
+                        state.updateFilter(filter.id) { filter in
+                            var bands = filter.hslBands ?? LayerFilter.neutralHSL
+                            bands[band * 3 + part] = value
+                            filter.hslBands = bands
+                        }
+                    }
+                ),
+                range: -1...1,
+                valueText: "\(Int(((filter.hslBands ?? LayerFilter.neutralHSL)[band * 3 + part] * 100).rounded()))"
+            )
+        }
     }
 
     @ViewBuilder
