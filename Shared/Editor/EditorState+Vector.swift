@@ -399,6 +399,30 @@ extension EditorState {
     }
 }
 
+// MARK: - Path operations
+
+extension EditorState {
+    /// Changes the picked path, or every path of the active vector layer
+    /// when none is picked, into what `operation` makes of it.
+    private func replacePaths(_ operation: (VectorPath) -> VectorPath?) {
+        guard let layer = activeLayer, layer.vector != nil, !composition.isLocked(layer) else { return }
+        let only = selectedNode?.layerID == layer.id ? selectedNode?.path : nil
+        updateVector(layer.id) { content in
+            for index in content.paths.indices where only == nil || only == index {
+                if let changed = operation(content.paths[index]) { content.paths[index] = changed }
+            }
+        }
+        selectedNode = nil
+        additionalNodes = []
+    }
+
+    /// Grows the paths by `distance` canvas pixels, or shrinks them.
+    func offsetPaths(by distance: Double) {
+        let scale = activeLayer?.transform.uniformScale ?? 1
+        replacePaths { $0.offset(distance: distance / max(scale, 0.0001)) }
+    }
+}
+
 // MARK: - Text on a path
 
 extension EditorState {

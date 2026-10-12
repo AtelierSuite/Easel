@@ -488,6 +488,9 @@ struct ToolOptionsBar: View {
                     )
                 }
             }
+            GlassGroup(scrollsHorizontally: true) {
+                PathOperationsMenu(state: state, hasStroke: path.stroke != nil)
+            }
             if let live = path.liveShape {
                 GlassGroup(scrollsHorizontally: true) {
                     LiveShapeControls(
@@ -987,6 +990,35 @@ struct SelectionMenuItems: View {
         Section {
             Button("Select.CropToSelection", systemImage: "crop") { state.cropToSelection() }
                 .disabled(!hasSelection)
+        }
+    }
+}
+
+/// Growing and shrinking the picked paths.
+private struct PathOperationsMenu: View {
+    let state: EditorState
+    let hasStroke: Bool
+    @State private var isAskingOffset = false
+    @State private var offsetText = ""
+
+    var body: some View {
+        GlassMenuButton(symbol: "square.dashed.inset.filled", label: "Vector.PathOperations") {
+            Button("Vector.OffsetPath", systemImage: "square.on.square.dashed") {
+                let size = state.composition.size
+                offsetText = "\(Int(max(4, (max(size.width, size.height) / 200).rounded())))"
+                isAskingOffset = true
+            }
+        }
+        .accessibilityIdentifier("pathOperations")
+        .alert("Vector.OffsetPath", isPresented: $isAskingOffset) {
+            TextField("Vector.OffsetPath.Distance", text: $offsetText)
+                .keyboardType(.numbersAndPunctuation)
+            Button("Common.Cancel", role: .cancel) {}
+            Button("Common.OK") {
+                if let distance = Double(offsetText.replacingOccurrences(of: ",", with: ".")) { state.offsetPaths(by: distance) }
+            }
+        } message: {
+            Text("Vector.OffsetPath.Message")
         }
     }
 }
