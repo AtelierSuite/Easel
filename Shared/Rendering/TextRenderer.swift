@@ -58,10 +58,13 @@ enum TextRenderer {
     /// descenders are not clipped.
     static func render(_ text: TextContent) -> CGImage {
         let string = attributedString(for: text)
-        let bounds = string.boundingRect(
-            with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude),
+        let boxWidth = text.boxWidth.map { max($0, 1) }
+        var bounds = string.boundingRect(
+            with: CGSize(width: boxWidth ?? .greatestFiniteMagnitude, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil
         )
+        // A paragraph keeps its box's width, so its lines line up in it.
+        if let boxWidth { bounds.size.width = boxWidth }
         let outlineWidth = text.outline.map { max(0.5, $0.width * text.fontSize) } ?? 0
         let backgroundPadding = text.background.map { $0.padding * text.fontSize } ?? 0
         // The box fills the image, so the slack for italics is inside it.

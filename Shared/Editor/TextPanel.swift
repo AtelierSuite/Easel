@@ -85,6 +85,30 @@ struct TextPanel: View {
                         )
                     )
                 }
+                Section {
+                    Toggle("Text.Box", isOn: Binding(
+                        get: { text.boxWidth != nil },
+                        set: { isOn in
+                            let start = (TextRenderer.attributedString(for: text).size().width).rounded()
+                            state.updateText { $0.boxWidth = isOn ? max(start, text.fontSize * 4) : nil }
+                        }
+                    ))
+                    .accessibilityIdentifier("textBox")
+                    if let boxWidth = text.boxWidth {
+                        LabeledSlider(
+                            label: "Text.Box.Width",
+                            value: Binding(
+                                get: { boxWidth },
+                                set: { value in state.updateText { $0.boxWidth = value.rounded() } }
+                            ),
+                            range: max(text.fontSize, 10)...max(state.composition.size.width * 1.5, text.fontSize * 2),
+                            valueText: "\(Int(boxWidth.rounded())) px"
+                        )
+                        .accessibilityIdentifier("textBoxWidth")
+                    }
+                } footer: {
+                    Text("Text.Box.Footer")
+                }
                 Section("Text.Outline") {
                     Toggle("Text.Outline.Show", isOn: Binding(
                         get: { text.outline != nil },

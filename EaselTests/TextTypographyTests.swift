@@ -65,3 +65,29 @@ struct TextSpacingTests {
         #expect(width(unkerned) > width(plain))
     }
 }
+
+@Suite("Paragraph text")
+struct ParagraphTextTests {
+    private let words = "A line of words long enough to wrap onto several lines in a narrow box"
+
+    @Test func aBoxWrapsLinesToItsWidth() {
+        let line = TextContent(string: words, fontSize: 30, color: .black)
+        var boxed = line
+        boxed.boxWidth = 300
+        let plain = TextRenderer.render(line), wrapped = TextRenderer.render(boxed)
+        #expect(wrapped.width < plain.width / 2)
+        #expect(wrapped.height > plain.height * 2)
+        // The box keeps its width, give or take the room round it.
+        #expect(abs(Double(wrapped.width) - 300) < 30)
+    }
+
+    @Test func resizingThePictureResizesTheBox() {
+        var content = TextContent(string: words, fontSize: 30, color: .black)
+        content.boxWidth = 300
+        let layer = Layer(name: "Text", image: LayerImage(TextRenderer.render(content)), text: content,
+                          transform: LayerTransform(position: CGPoint(x: 200, y: 200)))
+        var composition = Composition(size: CGSize(width: 400, height: 400), layers: [layer])
+        composition.resizeImage(to: CGSize(width: 800, height: 800))
+        #expect(composition.layers[0].text?.boxWidth == 600)
+    }
+}

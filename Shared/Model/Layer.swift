@@ -290,6 +290,9 @@ struct TextContent: Codable, Equatable, Sendable {
     var lineSpacing: Double?
     /// Whether the font's own spacing for pairs of letters is used.
     var usesKerning: Bool?
+    /// Set for paragraph text: lines wrap to fit this width, in canvas
+    /// pixels. Nil lets each line run as long as it is.
+    var boxWidth: Double?
     /// A line drawn around each letter; nil for none. Optional so files
     /// saved before outlines existed still open.
     var outline: Outline?

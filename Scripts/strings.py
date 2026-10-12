@@ -567,6 +567,9 @@ S = {
 "Text.Tracking": ("Tracking", "トラッキング", "자간", "字距", "字距"),
 "Text.LineSpacing": ("Line Spacing", "行間", "행간", "行距", "行距"),
 "Text.Kerning": ("Font Kerning", "フォントのカーニング", "서체 커닝", "字体字偶间距", "字體字距微調"),
+"Text.Box": ("Paragraph Box", "段落テキスト", "단락 상자", "段落文本框", "段落文字框"),
+"Text.Box.Width": ("Box Width", "ボックスの幅", "상자 폭", "文本框宽度", "文字框寬度"),
+"Text.Box.Footer": ("In a box, lines wrap to its width.", "ボックス内では、行がボックスの幅で折り返されます。", "상자 안에서는 행이 상자 폭에 맞춰 줄 바꿈됩니다.", "在文本框中，文本行会按文本框宽度换行。", "在文字框中，文字行會依文字框寬度換行。"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

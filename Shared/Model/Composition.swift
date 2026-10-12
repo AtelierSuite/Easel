@@ -280,6 +280,7 @@ struct Composition: Equatable, Sendable {
                 // Text is set again rather than stretched, so it stays crisp.
                 let factor = (scaleX + scaleY) / 2
                 text.fontSize *= factor
+                text.boxWidth = text.boxWidth.map { $0 * factor }
                 layers[index].text = text
                 layers[index].transform.scaleX /= factor
                 layers[index].transform.scaleY /= factor
