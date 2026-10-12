@@ -295,7 +295,7 @@ S = {
 "Text.Alignment.Trailing": ("Right", "右揃え", "오른쪽 정렬", "右对齐", "靠右"),
 "Text.Bold": ("Bold", "太字", "볼드체", "粗体", "粗體"),
 "Text.Color": ("Color", "カラー", "색상", "颜色", "顏色"),
-"Text.Design": ("Font", "フォント", "서체", "字体", "字體"),
+"Text.Design": ("Design", "デザイン", "디자인", "设计", "設計"),
 "Text.Design.Default": ("System", "システム", "시스템", "系统", "系統"),
 "Text.Design.Monospaced": ("Monospaced", "等幅", "고정폭", "等宽", "等寬"),
 "Text.Design.Rounded": ("Rounded", "丸ゴシック", "둥근", "圆体", "圓體"),
@@ -562,6 +562,8 @@ S = {
 "Gradient.RemoveStop": ("Remove Stop", "分岐点を削除", "정지점 제거", "移除色标", "移除色標"),
 "Gradient.Footer": ("Tap the bar to add a stop. Drag stops to move them.", "バーをタップすると分岐点を追加できます。分岐点はドラッグで移動できます。", "막대를 탭하여 정지점을 추가하십시오. 정지점을 드래그하여 이동하십시오.", "轻点渐变条以添加色标。拖移色标以移动它们。", "點一下漸層列以加入色標。拖移色標以移動。"),
 "Options.GradientFill": ("Gradient Fill", "グラデーションで塗りつぶし", "그레이디언트 채우기", "渐变填充", "漸層填色"),
+"Text.Font": ("Font", "フォント", "서체", "字体", "字體"),
+"Text.Font.System": ("System Font", "システムフォント", "시스템 서체", "系统字体", "系統字體"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

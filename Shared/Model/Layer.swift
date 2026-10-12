@@ -275,6 +275,8 @@ struct TextContent: Codable, Equatable, Sendable {
 
     var string: String
     var design: Design = .standard
+    /// A font family picked by name, in place of the system font's design.
+    var fontName: String?
     var isBold = true
     var isItalic = false
     /// In canvas pixels.

@@ -4,6 +4,7 @@ import SwiftUI
 struct TextPanel: View {
     @Bindable var state: EditorState
     @FocusState private var isEditing: Bool
+    @State private var isPickingFont = false
 
     var body: some View {
         Form {
@@ -15,9 +16,21 @@ struct TextPanel: View {
                         .accessibilityIdentifier("textContent")
                 }
                 Section {
-                    Picker("Text.Design", selection: binding(\.design)) {
-                        ForEach(TextContent.Design.allCases) { design in
-                            Text(design.label).tag(design)
+                    Button {
+                        isPickingFont = true
+                    } label: {
+                        LabeledContent("Text.Font") {
+                            Text(text.fontName ?? String(localized: "Text.Font.System"))
+                                .font(text.fontName.map { .custom($0, size: 17) } ?? .body)
+                        }
+                    }
+                    .tint(.primary)
+                    .accessibilityIdentifier("textFont")
+                    if text.fontName == nil {
+                        Picker("Text.Design", selection: binding(\.design)) {
+                            ForEach(TextContent.Design.allCases) { design in
+                                Text(design.label).tag(design)
+                            }
                         }
                     }
                     HStack {
@@ -110,6 +123,27 @@ struct TextPanel: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $isPickingFont) {
+            NavigationStack {
+                FontPicker { family in
+                    state.updateText { $0.fontName = family }
+                    isPickingFont = false
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Text.Font.System") {
+                            state.updateText { $0.fontName = nil }
+                            isPickingFont = false
+                        }
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Common.Cancel", role: .cancel) { isPickingFont = false }
+                    }
+                }
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
         .onAppear {
             // A new text layer starts with placeholder words, which give way
             // to whatever is typed.

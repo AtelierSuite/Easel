@@ -18066,31 +18066,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Font"
+            "value": "Design"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "フォント"
+            "value": "デザイン"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "서체"
+            "value": "디자인"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "字体"
+            "value": "设计"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "字體"
+            "value": "設計"
           }
         }
       }
@@ -18231,6 +18231,76 @@
           "stringUnit": {
             "state": "translated",
             "value": "襯線"
+          }
+        }
+      }
+    },
+    "Text.Font": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォント"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서체"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字体"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字體"
+          }
+        }
+      }
+    },
+    "Text.Font.System": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System Font"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システムフォント"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시스템 서체"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统字体"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系統字體"
           }
         }
       }

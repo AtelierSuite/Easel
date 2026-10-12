@@ -4,6 +4,7 @@ import UIKit
 enum TextRenderer {
     static func font(for text: TextContent) -> UIFont {
         let size = max(1, text.fontSize)
+        if let family = text.fontName, let font = font(family: family, text: text, size: size) { return font }
         var descriptor = UIFont.systemFont(ofSize: size, weight: text.isBold ? .bold : .regular).fontDescriptor
         let design: UIFontDescriptor.SystemDesign = switch text.design {
         case .standard: .default
@@ -15,6 +16,18 @@ enum TextRenderer {
         if text.isItalic {
             descriptor = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(.traitItalic)) ?? descriptor
         }
+        return UIFont(descriptor: descriptor, size: size)
+    }
+
+    /// A face of a named family, bold and italic as asked where the family
+    /// has them. Nil when no such family is installed.
+    private static func font(family: String, text: TextContent, size: Double) -> UIFont? {
+        guard !UIFont.fontNames(forFamilyName: family).isEmpty else { return nil }
+        var descriptor = UIFontDescriptor(fontAttributes: [.family: family])
+        var traits: UIFontDescriptor.SymbolicTraits = []
+        if text.isBold { traits.insert(.traitBold) }
+        if text.isItalic { traits.insert(.traitItalic) }
+        if !traits.isEmpty { descriptor = descriptor.withSymbolicTraits(traits) ?? descriptor }
         return UIFont(descriptor: descriptor, size: size)
     }
 
