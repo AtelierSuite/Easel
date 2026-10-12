@@ -534,6 +534,13 @@ S = {
 "Select.Mode.Add": ("Add to Selection", "選択範囲に追加", "선택 영역에 추가", "添加到选区", "增加至選取範圍"),
 "Select.Mode.Subtract": ("Subtract from Selection", "選択範囲から削除", "선택 영역에서 빼기", "从选区减去", "從選取範圍減去"),
 "Select.Mode.Intersect": ("Intersect with Selection", "選択範囲との共通範囲", "선택 영역과 교차", "与选区交叉", "與選取範圍相交"),
+"Select.Modify": ("Modify", "選択範囲を変更", "수정", "修改", "修改"),
+"Select.Feather": ("Feather", "ぼかし", "페더", "羽化", "羽化"),
+"Select.Expand": ("Expand", "拡張", "확장", "扩展", "擴張"),
+"Select.Contract": ("Contract", "縮小", "축소", "收缩", "收縮"),
+"Select.Smooth": ("Smooth", "滑らかに", "매끄럽게", "平滑", "平滑"),
+"Select.Border": ("Border", "境界線", "테두리", "边界", "邊框"),
+"Select.Radius": ("Radius in pixels", "半径（ピクセル）", "반경(픽셀)", "半径（像素）", "半徑（像素）"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

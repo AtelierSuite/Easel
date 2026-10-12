@@ -40,6 +40,42 @@ struct SelectionOperationTests {
         #expect(rect(0, 0, 10, 10).combined(with: rect(20, 0, 10, 10), mode: .intersect, canvasSize: size) == nil)
     }
 
+    @Test func expandingGrowsAndContractingShrinks() {
+        let box = rect(10, 5, 20, 10)
+        let grown = box.modified(.expand, radius: 3, canvasSize: size)
+        #expect(coverage(grown, x: 8, y: 10) == 255)
+        #expect(coverage(grown, x: 4, y: 10) == 0)
+        let shrunk = box.modified(.contract, radius: 3, canvasSize: size)
+        #expect(coverage(shrunk, x: 11, y: 10) == 0)
+        #expect(coverage(shrunk, x: 20, y: 10) == 255)
+    }
+
+    @Test func modifyingKeepsTheSelectionTheRightWayUp() {
+        // Only the top band is selected; it must stay at the top.
+        let top = rect(0, 0, 40, 5).modified(.expand, radius: 1, canvasSize: size)
+        #expect(coverage(top, x: 20, y: 2) == 255)
+        #expect(coverage(top, x: 20, y: 17) == 0)
+    }
+
+    @Test func featheringSoftensTheEdge() {
+        let soft = rect(10, 0, 20, 20).modified(.feather, radius: 6, canvasSize: size)
+        let edge = coverage(soft, x: 10, y: 10)
+        #expect(edge > 40 && edge < 215)
+        #expect(coverage(soft, x: 20, y: 10) > 230)
+    }
+
+    @Test func aBorderKeepsOnlyTheEdge() {
+        let border = rect(10, 2, 20, 16).modified(.border, radius: 4, canvasSize: size)
+        #expect(coverage(border, x: 10, y: 10) > 200)
+        #expect(coverage(border, x: 20, y: 10) == 0)
+    }
+
+    @Test func smoothingRoundsCorners() {
+        let smooth = rect(10, 2, 20, 16).modified(.smooth, radius: 4, canvasSize: size)
+        #expect(coverage(smooth, x: 10, y: 2) < 128)
+        #expect(coverage(smooth, x: 20, y: 10) == 255)
+    }
+
     @MainActor @Test func theEditorCombinesNewSelectionsByMode() async throws {
         let state = EditorState()
         state.attach(to: Composition.blank(size: size)) { _ in }

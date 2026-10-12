@@ -122,6 +122,7 @@ struct EditorView<Actions: View>: View {
             }
             .sensoryFeedback(.selection, trigger: state.tool)
             .errorAlert(state, isActive: !isCompact || state.presentedPanel == nil)
+            .selectionEditAlert(state)
             .onAppear(perform: attach)
             .onChange(of: composition) { _, new in state.sync(new) }
             #if DEBUG

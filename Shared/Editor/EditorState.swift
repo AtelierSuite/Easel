@@ -85,6 +85,8 @@ final class EditorState {
     var selectionKind: SelectionKind = .rectangle
     /// How a new selection meets the one already there.
     var selectionMode: SelectionMode = .replace
+    /// A change to the selection waiting for its size to be given.
+    var pendingSelectionEdit: SelectionEdit?
     /// How different a colour may be and still be picked by magic select.
     var selectionTolerance = 0.15
     /// The picture's edges, for magnetic select to cling to; worked out

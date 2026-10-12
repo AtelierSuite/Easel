@@ -847,6 +847,17 @@ struct SelectionMenuItems: View {
         }
         .disabled(!hasSelection)
         Section {
+            Menu("Select.Modify", systemImage: "slider.horizontal.below.rectangle") {
+                ForEach(SelectionModification.allCases) { modification in
+                    Button(modification.label, systemImage: modification.symbolName) {
+                        state.pendingSelectionEdit = .modify(modification)
+                    }
+                    .accessibilityIdentifier("selectionModify.\(modification.rawValue)")
+                }
+            }
+        }
+        .disabled(!hasSelection)
+        Section {
             Button("Select.CropToSelection", systemImage: "crop") { state.cropToSelection() }
                 .disabled(!hasSelection)
         }
