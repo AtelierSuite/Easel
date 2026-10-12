@@ -60,21 +60,43 @@ extension VectorPath {
 // MARK: - SVG
 
 enum SVGWriter {
+    /// The picture as SVG: vector layers as paths and text as words, masks
+    /// as SVG masks, layers clipped to a vector or text layer clipped to its
+    /// outline, and blurs, simple colour filters, shadows, glows, outside
+    /// strokes and colour overlays as SVG filters. Only what SVG cannot say
+    /// — adjustment layers and other filters and effects — is drawn out as
+    /// pixels.
     static func data(for composition: Composition) -> Data {
         var defs: [String] = []
         var body: [String] = []
-        for item in VectorExportItem.plan(for: composition) {
-            switch item {
-            case .vector(let layer):
-                body.append(group(for: layer, content: layer.vector!.paths.map { paths(for: $0, defs: &defs) }.joined()))
-            case .text(let layer):
-                // Set exactly as on the canvas, as pixels.
-                body.append(group(for: layer, content: imageElement(layer.image.cgImage, rect: CGRect(origin: .zero, size: layer.image.size))))
-            case .raster(let image, let rect, let transform, let opacity, let blendMode):
-                body.append(group(transform: transform, opacity: opacity, blendMode: blendMode, content: imageElement(image, rect: rect)))
-            }
+        var drawn: [Layer] = []
+        let size = composition.size
+        func canvasImage(_ layers: [Layer]) -> String {
+            imageElement(CompositionRenderer.render(layers: layers, size: size), rect: CGRect(origin: .zero, size: size))
         }
-        let width = number(composition.size.width), height = number(composition.size.height)
+        for unit in composition.displayLayers.clippingUnits {
+            let base = unit.base
+            defer { drawn.append(base); drawn += unit.clipped }
+            guard base.isVisible, base.opacity > 0 else { continue }
+            if base.isActiveAdjustment {
+                // It changes everything beneath it, which becomes one picture.
+                body = [canvasImage(drawn + [base])]
+                continue
+            }
+            let clipped = unit.clipped.filter { $0.isVisible && $0.opacity > 0 }
+            if !clipped.isEmpty {
+                if let element = element(for: base, defs: &defs), let clip = clipPath(for: base, defs: &defs) {
+                    body.append(element)
+                    let inside = clipped.map { self.element(for: $0, defs: &defs) ?? raster($0) }.joined(separator: "\n")
+                    body.append("<g clip-path=\"url(#\(clip))\">\n\(inside)\n</g>")
+                } else {
+                    body.append(canvasImage([base] + unit.clipped))
+                }
+                continue
+            }
+            body.append(element(for: base, defs: &defs) ?? raster(base))
+        }
+        let width = number(size.width), height = number(size.height)
         var svg = """
         <?xml version="1.0" encoding="UTF-8"?>
         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="\(width)" height="\(height)" viewBox="0 0 \(width) \(height)">
@@ -83,6 +105,198 @@ enum SVGWriter {
         if !defs.isEmpty { svg += "<defs>\n" + defs.joined(separator: "\n") + "\n</defs>\n" }
         svg += body.joined(separator: "\n") + "\n</svg>\n"
         return Data(svg.utf8)
+    }
+
+    // MARK: - Layers
+
+    /// The layer drawn out with its filters, mask and effects, as an image.
+    private static func raster(_ layer: Layer) -> String {
+        let styled = layer.styledImage
+        let rect = layer.paddedRect(imageWidth: styled.composite.width, padding: styled.padding)
+        return group(for: layer, content: imageElement(styled.composite, rect: rect))
+    }
+
+    private static let filterKinds: Set<LayerFilter.Kind> = [.gaussianBlur, .blackAndWhite, .saturation, .sepia]
+
+    private static func isExpressible(_ effect: LayerEffect) -> Bool {
+        switch effect.kind {
+        case .dropShadow, .outerGlow, .colorOverlay: return true
+        case .stroke: return effect.position == .outside
+        default: return false
+        }
+    }
+
+    /// The layer as SVG of its own, or nil if it needs drawing out.
+    private static func element(for layer: Layer, defs: inout [String]) -> String? {
+        guard layer.activeFilters.allSatisfy({ filterKinds.contains($0.kind) }),
+              layer.activeEffects.allSatisfy(isExpressible) else { return nil }
+        var content: String
+        if let vector = layer.vector {
+            guard vector.paths.allSatisfy(\.isExpressibleAsVector) else { return nil }
+            content = vector.paths.map { paths(for: $0, defs: &defs) }.joined()
+        } else if let text = layer.text {
+            content = textElements(text)
+        } else if layer.adjustment == nil {
+            // Pixels, but with their mask and filters left to SVG.
+            content = imageElement(layer.image.cgImage, rect: CGRect(origin: .zero, size: layer.image.size))
+        } else {
+            return nil
+        }
+        if let mask = layer.activeMask {
+            let id = "mask\(defs.count)"
+            let rect = CGRect(origin: .zero, size: layer.image.size)
+            defs.append("<mask id=\"\(id)\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"\(number(rect.width))\" height=\"\(number(rect.height))\">\n\(imageElement(mask.image.cgImage, rect: rect))</mask>")
+            content = "<g mask=\"url(#\(id))\">\n\(content)</g>\n"
+        }
+        if !layer.activeFilters.isEmpty || !layer.activeEffects.isEmpty {
+            let id = "filter\(defs.count)"
+            defs.append(filterElement(for: layer, id: id))
+            content = "<g filter=\"url(#\(id))\">\n\(content)</g>\n"
+        }
+        return group(for: layer, content: content)
+    }
+
+    /// The outline of a vector or text layer, for what is clipped to it.
+    private static func clipPath(for layer: Layer, defs: inout [String]) -> String? {
+        // A clip path holds shapes and text only, so each carries the
+        // layer's placement itself.
+        let t = layer.affineTransform
+        let placement = "transform=\"matrix(\(number(t.a)) \(number(t.b)) \(number(t.c)) \(number(t.d)) \(number(t.tx)) \(number(t.ty)))\""
+        let shape: String
+        if let vector = layer.vector {
+            shape = vector.paths.filter(\.isClosed).map {
+                "<path \(placement) d=\"\(pathData($0.cgPath))\" clip-rule=\"evenodd\"/>\n"
+            }.joined()
+            guard !shape.isEmpty else { return nil }
+        } else if let text = layer.text {
+            shape = textElements(text, forClipping: true).replacingOccurrences(of: "<text ", with: "<text \(placement) ")
+        } else {
+            return nil
+        }
+        let id = "clip\(defs.count)"
+        defs.append("<clipPath id=\"\(id)\">\n\(shape)</clipPath>")
+        return id
+    }
+
+    // MARK: - Text
+
+    /// The words as `<text>`, line by line and style by style where the
+    /// canvas sets them, with the layer's outline and background.
+    private static func textElements(_ text: TextContent, forClipping: Bool = false) -> String {
+        let (runs, size, outlineWidth) = TextRenderer.setRuns(for: text)
+        var out = ""
+        if let background = text.background, !forClipping {
+            let radius = min(size.width, size.height) / 2 * min(max(background.cornerRadius, 0), 1)
+            out += "<rect x=\"0\" y=\"0\" width=\"\(number(size.width))\" height=\"\(number(size.height))\" rx=\"\(number(radius))\" fill=\"\(color(background.color))\"\(opacityAttribute("fill-opacity", background.color))/>\n"
+        }
+        for run in runs {
+            var attributes = "x=\"\(number(run.origin.x))\" y=\"\(number(run.origin.y))\""
+            attributes += " font-family=\"\(escaped(fontFamily(run.font, design: text.design)))\" font-size=\"\(number(run.font.pointSize))\""
+            let traits = run.font.fontDescriptor.symbolicTraits
+            if traits.contains(.traitBold) { attributes += " font-weight=\"bold\"" }
+            if traits.contains(.traitItalic) { attributes += " font-style=\"italic\"" }
+            if abs(run.spacing) > 0.01 { attributes += " letter-spacing=\"\(number(run.spacing))\"" }
+            if !forClipping {
+                let paint = RGBAColor(run.color.cgColor) ?? .black
+                attributes += " fill=\"\(color(paint))\"\(opacityAttribute("fill-opacity", paint))"
+                if run.isUnderlined { attributes += " text-decoration=\"underline\"" }
+                if let outline = text.outline {
+                    attributes += " stroke=\"\(color(outline.color))\" stroke-width=\"\(number(outlineWidth * 2))\" stroke-linejoin=\"round\" paint-order=\"stroke\""
+                }
+            }
+            out += "<text \(attributes) xml:space=\"preserve\">\(escaped(run.string))</text>\n"
+        }
+        return out
+    }
+
+    /// A font family a viewer can find: the system font's designs by their
+    /// CSS names, with fallbacks.
+    private static func fontFamily(_ font: UIFont, design: TextContent.Design) -> String {
+        guard font.familyName.hasPrefix(".") else { return "'\(font.familyName)'" }
+        switch design {
+        case .standard: return "system-ui, -apple-system, 'Helvetica Neue', sans-serif"
+        case .serif: return "ui-serif, 'New York', Georgia, serif"
+        case .rounded: return "ui-rounded, 'SF Pro Rounded', sans-serif"
+        case .monospaced: return "ui-monospace, 'SF Mono', Menlo, monospace"
+        }
+    }
+
+    // MARK: - Filters
+
+    /// The layer's filters and effects as an SVG filter, in the layer's
+    /// own units: lengths set on the canvas are carried through its scale
+    /// and turn.
+    private static func filterElement(for layer: Layer, id: String) -> String {
+        let placement = layer.affineTransform
+        let toLocal = CGAffineTransform(a: placement.a, b: placement.b, c: placement.c, d: placement.d, tx: 0, ty: 0).inverted()
+        let lengthScale = sqrt(abs(toLocal.a * toLocal.d - toLocal.b * toLocal.c))
+        var primitives: [String] = []
+        var current = "SourceGraphic"
+        let unit = max(layer.image.size.width, layer.image.size.height) / 1000
+        for (index, filter) in layer.activeFilters.enumerated() {
+            let result = "f\(index)"
+            switch filter.kind {
+            case .gaussianBlur:
+                primitives.append("<feGaussianBlur in=\"\(current)\" stdDeviation=\"\(number(filter.amount * 50 * unit))\" edgeMode=\"duplicate\" result=\"\(result)\"/>")
+            case .blackAndWhite:
+                primitives.append("<feColorMatrix in=\"\(current)\" type=\"saturate\" values=\"\(number(1 - min(max(filter.amount, 0), 1)))\" result=\"\(result)\"/>")
+            case .saturation:
+                primitives.append("<feColorMatrix in=\"\(current)\" type=\"saturate\" values=\"\(number(1 + filter.amount))\" result=\"\(result)\"/>")
+            case .sepia:
+                // Mixed from no change to a full sepia tone.
+                let t = min(max(filter.amount, 0), 1)
+                let sepia: [Double] = [0.393, 0.769, 0.189, 0.349, 0.686, 0.168, 0.272, 0.534, 0.131]
+                let identity: [Double] = [1, 0, 0, 0, 1, 0, 0, 0, 1]
+                let m = zip(identity, sepia).map { $0 + ($1 - $0) * t }
+                let values = "\(number(m[0])) \(number(m[1])) \(number(m[2])) 0 0 \(number(m[3])) \(number(m[4])) \(number(m[5])) 0 0 \(number(m[6])) \(number(m[7])) \(number(m[8])) 0 0 0 0 0 1 0"
+                primitives.append("<feColorMatrix in=\"\(current)\" type=\"matrix\" values=\"\(values)\" result=\"\(result)\"/>")
+            default:
+                continue
+            }
+            current = result
+        }
+        var behind: [String] = []
+        var content = current
+        for kind in LayerEffect.Kind.allCases {
+            guard let effect = layer.activeEffects.first(where: { $0.kind == kind }) else { continue }
+            let size = effect.size * lengthScale
+            let paint = "flood-color=\"\(color(effect.color))\" flood-opacity=\"\(number(effect.opacity))\""
+            let name = kind.rawValue
+            switch kind {
+            case .dropShadow:
+                let light = CGPoint(x: effect.lightDirection.dx * effect.distance, y: effect.lightDirection.dy * effect.distance).applying(toLocal)
+                primitives.append("<feOffset in=\"\(content)\" dx=\"\(number(light.x))\" dy=\"\(number(light.y))\" result=\"\(name)Moved\"/>")
+                primitives.append("<feGaussianBlur in=\"\(name)Moved\" stdDeviation=\"\(number(size * 0.5))\" result=\"\(name)Blur\"/>")
+                primitives.append("<feFlood \(paint) result=\"\(name)Paint\"/>")
+                primitives.append("<feComposite in=\"\(name)Paint\" in2=\"\(name)Blur\" operator=\"in\" result=\"\(name)\"/>")
+                behind.append(name)
+            case .outerGlow:
+                primitives.append("<feMorphology in=\"\(content)\" operator=\"dilate\" radius=\"\(number(size * 0.25))\" result=\"\(name)Grown\"/>")
+                primitives.append("<feGaussianBlur in=\"\(name)Grown\" stdDeviation=\"\(number(size * 0.5))\" result=\"\(name)Blur\"/>")
+                primitives.append("<feFlood \(paint) result=\"\(name)Paint\"/>")
+                primitives.append("<feComposite in=\"\(name)Paint\" in2=\"\(name)Blur\" operator=\"in\" result=\"\(name)\"/>")
+                behind.append(name)
+            case .stroke:
+                primitives.append("<feMorphology in=\"\(content)\" operator=\"dilate\" radius=\"\(number(size))\" result=\"\(name)Grown\"/>")
+                primitives.append("<feFlood \(paint) result=\"\(name)Paint\"/>")
+                primitives.append("<feComposite in=\"\(name)Paint\" in2=\"\(name)Grown\" operator=\"in\" result=\"\(name)Filled\"/>")
+                primitives.append("<feComposite in=\"\(name)Filled\" in2=\"\(content)\" operator=\"out\" result=\"\(name)\"/>")
+                behind.append(name)
+            case .colorOverlay:
+                primitives.append("<feFlood \(paint) result=\"\(name)Paint\"/>")
+                primitives.append("<feComposite in=\"\(name)Paint\" in2=\"\(content)\" operator=\"atop\" result=\"\(name)\"/>")
+                content = name
+            default:
+                break
+            }
+        }
+        if !behind.isEmpty {
+            let nodes = (behind + [content]).map { "<feMergeNode in=\"\($0)\"/>" }.joined()
+            primitives.append("<feMerge>\(nodes)</feMerge>")
+        } else if content == "SourceGraphic" {
+            primitives.append("<feOffset in=\"SourceGraphic\" dx=\"0\" dy=\"0\"/>")
+        }
+        return "<filter id=\"\(id)\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\" color-interpolation-filters=\"sRGB\">\n\(primitives.joined(separator: "\n"))\n</filter>"
     }
 
     private static func group(for layer: Layer, content: String) -> String {

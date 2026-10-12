@@ -1,3 +1,4 @@
+import CoreText
 import UIKit
 
 /// Sets a text layer's words into pixels.
@@ -107,6 +108,55 @@ enum TextRenderer {
             height: min(ceil(bounds.height) + padding * 2, CGFloat(Bitmap.maximumDimension))
         )
         return (string, size, padding, outlineWidth)
+    }
+
+    /// A stretch of text set in one style on one line, where it sits in the
+    /// image `render` draws: what a vector file writes as words.
+    struct SetRun {
+        var string: String
+        /// Where its baseline starts, y running down.
+        var origin: CGPoint
+        var font: UIFont
+        var color: UIColor
+        /// Extra room after each letter, in pixels.
+        var spacing: Double
+        var isUnderlined: Bool
+    }
+
+    /// The text laid out line by line and style by style as `render` sets
+    /// it, with the image's size and the outline's width.
+    static func setRuns(for text: TextContent) -> (runs: [SetRun], size: CGSize, outlineWidth: Double) {
+        let (string, size, padding, outlineWidth) = layout(for: text)
+        let framesetter = CTFramesetterCreateWithAttributedString(string)
+        // Core Text counts y up; a little room below so no line is dropped.
+        let box = CGRect(x: padding, y: padding - 2, width: size.width - padding * 2, height: size.height - padding * 2 + 2)
+        let frame = CTFramesetterCreateFrame(framesetter, CFRange(location: 0, length: 0), CGPath(rect: box, transform: nil), nil)
+        let lines = CTFrameGetLines(frame) as? [CTLine] ?? []
+        var origins = [CGPoint](repeating: .zero, count: lines.count)
+        CTFrameGetLineOrigins(frame, CFRange(location: 0, length: 0), &origins)
+        let nsString = string.string as NSString
+        var runs: [SetRun] = []
+        for (line, origin) in zip(lines, origins) {
+            for run in CTLineGetGlyphRuns(line) as? [CTRun] ?? [] {
+                let range = CTRunGetStringRange(run)
+                guard range.length > 0 else { continue }
+                let piece = nsString.substring(with: NSRange(location: range.location, length: range.length))
+                guard !piece.trimmingCharacters(in: .newlines).isEmpty else { continue }
+                var start = CGPoint.zero
+                CTRunGetPositions(run, CFRange(location: 0, length: 1), &start)
+                let attributes = string.attributes(at: range.location, effectiveRange: nil)
+                let font = attributes[.font] as? UIFont ?? font(for: text)
+                let spacing = (attributes[.tracking] as? Double ?? 0) + (attributes[.kern] as? Double ?? 0)
+                let shift = attributes[.baselineOffset] as? Double ?? 0
+                runs.append(SetRun(
+                    string: piece.trimmingCharacters(in: .newlines),
+                    origin: CGPoint(x: box.minX + origin.x + start.x, y: size.height - (box.minY + origin.y) - shift),
+                    font: font, color: attributes[.foregroundColor] as? UIColor ?? .black, spacing: spacing,
+                    isUnderlined: (attributes[.underlineStyle] as? Int ?? 0) != 0
+                ))
+            }
+        }
+        return (runs, size, outlineWidth)
     }
 
     /// Draws the text, its outline and background into `context`, which is
