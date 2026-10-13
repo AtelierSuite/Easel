@@ -61,6 +61,21 @@ struct StylizeFilterTests {
         #expect(TestImages.isClear(filtered(half, .halftone), x: 150, y: 100))
     }
 
+    @Test func aLongSpinIsASmoothStreakRatherThanCopies() {
+        // A small white square on black, spun through 60° about the middle.
+        var pixels = PixelFilters.Pixels(width: 200, height: 200)
+        for index in stride(from: 0, to: pixels.bytes.count, by: 4) { pixels.bytes[index + 3] = 255 }
+        for y in 99...100 { for x in 179...180 { for channel in 0..<3 { pixels[x, y, channel] = 255 } } }
+        LayerFilter.spinBlur(&pixels, centre: SIMD2(100, 100), arc: .pi / 3)
+        // Lit all along the arc, with no dark gaps between copies.
+        for degrees in -25...25 {
+            let angle = Double(degrees) * .pi / 180
+            let x = Int((100 + 80 * cos(angle)).rounded()), y = Int((100 + 80 * sin(angle)).rounded())
+            let lit = (-1...1).map { dy in pixels[x, y + dy, 0] }.max() ?? 0
+            #expect(lit > 0, "\(degrees)°")
+        }
+    }
+
     @Test func clearNeighboursDoNotCountAsBlack() {
         let half = Bitmap.render(size: CGSize(width: 200, height: 200)) { context in
             context.setFillColor(RGBAColor(red: 0.5, green: 0.5, blue: 0.5).cgColor)

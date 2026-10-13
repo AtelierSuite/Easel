@@ -213,20 +213,33 @@ extension LayerFilter {
     /// arc about the centre, `arc` radians in all.
     static func spinBlur(_ pixels: inout PixelFilters.Pixels, centre: SIMD2<Double>, arc: Double) {
         guard arc > 0 else { return }
-        let original = pixels, steps = 24
-        let turns = (0..<steps).map { (Double($0) / Double(steps - 1) - 0.5) * arc }
-        for y in 0..<pixels.height {
-            for x in 0..<pixels.width {
-                let offset = SIMD2(Double(x) + 0.5, Double(y) + 0.5) - centre
-                var sum = SIMD4<Double>(repeating: 0)
-                for t in turns {
-                    let point = centre + SIMD2(offset.x * cos(t) - offset.y * sin(t), offset.x * sin(t) + offset.y * cos(t)) - 0.5
-                    let colour = sample(original, point.x, point.y, clamped: true)
-                    sum += SIMD4(colour.x * colour.w, colour.y * colour.w, colour.z * colour.w, colour.w)
+        let original = pixels, width = pixels.width, height = pixels.height
+        pixels.bytes.withUnsafeMutableBufferPointer { output in
+            let output = output
+            DispatchQueue.concurrentPerform(iterations: height) { y in
+                for x in 0..<width {
+                    let offset = SIMD2(Double(x) + 0.5, Double(y) + 0.5) - centre
+                    // About a sample a pixel along the arc, so a long one far
+                    // out is a smooth streak rather than copies; at least 24,
+                    // and no more than 256.
+                    let distance = (offset * offset).sum().squareRoot()
+                    let steps = min(max(24, Int((arc * distance).rounded(.up)) + 1), 256)
+                    // Turned round step by step from one end of the arc.
+                    let turn = arc / Double(steps - 1), start = -arc / 2
+                    let by = SIMD2(cos(turn), sin(turn))
+                    var turned = SIMD2(offset.x * cos(start) - offset.y * sin(start), offset.x * sin(start) + offset.y * cos(start))
+                    var sum = SIMD4<Double>(repeating: 0)
+                    for _ in 0..<steps {
+                        let point = centre + turned - 0.5
+                        let colour = sample(original, point.x, point.y, clamped: true)
+                        sum += SIMD4(colour.x * colour.w, colour.y * colour.w, colour.z * colour.w, colour.w)
+                        turned = SIMD2(turned.x * by.x - turned.y * by.y, turned.x * by.y + turned.y * by.x)
+                    }
+                    sum /= Double(steps)
+                    let index = (y * width + x) * 4
+                    output[index + 3] = PixelFilters.byte(sum.w)
+                    for channel in 0..<3 { output[index + channel] = sum.w > 0 ? PixelFilters.byte(sum[channel] / sum.w) : 0 }
                 }
-                sum /= Double(steps)
-                pixels[x, y, 3] = PixelFilters.byte(sum.w)
-                for channel in 0..<3 { pixels[x, y, channel] = sum.w > 0 ? PixelFilters.byte(sum[channel] / sum.w) : 0 }
             }
         }
     }
