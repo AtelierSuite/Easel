@@ -727,13 +727,18 @@ extension StrokePreview {
             stamp.draw(tip, in: CGRect(x: -size / 2, y: -size / 2, width: size, height: size))
         }
         if let grain = PaperGrain.image(for: stroke.settings.tip) {
-            // The paper, pinned to the canvas so the grain stays put.
+            // The paper, pinned to the canvas so the grain stays put. Each
+            // tile upside down, as `Stroke.drawDabs` tiles it into a
+            // context whose y runs down.
             var paper = context
             paper.blendMode = .destinationIn
             let origin = CGPoint.zero.applying(transform)
             paper.fill(
                 Path(stroke.bounds.applying(transform)),
-                with: .tiledImage(Image(decorative: grain, scale: 1), origin: origin, scale: stroke.grainScale * scale)
+                with: .tiledImage(
+                    Image(decorative: grain, scale: 1, orientation: .downMirrored), origin: origin,
+                    scale: stroke.grainScale * scale
+                )
             )
         }
     }
