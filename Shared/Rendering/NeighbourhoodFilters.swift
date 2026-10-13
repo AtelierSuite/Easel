@@ -228,27 +228,33 @@ extension LayerFilter {
         var current = source
         for pass in passes {
             var out = current
-            for y in 0..<height {
-                for x in 0..<width {
-                    let center = (y * width + x) * 4
-                    guard current[center + 3] > 0 else { continue }
-                    for channel in 0..<3 {
-                        let value = Int(current[center + channel])
-                        var sum = 0.0, total = 0.0
-                        func add(_ nx: Int, _ ny: Int) {
-                            let n = (min(max(ny, 0), height - 1) * width + min(max(nx, 0), width - 1)) * 4
-                            guard current[n + 3] > 0 else { return }
-                            let other = Int(current[n + channel])
-                            let w = weights[abs(other - value)]
-                            sum += w * Double(other)
-                            total += w
+            let steps = pass.dx == 0 && pass.dy == 0
+                ? (-radius...radius).flatMap { dy in (-radius...radius).map { dx in (dx, dy) } }
+                : (-pass.radius...pass.radius).map { ($0 * pass.dx, $0 * pass.dy) }
+            current.withUnsafeBufferPointer { current in
+                weights.withUnsafeBufferPointer { weights in
+                    out.withUnsafeMutableBufferPointer { out in
+                        let out = out
+                        // Rows at once, each written only by its own.
+                        DispatchQueue.concurrentPerform(iterations: height) { y in
+                            for x in 0..<width {
+                                let center = (y * width + x) * 4
+                                guard current[center + 3] > 0 else { continue }
+                                for channel in 0..<3 {
+                                    let value = Int(current[center + channel])
+                                    var sum = 0.0, total = 0.0
+                                    for (dx, dy) in steps {
+                                        let n = (min(max(y + dy, 0), height - 1) * width + min(max(x + dx, 0), width - 1)) * 4
+                                        guard current[n + 3] > 0 else { continue }
+                                        let other = Int(current[n + channel])
+                                        let w = weights[abs(other - value)]
+                                        sum += w * Double(other)
+                                        total += w
+                                    }
+                                    if total > 0 { out[center + channel] = PixelFilters.byte(sum / total) }
+                                }
+                            }
                         }
-                        if pass.dx == 0 && pass.dy == 0 {
-                            for dy in -radius...radius { for dx in -radius...radius { add(x + dx, y + dy) } }
-                        } else {
-                            for step in -pass.radius...pass.radius { add(x + step * pass.dx, y + step * pass.dy) }
-                        }
-                        if total > 0 { out[center + channel] = PixelFilters.byte(sum / total) }
                     }
                 }
             }
@@ -264,56 +270,92 @@ extension LayerFilter {
         let width = pixels.width, height = pixels.height
         let source = pixels.bytes
         let middle = ((2 * radius + 1) * (2 * radius + 1)) / 2
-        for channel in 0..<4 {
-            // A histogram slid along each row, as Huang's method does.
-            for y in 0..<height {
-                var histogram = [Int](repeating: 0, count: 256)
-                func column(_ x: Int, _ delta: Int) {
-                    let cx = min(max(x, 0), width - 1)
-                    for dy in -radius...radius {
-                        let cy = min(max(y + dy, 0), height - 1)
-                        histogram[Int(source[(cy * width + cx) * 4 + channel])] += delta
+        source.withUnsafeBufferPointer { source in
+            pixels.bytes.withUnsafeMutableBufferPointer { output in
+                let output = output
+                // A histogram slid along each row, as Huang's method does,
+                // the rows at once. Its counts are kept in sixteens as well,
+                // so finding the middle skips most of it.
+                DispatchQueue.concurrentPerform(iterations: height) { y in
+                    var histogram = [Int](repeating: 0, count: 256), coarse = [Int](repeating: 0, count: 16)
+                    for channel in 0..<4 {
+                        for value in 0..<256 { histogram[value] = 0 }
+                        for bin in 0..<16 { coarse[bin] = 0 }
+                        // Columns into and out of the square: the first ones
+                        // in, then at each step one out and one in.
+                        for step in -radius...(width + radius) {
+                            let x = step - radius - 1
+                            if x >= 0 {
+                                var count = 0, bin = 0
+                                while bin < 15, count + coarse[bin] <= middle {
+                                    count += coarse[bin]
+                                    bin += 1
+                                }
+                                var value = bin * 16
+                                while value < 255 {
+                                    count += histogram[value]
+                                    if count > middle { break }
+                                    value += 1
+                                }
+                                let index = (y * width + x) * 4 + channel
+                                let changes = threshold.map { abs(value - Int(source[index])) > $0 } ?? true
+                                if changes { output[index] = UInt8(value) }
+                            }
+                            for side in (x >= 0 ? 0 : 1)...1 {
+                                let delta = side == 0 ? -1 : 1
+                                let cx = min(max(side == 0 ? step - 2 * radius - 1 : step, 0), width - 1)
+                                for dy in -radius...radius {
+                                    let cy = min(max(y + dy, 0), height - 1)
+                                    let pixel = (cy * width + cx) * 4
+                                    let value = Int(source[pixel + channel])
+                                    histogram[value] += delta
+                                    coarse[value >> 4] += delta
+                                }
+                            }
+                        }
                     }
-                }
-                for dx in -radius...radius { column(dx, 1) }
-                for x in 0..<width {
-                    var count = 0, value = 0
-                    while value < 255 {
-                        count += histogram[value]
-                        if count > middle { break }
-                        value += 1
-                    }
-                    let index = (y * width + x) * 4 + channel
-                    if let threshold {
-                        if abs(value - Int(source[index])) > threshold { pixels.bytes[index] = UInt8(value) }
-                    } else {
-                        pixels.bytes[index] = UInt8(value)
-                    }
-                    column(x - radius, -1)
-                    column(x + radius + 1, 1)
                 }
             }
         }
     }
 
     /// Each channel the darkest, or lightest, of a square round it: a pass
-    /// along rows, then down columns.
+    /// along rows, then down columns, each line by van Herk and Gil-Werman's
+    /// method, a few steps a pixel however wide the square.
     static func extreme(_ pixels: inout PixelFilters.Pixels, radius: Int, minimum: Bool) {
         guard radius > 0 else { return }
         let width = pixels.width, height = pixels.height
+        let window = 2 * radius + 1
+        func pick(_ a: UInt8, _ b: UInt8) -> UInt8 { minimum ? min(a, b) : max(a, b) }
         for (across, lines, length) in [(true, height, width), (false, width, height)] {
             let source = pixels.bytes
-            for line in 0..<lines {
-                for i in 0..<length {
-                    for channel in 0..<4 {
-                        var best: UInt8 = minimum ? 255 : 0
-                        for step in -radius...radius {
-                            let j = min(max(i + step, 0), length - 1)
-                            let value = across ? source[(line * width + j) * 4 + channel] : source[(j * width + line) * 4 + channel]
-                            best = minimum ? min(best, value) : max(best, value)
+            let step = across ? 4 : width * 4
+            source.withUnsafeBufferPointer { source in
+                pixels.bytes.withUnsafeMutableBufferPointer { output in
+                    let output = output
+                    DispatchQueue.concurrentPerform(iterations: lines) { line in
+                        let start = across ? line * width * 4 : line * 4
+                        // The line with its ends carried on a radius further,
+                        // and the extremes so far within each block a window
+                        // long, from its start and from its end.
+                        let padded = length + 2 * radius
+                        var values = [UInt8](repeating: 0, count: padded), fromStart = values, fromEnd = values
+                        for channel in 0..<4 {
+                            for i in 0..<padded {
+                                values[i] = source[start + min(max(i - radius, 0), length - 1) * step + channel]
+                            }
+                            for i in 0..<padded {
+                                fromStart[i] = i % window == 0 ? values[i] : pick(fromStart[i - 1], values[i])
+                            }
+                            for i in stride(from: padded - 1, through: 0, by: -1) {
+                                fromEnd[i] = i == padded - 1 || i % window == window - 1 ? values[i] : pick(fromEnd[i + 1], values[i])
+                            }
+                            // A window spans the end of one block and the
+                            // start of the next.
+                            for i in 0..<length {
+                                output[start + i * step + channel] = pick(fromEnd[i], fromStart[i + window - 1])
+                            }
                         }
-                        let target = across ? (line * width + i) * 4 + channel : (i * width + line) * 4 + channel
-                        pixels.bytes[target] = best
                     }
                 }
             }
