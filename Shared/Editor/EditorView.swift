@@ -295,6 +295,11 @@ struct EditorView<Actions: View>: View {
         Menu {
             leading()
             Section {
+                Button("Panel.History.Title", systemImage: EditorPanel.history.symbolName) {
+                    state.presentedPanel = .history
+                }
+            }
+            Section {
                 Button("Canvas.ImageSize", systemImage: EditorPanel.imageSize.symbolName) {
                     state.presentedPanel = .imageSize
                 }
