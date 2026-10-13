@@ -59,6 +59,72 @@ struct EditorStateTests {
         #expect(Set(host.published.layers.map(\.name)).count == 3)
     }
 
+    /// A host whose file must be saved as a copy before it is edited,
+    /// answering with `saves` when asked to save it.
+    private func copyingHost(saves: Bool) -> (Host, () -> Int) {
+        let host = Host(.blank(size: CGSize(width: 40, height: 20)))
+        var hasCopy = false
+        var steps = 0
+        host.state.edited = { _, _ in steps += 1 }
+        host.state.copyBeforeEditing = CopyBeforeEditing(isRequired: { !hasCopy }) { completion in
+            hasCopy = saves
+            completion(saves)
+        }
+        return (host, { steps })
+    }
+
+    @Test func editsHeldForACopyAllLandOnceItIsSaved() throws {
+        let (host, steps) = copyingHost(saves: true)
+        let original = host.published
+        host.state.addEmptyLayer()
+        let added = try #require(host.state.activeLayerID)
+        #expect(host.state.isAskingToCopy)
+        #expect(host.published == original)
+        // What the command did after its edit holds: the new layer is the
+        // active one, and edits after it build on it.
+        #expect(host.state.composition[added] != nil)
+        host.state.updateActiveLayer { $0.opacity = 0.5 }
+        host.state.saveCopyForHeldEdit()
+        #expect(!host.state.isHoldingEdits)
+        #expect(host.published.layers.count == 2)
+        #expect(host.published[added]?.opacity == 0.5)
+        #expect(steps() == 1)
+    }
+
+    @Test func editsHeldForACopyAreTakenBackWithoutOne() {
+        let (host, steps) = copyingHost(saves: false)
+        let original = host.published
+        let layerID = host.state.activeLayerID
+        let selected = Selection(shape: .rectangle(CGRect(x: 0, y: 0, width: 10, height: 10)))
+        host.state.selection = selected
+        host.state.cropToSelection()
+        #expect(host.state.composition.size == CGSize(width: 10, height: 10))
+        #expect(host.state.selection == nil)
+        host.state.addEmptyLayer()
+        host.state.saveCopyForHeldEdit()
+        #expect(host.state.composition == original)
+        #expect(host.state.selection == selected)
+        #expect(host.state.activeLayerID == layerID)
+        #expect(host.published == original)
+        #expect(steps() == 0)
+        // Cancelling from the question does the same.
+        host.state.addEmptyLayer()
+        host.state.cancelHeldEdit()
+        #expect(host.state.composition == original)
+        #expect(!host.state.isAskingToCopy)
+    }
+
+    @Test func aDragCalledOffByTheQuestionStays() {
+        let (host, _) = copyingHost(saves: true)
+        host.state.tool = .move
+        host.state.toolBegan(at: CGPoint(x: 1, y: 1), pressure: 1)
+        host.state.toolMoved(to: [StrokePoint(location: CGPoint(x: 5, y: 1))])
+        host.state.toolMoved(to: [StrokePoint(location: CGPoint(x: 9, y: 1))])
+        host.state.toolCancelled()
+        host.state.saveCopyForHeldEdit()
+        #expect(host.published.layers[0].transform.position.x == 28)
+    }
+
     @Test func aLayerMovedDuringAnEditKeepsTheMove() async throws {
         var composition = Composition.blank(size: CGSize(width: 40, height: 20))
         // Half the canvas's size, doubled to cover it, so the edit lines

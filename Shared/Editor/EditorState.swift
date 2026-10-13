@@ -167,12 +167,13 @@ final class EditorState {
     var shapeBuilder: ShapeBuilderSession?
     /// The smart object layer whose contents are open for editing.
     var editingSmartObject: SmartObjectEditing?
-    /// An edit waiting on the file being saved as a copy first, which the
-    /// person is asked about; see `copyBeforeEditing`.
+    /// Something to do once the file is saved as a copy, such as opening a
+    /// smart object's contents, which the person is asked about; see
+    /// `copyBeforeEditing`.
     var heldEdit: (() -> Void)? {
-        didSet { isAskingToCopy = heldEdit != nil }
+        didSet { if heldEdit != nil { isAskingToCopy = true } }
     }
-    /// Whether the person is being asked about the held edit.
+    /// Whether the person is being asked about the held edits.
     var isAskingToCopy = false
     @ObservationIgnored var vectorDrag: VectorDrag?
     /// The vector layer as it was when the drag began, to go back to if
@@ -260,6 +261,17 @@ final class EditorState {
     /// Set by a host whose file is never edited in place: until a copy is
     /// saved, each edit is held back and the person asked first.
     @ObservationIgnored var copyBeforeEditing: CopyBeforeEditing?
+    /// The editor as it was before the edits held back while a copy is
+    /// asked for and saved: shown, and built on, but not handed to the host
+    /// until there is a copy to take them, or undone if there is none.
+    @ObservationIgnored private var unsaved: UnsavedEdits?
+
+    private struct UnsavedEdits {
+        var composition: Composition
+        var selection: Selection?
+        var activeLayerID: Layer.ID?
+        var activeGroupID: UUID?
+    }
     /// Told of every change made here, which is what undo records. Changes
     /// the host makes — such as a document reading itself back after its
     /// first save — are not edits and are not undoable.
@@ -325,13 +337,20 @@ final class EditorState {
 
     /// Replaces the picture and passes it to the host.
     func write(_ composition: Composition) {
-        if holdsEdits {
-            heldEdit = { [weak self] in self?.write(composition) }
-            return
+        if unsaved == nil, holdsEdits {
+            // The whole command goes ahead here, and so does every edit
+            // after it — a drag's every step, strokes still being worked
+            // out — so they build on each other as usual.
+            unsaved = UnsavedEdits(
+                composition: self.composition, selection: selection, activeLayerID: activeLayerID,
+                activeGroupID: activeGroupID
+            )
+            isAskingToCopy = true
         }
         let previous = self.composition
         replaced = previous
         self.composition = composition
+        guard unsaved == nil else { return }
         recentlyPublished.append(composition)
         if recentlyPublished.count > 64 { recentlyPublished.removeFirst(recentlyPublished.count - 64) }
         publish(composition)
@@ -376,7 +395,7 @@ final class EditorState {
     /// Takes in a change the host made, such as an undo, or the host catching
     /// up with an edit made here.
     func sync(_ composition: Composition) {
-        guard composition != self.composition else { return }
+        guard composition != self.composition, composition != unsaved?.composition else { return }
         if recentlyPublished.contains(composition) {
             // Behind the editor: either a late report of an earlier step, or
             // the system's own undo stepping the document back. Either way
@@ -402,8 +421,11 @@ final class EditorState {
     /// Whether an edit has to wait for the file to be saved as a copy.
     var holdsEdits: Bool { copyBeforeEditing?.isRequired() == true }
 
-    /// Saves the copy the held edit is waiting on, then makes the edit, or
-    /// drops it if no copy was saved.
+    /// Whether edits are being held back until a copy is saved.
+    var isHoldingEdits: Bool { unsaved != nil }
+
+    /// Saves the copy the held edits are waiting on, then hands them on as
+    /// one step, or takes them back if no copy was saved.
     func saveCopyForHeldEdit() {
         guard let copyBeforeEditing else { return }
         let save = {
@@ -411,7 +433,12 @@ final class EditorState {
                 guard let self else { return }
                 let edit = heldEdit
                 heldEdit = nil
-                if saved { edit?() }
+                if saved {
+                    keepHeldEdits()
+                    edit?()
+                } else {
+                    dropHeldEdits()
+                }
             }
         }
         guard presentedPanel != nil else {
@@ -424,6 +451,33 @@ final class EditorState {
             try? await Task.sleep(for: .milliseconds(450))
             save()
         }
+    }
+
+    /// Lets go of the held edits, putting the editor back as it was.
+    func cancelHeldEdit() {
+        heldEdit = nil
+        isAskingToCopy = false
+        dropHeldEdits()
+    }
+
+    private func keepHeldEdits() {
+        guard let unsaved else { return }
+        self.unsaved = nil
+        guard composition != unsaved.composition else { return }
+        recentlyPublished.append(composition)
+        publish(composition)
+        edited(unsaved.composition, composition)
+    }
+
+    private func dropHeldEdits() {
+        guard let unsaved else { return }
+        self.unsaved = nil
+        replaced = nil
+        composition = unsaved.composition
+        selection = unsaved.selection
+        activeLayerID = unsaved.activeLayerID
+        activeGroupID = unsaved.activeGroupID
+        showRestored(unsaved.composition)
     }
 
     /// Changes the picture.
@@ -1056,17 +1110,20 @@ final class EditorState {
             transformDrag = nil
             updateTransformPreview()
         }
-        if let origin = moveOrigin {
+        // Asking to save a copy calls off the touch that made the first
+        // edit; that edit stays, to be kept or dropped with the answer.
+        let restores = unsaved == nil
+        if let origin = moveOrigin, restores {
             update { $0[origin.layerID]?.transform = origin.transform }
-            moveOrigin = nil
         }
-        if let group = groupMoveOrigin {
+        moveOrigin = nil
+        if let group = groupMoveOrigin, restores {
             update { composition in
                 for (id, transform) in group.layers { composition[id]?.transform = transform }
             }
-            groupMoveOrigin = nil
         }
-        if vectorDrag != nil, let origin = vectorDragOrigin {
+        groupMoveOrigin = nil
+        if vectorDrag != nil, let origin = vectorDragOrigin, restores {
             update { $0[origin.id] = origin }
         }
         vectorDrag = nil

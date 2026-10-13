@@ -441,7 +441,7 @@ extension View {
             )
         ) {
             Button("CopyToEasel.SaveAndEdit") { state.saveCopyForHeldEdit() }
-            Button("CopyToEasel.CancelEdit", role: .cancel) { state.heldEdit = nil }
+            Button("CopyToEasel.CancelEdit", role: .cancel) { state.cancelHeldEdit() }
         } message: {
             Text("CopyToEasel.Message")
         }
