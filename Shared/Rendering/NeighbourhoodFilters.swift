@@ -269,7 +269,6 @@ extension LayerFilter {
         guard radius > 0 else { return }
         let width = pixels.width, height = pixels.height
         let source = pixels.bytes
-        let middle = ((2 * radius + 1) * (2 * radius + 1)) / 2
         source.withUnsafeBufferPointer { source in
             pixels.bytes.withUnsafeMutableBufferPointer { output in
                 let output = output
@@ -281,11 +280,15 @@ extension LayerFilter {
                     for channel in 0..<4 {
                         for value in 0..<256 { histogram[value] = 0 }
                         for bin in 0..<16 { coarse[bin] = 0 }
+                        // Clear pixels have no colour of their own, so only
+                        // their transparency is counted.
+                        var counted = 0
                         // Columns into and out of the square: the first ones
                         // in, then at each step one out and one in.
                         for step in -radius...(width + radius) {
                             let x = step - radius - 1
                             if x >= 0 {
+                                let middle = counted / 2
                                 var count = 0, bin = 0
                                 while bin < 15, count + coarse[bin] <= middle {
                                     count += coarse[bin]
@@ -299,7 +302,7 @@ extension LayerFilter {
                                 }
                                 let index = (y * width + x) * 4 + channel
                                 let changes = threshold.map { abs(value - Int(source[index])) > $0 } ?? true
-                                if changes { output[index] = UInt8(value) }
+                                if counted > 0, changes { output[index] = UInt8(value) }
                             }
                             for side in (x >= 0 ? 0 : 1)...1 {
                                 let delta = side == 0 ? -1 : 1
@@ -307,9 +310,11 @@ extension LayerFilter {
                                 for dy in -radius...radius {
                                     let cy = min(max(y + dy, 0), height - 1)
                                     let pixel = (cy * width + cx) * 4
+                                    if channel < 3, source[pixel + 3] == 0 { continue }
                                     let value = Int(source[pixel + channel])
                                     histogram[value] += delta
                                     coarse[value >> 4] += delta
+                                    counted += delta
                                 }
                             }
                         }

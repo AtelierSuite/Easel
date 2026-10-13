@@ -34,6 +34,14 @@ enum PixelFilters {
         func clamped(_ x: Int, _ y: Int, _ channel: Int) -> UInt8 {
             self[min(max(x, 0), width - 1), min(max(y, 0), height - 1), channel]
         }
+
+        /// As `clamped`, but where that pixel is clear, the colour at
+        /// `fallback` instead: clear pixels have no colour of their own,
+        /// and would otherwise count as black.
+        func clamped(_ x: Int, _ y: Int, _ channel: Int, or fallback: (x: Int, y: Int)) -> UInt8 {
+            let cx = min(max(x, 0), width - 1), cy = min(max(y, 0), height - 1)
+            return self[cx, cy, 3] > 0 ? self[cx, cy, channel] : self[fallback.x, fallback.y, channel]
+        }
     }
 
     static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!

@@ -60,4 +60,16 @@ struct StylizeFilterTests {
         #expect(TestImages.isClear(filtered(half, .emboss), x: 150, y: 100))
         #expect(TestImages.isClear(filtered(half, .halftone), x: 150, y: 100))
     }
+
+    @Test func clearNeighboursDoNotCountAsBlack() {
+        let half = Bitmap.render(size: CGSize(width: 200, height: 200)) { context in
+            context.setFillColor(RGBAColor(red: 0.5, green: 0.5, blue: 0.5).cgColor)
+            context.fill(CGRect(x: 0, y: 0, width: 100, height: 200))
+        }
+        // Flat grey right up to where the layer ends: no edge there.
+        #expect(TestImages.pixel(filtered(half, .findEdges), x: 99, y: 100).red > 240)
+        #expect(abs(TestImages.pixel(filtered(half, .emboss), x: 99, y: 100).red - 128) < 10)
+        let median = filtered(half, .median) { $0.values = [20] }
+        #expect(abs(TestImages.pixel(median, x: 99, y: 100).red - TestImages.pixel(median, x: 50, y: 100).red) < 3)
+    }
 }

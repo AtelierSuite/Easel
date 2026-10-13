@@ -74,7 +74,7 @@ extension LayerFilter {
         for y in 0..<pixels.height {
             for x in 0..<pixels.width where source[x, y, 3] > 0 {
                 for channel in 0..<3 {
-                    func p(_ dx: Int, _ dy: Int) -> Double { Double(source.clamped(x + dx, y + dy, channel)) }
+                    func p(_ dx: Int, _ dy: Int) -> Double { Double(source.clamped(x + dx, y + dy, channel, or: (x, y))) }
                     let gx = (p(1, -1) + 2 * p(1, 0) + p(1, 1)) - (p(-1, -1) + 2 * p(-1, 0) + p(-1, 1))
                     let gy = (p(-1, 1) + 2 * p(0, 1) + p(1, 1)) - (p(-1, -1) + 2 * p(0, -1) + p(1, -1))
                     pixels[x, y, channel] = PixelFilters.byte(255 - (gx * gx + gy * gy).squareRoot())
@@ -91,10 +91,10 @@ extension LayerFilter {
             for x in 0..<pixels.width where source[x, y, 3] > 0 {
                 for channel in 0..<3 {
                     let value = Double(source[x, y, channel])
-                    let right = Double(source.clamped(x + 1, y, channel))
-                    let left = Double(source.clamped(x - 1, y, channel))
-                    let below = Double(source.clamped(x, y + 1, channel))
-                    let above = Double(source.clamped(x, y - 1, channel))
+                    let right = Double(source.clamped(x + 1, y, channel, or: (x, y)))
+                    let left = Double(source.clamped(x - 1, y, channel, or: (x, y)))
+                    let below = Double(source.clamped(x, y + 1, channel, or: (x, y)))
+                    let above = Double(source.clamped(x, y - 1, channel, or: (x, y)))
                     let crosses = upper
                         ? value < level && max(right, left, below, above) >= level
                         : value >= level && min(right, left, below, above) < level
@@ -154,7 +154,7 @@ extension LayerFilter {
                     var sum = 0.0
                     for row in 0..<5 {
                         for column in 0..<5 where weights[row * 5 + column] != 0 {
-                            sum += weights[row * 5 + column] * Double(source.clamped(x + column - 2, y + row - 2, channel))
+                            sum += weights[row * 5 + column] * Double(source.clamped(x + column - 2, y + row - 2, channel, or: (x, y)))
                         }
                     }
                     pixels[x, y, channel] = PixelFilters.byte(sum / scale + bias)
@@ -172,16 +172,17 @@ extension LayerFilter {
         // along whichever axis it leans to more, as Photoshop steps.
         let lean = max(abs(cos(radians)), abs(sin(radians)))
         let ux = cos(radians) / lean * distance, uy = -sin(radians) / lean * distance
-        func sample(_ x: Double, _ y: Double, _ channel: Int) -> Double {
+        func sample(_ x: Double, _ y: Double, _ channel: Int, centre: (x: Int, y: Int)) -> Double {
             let x0 = Int(x.rounded(.down)), y0 = Int(y.rounded(.down)), fx = x - Double(x0), fy = y - Double(y0)
-            let a = Double(source.clamped(x0, y0, channel)), b = Double(source.clamped(x0 + 1, y0, channel))
-            let c = Double(source.clamped(x0, y0 + 1, channel)), d = Double(source.clamped(x0 + 1, y0 + 1, channel))
+            let a = Double(source.clamped(x0, y0, channel, or: centre)), b = Double(source.clamped(x0 + 1, y0, channel, or: centre))
+            let c = Double(source.clamped(x0, y0 + 1, channel, or: centre)), d = Double(source.clamped(x0 + 1, y0 + 1, channel, or: centre))
             return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy
         }
         for y in 0..<pixels.height {
             for x in 0..<pixels.width where source[x, y, 3] > 0 {
                 for channel in 0..<3 {
-                    let lit = sample(Double(x) + ux, Double(y) + uy, channel), shaded = sample(Double(x) - ux, Double(y) - uy, channel)
+                    let lit = sample(Double(x) + ux, Double(y) + uy, channel, centre: (x, y))
+                    let shaded = sample(Double(x) - ux, Double(y) - uy, channel, centre: (x, y))
                     pixels[x, y, channel] = PixelFilters.byte(128 + (lit - shaded) * strength)
                 }
             }
@@ -299,8 +300,8 @@ extension LayerFilter {
                         for dx in 0...radius {
                             let nx = x + dx * sx, ny = y + dy * sy
                             let colour = SIMD3(
-                                Double(source.clamped(nx, ny, 0)), Double(source.clamped(nx, ny, 1)),
-                                Double(source.clamped(nx, ny, 2))
+                                Double(source.clamped(nx, ny, 0, or: (x, y))), Double(source.clamped(nx, ny, 1, or: (x, y))),
+                                Double(source.clamped(nx, ny, 2, or: (x, y)))
                             )
                             sum += colour
                             squares += (colour * colour).sum()
