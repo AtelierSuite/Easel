@@ -52,6 +52,24 @@ struct AdjustmentLayerTests {
         #expect(pixel.green > 20)
     }
 
+    @Test func itNeverMakesWhatIsBeneathMoreSolid() {
+        let halfRed = Layer(name: "Half red", image: LayerImage(TestImages.solid(red.withAlpha(0.5))), canvasSize: size)
+        for (opacity, blendMode) in [(1.0, LayerBlendMode.normal), (0.5, .normal), (1, .multiply), (1, .screen)] {
+            var adjustment = Composition(size: size, layers: []).adjustmentLayer(.brightness)
+            adjustment.adjustment?.amount = 0.5
+            adjustment.opacity = opacity
+            adjustment.blendMode = blendMode
+            let image = CompositionRenderer.render(Composition(size: size, layers: [halfRed, adjustment]))
+            let pixel = TestImages.pixel(image, x: 1, y: 1)
+            #expect(abs(pixel.alpha - 128) < 4, "\(opacity) \(blendMode)")
+        }
+        // Brightened, it is lighter where it shows.
+        var adjustment = Composition(size: size, layers: []).adjustmentLayer(.brightness)
+        adjustment.adjustment?.amount = 0.5
+        let image = CompositionRenderer.render(Composition(size: size, layers: [halfRed, adjustment]))
+        #expect(TestImages.pixel(image, x: 1, y: 1).green > 20)
+    }
+
     @Test func turnedOffItChangesNothing() {
         var adjustment = Composition(size: size, layers: []).adjustmentLayer(.blackAndWhite)
         adjustment.adjustment?.isEnabled = false

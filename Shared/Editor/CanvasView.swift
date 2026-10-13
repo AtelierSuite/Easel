@@ -234,14 +234,17 @@ struct CanvasView: View {
 
     /// `below`, and over it `below` as an adjustment layer changes it, where
     /// the adjustment's mask shows, mixed in as the layer says. Strokes on
-    /// their way into the mask show as they are drawn.
+    /// their way into the mask show as they are drawn. As when exporting,
+    /// the mixing is done on `below` made opaque and its transparency put
+    /// back after, so the adjustment never makes it more solid.
     private func adjusted(_ below: AnyView, by layer: Layer, _ viewport: CanvasViewport) -> AnyView {
         let cube = layer.adjustment.map(ColorCube.image(for:)) ?? Bitmap.empty
         let cubeSize = layer.adjustment.map(ColorCube.size(for:)) ?? ColorCube.size
         let nearest: Float = layer.adjustment.map(ColorCube.isStepped) == true ? 1 : 0
         var maskLayer = layer.with(opacity: 1, blendMode: .normal)
         maskLayer.mask = nil
-        let changed = below
+        let opaque = AnyView(below.colorEffect(ShaderLibrary.opaqueColor()))
+        let changed = opaque
             .colorEffect(ShaderLibrary.colorCube(
                 .image(Image(decorative: cube, scale: 1)), .float(Float(cubeSize)), .float(nearest)
             ))
@@ -257,14 +260,14 @@ struct CanvasView: View {
                 }
             }
             .opacity(layer.opacity)
-        if layer.blendMode.isCustom {
-            return AnyView(blended(below, changed, mode: layer.blendMode, viewport))
-        }
-        return AnyView(ZStack(alignment: .topLeading) {
-            below
-            changed.blendMode(layer.blendMode.swiftUI)
-        }
-        .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading))
+        let mixed = layer.blendMode.isCustom
+            ? AnyView(blended(opaque, changed, mode: layer.blendMode, viewport))
+            : AnyView(ZStack(alignment: .topLeading) {
+                opaque
+                changed.blendMode(layer.blendMode.swiftUI)
+            }
+            .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading))
+        return AnyView(mixed.compositingGroup().mask(alignment: .topLeading) { below })
     }
 
     /// `top` mixed over `below` in a blend mode SwiftUI does not have. A

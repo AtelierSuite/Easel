@@ -133,6 +133,10 @@ enum CompositionRenderer {
                 Bitmap.draw(mask.image.cgImage, in: CGRect(origin: .zero, size: layer.image.size), context: masked)
             }
         }
+        // Mixed over the backdrop made opaque, so the blend sees its colours
+        // alone; its transparency is put back after. An adjustment changes
+        // colours, never how see-through the picture is.
+        let plain = opaque(backdrop)
         let adjusted = ImageProcessing.apply({ input in
             let changed = filter.apply(to: input)
             guard let mask else { return changed }
@@ -141,11 +145,21 @@ enum CompositionRenderer {
             masked.backgroundImage = CIImage.empty()
             masked.maskImage = CIImage(cgImage: mask)
             return masked.outputImage ?? changed
-        }, to: backdrop)
-        put(layer.blendMode, in: context) { context in
-            context.setAlpha(layer.opacity)
-            drawInDeviceSpace(adjusted, in: context)
-        }
+        }, to: plain)
+        // Mixed on the opaque backdrop, then cut back to its transparency.
+        guard let result = offscreen(like: context, { mixed in
+            drawInDeviceSpace(plain, in: mixed)
+            put(layer.blendMode, in: mixed) { mixed in
+                mixed.setAlpha(layer.opacity)
+                drawInDeviceSpace(adjusted, in: mixed)
+            }
+            mixed.setBlendMode(.destinationIn)
+            drawInDeviceSpace(backdrop, in: mixed)
+        }) else { return }
+        context.saveGState()
+        context.setBlendMode(.copy)
+        drawInDeviceSpace(result, in: context)
+        context.restoreGState()
     }
 
     /// A transparent bitmap the size of `context`'s, drawn into through the
