@@ -121,7 +121,10 @@ extension Painter {
         let rect = CGRect(origin: .zero, size: size)
         return Bitmap.render(size: size) { context in
             Bitmap.draw(image, in: rect, context: context)
-            context.beginTransparencyLayer(auxiliaryInfo: nil)
+            // Only as large as the part the stroke can touch.
+            let area = stroke.bounds.integral.intersection(rect)
+            guard !area.isEmpty else { return }
+            context.beginTransparencyLayer(in: area, auxiliaryInfo: nil)
             stroke.asMask.paint(in: context, canvasSize: size)
             context.setBlendMode(.sourceIn)
             Bitmap.draw(effect, in: rect, context: context)

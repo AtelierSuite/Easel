@@ -301,6 +301,10 @@ struct Stroke: Equatable, Sendable {
     /// Paints the stroke into `context`, which already holds the layer's
     /// pixels in canvas coordinates.
     func paint(in context: CGContext, canvasSize: CGSize) {
+        // A transparency layer is as large as the area it is given: only
+        // the part of the canvas the stroke can touch.
+        let area = bounds.integral.intersection(CGRect(origin: .zero, size: canvasSize))
+        guard !area.isEmpty else { return }
         context.saveGState()
         if let clip {
             clip.clip(context, canvasSize: canvasSize)
@@ -309,7 +313,7 @@ struct Stroke: Equatable, Sendable {
         context.setBlendMode(blendMode)
         // One transparency layer for the whole stroke, so where its pieces
         // overlap they do not build up past the brush's opacity.
-        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        context.beginTransparencyLayer(in: area, auxiliaryInfo: nil)
         // The opacity and blend mode above are for putting the finished
         // stroke down; inside it, everything is drawn solid.
         context.setAlpha(1)
