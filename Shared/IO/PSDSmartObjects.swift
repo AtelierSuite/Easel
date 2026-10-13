@@ -180,8 +180,8 @@ enum PSDSmartObjects {
         let corners = stride(from: 0, to: 8, by: 2).map { CGPoint(x: values[$0], y: values[$0 + 1]) }
         var mesh: [CGPoint]?
         if let warp = descriptor["warp"]?.descriptor, !isUnwarped(warp) {
-            // Photoshop's preset bends are drawn in ways Easel cannot.
-            guard warp["warpStyle"]?.enumValue == "warpCustom", let points = meshPoints(warp) else { return nil }
+            // A grid of its own, or one of Photoshop's presets made into one.
+            guard let points = warp["warpStyle"]?.enumValue == "warpCustom" ? meshPoints(warp) : presetMesh(warp) else { return nil }
             // The grid's own extent is what is placed on the corners.
             let xs = points.map(\.x), ys = points.map(\.y)
             let minX = xs.min()!, minY = ys.min()!
@@ -191,6 +191,19 @@ enum PSDSmartObjects {
         }
         return Placement(id: id, corners: corners, mesh: mesh, filters: descriptor["filterFX"]?.descriptor,
                          placedID: descriptor["placed"]?.text)
+    }
+
+    /// The grid a preset bend makes over its bounds.
+    private static func presetMesh(_ warp: PSDDescriptor) -> [CGPoint]? {
+        guard let style = warp["warpStyle"]?.enumValue, warp["warpValues"] == nil,
+              let bounds = warp["bounds"]?.descriptor,
+              let top = bounds["Top "]?.number, let left = bounds["Left"]?.number,
+              let bottom = bounds["Btom"]?.number, let right = bounds["Rght"]?.number else { return nil }
+        return PSDWarpPresets.mesh(
+            style: style, bend: warp["warpValue"]?.number ?? 0, vertical: warp["warpRotate"]?.enumValue == "Vrtc",
+            horizontalDistortion: warp["warpPerspective"]?.number ?? 0, verticalDistortion: warp["warpPerspectiveOther"]?.number ?? 0,
+            bounds: CGRect(x: left, y: top, width: right - left, height: bottom - top)
+        )
     }
 
     /// A custom bend's sixteen points, four rows of four from the top left.
