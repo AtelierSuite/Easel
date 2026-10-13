@@ -186,6 +186,11 @@ struct TextPanel: View {
             }
         }
         .formStyle(.grouped)
+        // Characters picked on one layer are not the same ones on another.
+        .onChange(of: state.activeLayerID) {
+            selection = nil
+            pickedRange = nil
+        }
         .sheet(isPresented: $isPickingFont) {
             NavigationStack {
                 FontPicker { family in
