@@ -72,7 +72,9 @@ enum TextRenderer {
             attributes[.foregroundColor] = UIColor(red: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
         }
         if style.isUnderlined == true { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-        if let kerning = style.kerning { attributes[.kern] = kerning * text.fontSize }
+        // Core Text drops a kern where there is tracking, so a run's
+        // kerning goes on top of the layer's tracking instead.
+        if let kerning = style.kerning { attributes[.tracking] = ((text.tracking ?? 0) + kerning) * text.fontSize }
         if let shift = style.baselineShift { attributes[.baselineOffset] = shift * text.fontSize }
         return attributes
     }

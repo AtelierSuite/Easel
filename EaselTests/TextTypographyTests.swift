@@ -158,6 +158,18 @@ struct CharacterStyleTests {
         #expect(TextRenderer.render(kerned).width > TextRenderer.render(plain).width + 30)
     }
 
+    @Test func kerningAddsToTracking() {
+        var plain = content("ABCD")
+        plain.tracking = 0.2
+        var kerned = plain
+        kerned.restyle(NSRange(location: 1, length: 1)) { $0.kerning = 1 }
+        #expect(TextRenderer.render(kerned).width > TextRenderer.render(plain).width + 30)
+        // Words written to a file space the letters as the picture does.
+        let spacing = TextRenderer.setRuns(for: kerned).runs.map(\.spacing)
+        #expect(spacing.contains { abs($0 - 1.2 * 40) < 0.01 })
+        #expect(spacing.contains { abs($0 - 0.2 * 40) < 0.01 })
+    }
+
     @Test func runsAreSaved() throws {
         var text = content()
         text.restyle(NSRange(location: 0, length: 5)) { $0.baselineShift = 0.3; $0.isItalic = true }
