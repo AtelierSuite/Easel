@@ -815,6 +815,11 @@ struct BigEndianReader {
         return true
     }
 
+    /// Bytes already read, as they were.
+    func bytes(in range: Range<Int>) -> [UInt8] {
+        Array(data[range])
+    }
+
     mutating func skip(_ count: Int) throws {
         guard count >= 0, count <= data.count - offset else { throw PSDReader.Failure.damaged }
         offset += count

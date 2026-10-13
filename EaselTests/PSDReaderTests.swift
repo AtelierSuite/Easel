@@ -280,6 +280,26 @@ struct PSDReaderTests {
         #expect(throws: PSDReader.Failure.self) { try PSDDescriptor.read(&deep) }
     }
 
+    /// Values Easel does not read go back as Photoshop wrote them, so
+    /// untouched smart filters stay whole.
+    @Test func unreadDescriptorValuesAreWrittenBackAsTheyWere() throws {
+        func u32(_ value: Int) -> [UInt8] { [UInt8(value >> 24 & 0xFF), UInt8(value >> 16 & 0xFF), UInt8(value >> 8 & 0xFF), UInt8(value & 0xFF)] }
+        func key(_ key: String) -> [UInt8] { u32(key.utf8.count == 4 ? 0 : key.utf8.count) + Array(key.utf8) }
+        let empty = u32(1) + [0, 0]
+        var bytes = empty + key("null") + u32(4)
+        bytes += key("Clss") + Array("type".utf8) + empty + key("Lyr ")
+        bytes += key("Rf  ") + Array("obj ".utf8) + u32(2)
+            + Array("Clss".utf8) + empty + key("Lyr ") + Array("Idnt".utf8) + u32(5)
+        bytes += key("Als ") + Array("alis".utf8) + u32(4) + [1, 2, 3, 4]
+        bytes += key("Grid") + Array("ObAr".utf8) + u32(16) + empty + key("rationalPoint") + u32(0)
+        var reader = BigEndianReader(bytes: bytes)
+        let descriptor = try PSDDescriptor.read(&reader)
+        #expect(descriptor["Grid"]?.descriptor?.classID == "rationalPoint")
+        var writer = PSDBinaryWriter()
+        descriptor.write(to: &writer)
+        #expect(writer.data == bytes)
+    }
+
     /// A `.psd` has to resolve to a type Easel both opens and saves.
     @Test func psdFilesResolveToReadableTypes() throws {
         let type = try #require(UTType(filenameExtension: "psd"))

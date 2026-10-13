@@ -23,12 +23,18 @@ struct PSDDescriptor: Equatable {
         /// and levels name their channel: class, type and value.
         case enumReference(classID: String, type: String, value: String)
         /// An array of `count` objects, written as one descriptor of their
-        /// values, as a custom warp's grid is. Read back as `descriptor`.
+        /// values, as a custom warp's grid is. Its `descriptor` is that one.
         case objectArray(count: Int, PSDDescriptor)
-        /// Kinds kept only so they can be skipped.
-        case unsupported
+        /// Kinds Easel does not read: their type and bytes as Photoshop
+        /// wrote them, to go back unchanged.
+        case unsupported(type: String, bytes: [UInt8])
 
-        var descriptor: PSDDescriptor? { if case .descriptor(let value) = self { value } else { nil } }
+        var descriptor: PSDDescriptor? {
+            switch self {
+            case .descriptor(let value), .objectArray(_, let value): value
+            default: nil
+            }
+        }
         var list: [Value]? { if case .list(let value) = self { value } else { nil } }
         var text: String? { if case .text(let value) = self { value } else { nil } }
         var bool: Bool? { if case .bool(let value) = self { value } else { nil } }
@@ -159,12 +165,17 @@ struct PSDDescriptor: Equatable {
         case "bool":
             return .bool(try reader.uint8() != 0)
         case "type", "GlbC":
+            let start = reader.offset
             _ = try readUnicode(&reader)
             _ = try readKey(&reader)
-            return .unsupported
-        case "tdta", "alis":
+            return .unsupported(type: type, bytes: reader.bytes(in: start..<reader.offset))
+        case "tdta":
             let length = Int(try reader.uint32())
             return .rawData(try reader.bytes(length))
+        case "alis":
+            let start = reader.offset
+            try reader.skip(Int(try reader.uint32()))
+            return .unsupported(type: type, bytes: reader.bytes(in: start..<reader.offset))
         case "Pth ":
             let length = Int(try reader.uint32())
             return .path(try reader.bytes(length))
@@ -176,11 +187,12 @@ struct PSDDescriptor: Equatable {
             return .unitFloats(unit, values)
         case "ObAr":
             // An array of objects, kept as one descriptor of their values.
-            _ = try reader.uint32()
-            return .descriptor(try read(&reader, depth: depth))
-        case "obj ":
             let count = Int(try reader.uint32())
-            var reference: Value = .unsupported
+            return .objectArray(count: count, try read(&reader, depth: depth))
+        case "obj ":
+            let start = reader.offset
+            let count = Int(try reader.uint32())
+            var reference: Value?
             for _ in 0..<count {
                 switch try reader.ascii(4) {
                 case "Enmr":
@@ -206,7 +218,7 @@ struct PSDDescriptor: Equatable {
                     throw PSDReader.Failure.damaged
                 }
             }
-            return reference
+            return reference ?? .unsupported(type: type, bytes: reader.bytes(in: start..<reader.offset))
         default:
             throw PSDReader.Failure.unsupported
         }
@@ -292,9 +304,9 @@ struct PSDDescriptor: Equatable {
             writeKey(classID, to: &writer)
             writeKey(type, to: &writer)
             writeKey(value, to: &writer)
-        case .unsupported:
-            // Nothing Easel writes is of a kind it cannot read.
-            break
+        case .unsupported(let type, let bytes):
+            writer.ascii(type)
+            writer.bytes(bytes)
         }
     }
 
