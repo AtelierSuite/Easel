@@ -66,4 +66,20 @@ struct VectorStrokeTests {
         path.strokeStyle = VectorStrokeStyle(endArrow: .triangle)
         #expect(path.bounds.height > plain + 20)
     }
+
+    @Test func boundsMakeRoomForMiterCornersAndSquareEnds() {
+        // A sharp corner's miter stands far past half the line's width.
+        let nodes = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 20), CGPoint(x: 0, y: 40)].map { VectorNode(point: $0) }
+        var corner = VectorPath(nodes: nodes, isClosed: true, fill: nil, stroke: .black, strokeWidth: 20)
+        corner.strokeStyle = VectorStrokeStyle(join: .miter)
+        #expect(corner.bounds.maxX > 140)
+        corner.strokeStyle = VectorStrokeStyle(join: .miter, alignment: .outside)
+        #expect(corner.bounds.maxX > 190)
+        // A square end across a slanted line reaches its corner.
+        var slant = VectorPath(nodes: [VectorNode(point: .zero), VectorNode(point: CGPoint(x: 100, y: 100))],
+                               isClosed: false, fill: nil, stroke: .black, strokeWidth: 20)
+        slant.strokeStyle = VectorStrokeStyle(cap: .square)
+        #expect(slant.bounds.maxX >= 114)
+        #expect(slant.bounds.contains(slant.cgPath.copy(strokingWithWidth: 20, lineCap: .square, lineJoin: .round, miterLimit: 10).boundingBoxOfPath))
+    }
 }

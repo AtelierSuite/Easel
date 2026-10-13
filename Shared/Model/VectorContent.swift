@@ -87,10 +87,16 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
     var bounds: CGRect {
         guard !nodes.isEmpty else { return .null }
         let box = cgPath.boundingBoxOfPath
-        var reach = stroke == nil ? 1 : strokeStyleOrDefault.reach(width: strokeWidth) + 1
+        var reach = 1.0
+        let style = strokeStyleOrDefault
+        if stroke != nil, !isClosed, style.startArrow != .none || style.endArrow != .none {
+            reach = VectorStrokeStyle.arrowSize(width: strokeWidth) + 1
+        }
         // Letters stand up to a font size off the line either way.
         if let text { reach = max(reach, text.fontSize * 1.2) }
-        return box.insetBy(dx: -reach, dy: -reach)
+        var bounds = box.insetBy(dx: -reach, dy: -reach)
+        if stroke != nil, strokeWidth > 0 { bounds = bounds.union(strokeBounds.insetBy(dx: -1, dy: -1)) }
+        return bounds
     }
 
     func offset(by delta: CGPoint) -> VectorPath {

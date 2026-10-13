@@ -94,14 +94,6 @@ struct VectorStrokeStyle: Codable, Hashable, Sendable {
         }
     }
 
-    /// How far past the path the outline can reach, for sizing its image.
-    func reach(width: Double) -> Double {
-        var reach = width / 2
-        if alignment == .outside { reach = width }
-        if startArrow != .none || endArrow != .none { reach = max(reach, Self.arrowSize(width: width)) }
-        return reach
-    }
-
     static func arrowSize(width: Double) -> Double { max(width * 3.5, 8) }
 }
 
@@ -155,6 +147,19 @@ extension VectorPath {
         path.addLines(between: left + right.reversed())
         path.closeSubpath()
         return path
+    }
+
+    /// The area the outline covers as `drawStroke` draws it, arrowheads
+    /// aside: miter corners and square ends reach past half its width.
+    var strokeBounds: CGRect {
+        let style = strokeStyleOrDefault
+        if style.profile != .uniform { return profiledOutline(width: strokeWidth).boundingBoxOfPath }
+        // An aligned outline is drawn twice as wide, half of it cut away.
+        let width = isClosed && style.alignment != .center ? strokeWidth * 2 : strokeWidth
+        let cap = style.dash == .dotted ? CGLineCap.round : style.cap.cgLineCap
+        // A context's own miter limit, which `drawStroke` leaves as it is.
+        return cgPath.copy(strokingWithWidth: width, lineCap: cap, lineJoin: style.join.cgLineJoin, miterLimit: 10)
+            .boundingBoxOfPath
     }
 
     /// Draws the path's outline in `color`, as its stroke style says.
