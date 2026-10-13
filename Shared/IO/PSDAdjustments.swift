@@ -7,7 +7,7 @@ enum PSDAdjustments {
     /// The tagged blocks that make a layer an adjustment layer Easel can
     /// read, or that carry its settings.
     static let keys: Set<String> = [
-        "levl", "curv", "hue2", "brit", "CgEd", "blnc", "blwh", "grdm", "nvrt", "post", "thrs", "expA", "vibA", "phfl",
+        "levl", "curv", "hue2", "brit", "CgEd", "blnc", "blwh", "grdm", "nvrt", "post", "thrs", "expA", "vibA", "phfl", "mixr",
     ]
 
     /// Every tagged block that marks an adjustment or fill layer, read or
@@ -34,6 +34,7 @@ enum PSDAdjustments {
         if let data = blocks["expA"], let filter = exposure(data) { return [filter] }
         if let data = blocks["vibA"], let filter = vibrance(data) { return [filter] }
         if let data = blocks["phfl"], let filter = photoFilter(data) { return [filter] }
+        if let data = blocks["mixr"], let filter = channelMixer(data) { return [filter] }
         if let data = blocks["grdm"], let filter = gradientMap(data) { return [filter] }
         return []
     }
@@ -74,6 +75,32 @@ enum PSDAdjustments {
         guard (try? reader.uint32()) != nil, let settings = try? PSDDescriptor.read(&reader) else { return nil }
         var filter = LayerFilter(kind: .vibrance)
         filter.values = [settings["vibrance"]?.number ?? 0, settings["Strt"]?.number ?? 0]
+        return filter
+    }
+
+    /// Channel Mixer: for red, green and blue, then grey, the three mixes
+    /// and a constant, in percent.
+    private static func channelMixer(_ data: [UInt8]) -> LayerFilter? {
+        var reader = BigEndianReader(bytes: data)
+        guard (try? reader.uint16()) == 1, let mono = try? reader.uint16() else { return nil }
+        func row() -> [Double]? {
+            guard let r = try? reader.int16(), let g = try? reader.int16(), let b = try? reader.int16(),
+                  (try? reader.skip(2)) != nil, let constant = try? reader.int16() else { return nil }
+            return [Double(r), Double(g), Double(b), Double(constant)]
+        }
+        var filter = LayerFilter(kind: .channelMixer)
+        var values = filter.kind.parameters.map(\.defaultValue)
+        if mono != 0 {
+            guard let grey = row() else { return nil }
+            values.replaceSubrange(12..<16, with: grey)
+        } else {
+            for index in 0..<4 {
+                guard let mix = row() else { return nil }
+                values.replaceSubrange((index * 4)..<(index * 4 + 4), with: mix)
+            }
+        }
+        values[16] = mono != 0 ? 1 : 0
+        filter.values = values
         return filter
     }
 
@@ -403,6 +430,24 @@ enum PSDAdjustments {
                 ("vibrance", .integer(Int32(filter.value(0).rounded()))), ("Strt", .integer(Int32(filter.value(1).rounded()))),
             ])
             return ([("vibA", settings.versionedBytes)], 1)
+        case .channelMixer:
+            let mono = filter.value(16) >= 0.5
+            out.uint16(1)
+            out.uint16(mono ? 1 : 0)
+            func row(_ index: Int) {
+                out.int16(Int(filter.value(index * 4).rounded()))
+                out.int16(Int(filter.value(index * 4 + 1).rounded()))
+                out.int16(Int(filter.value(index * 4 + 2).rounded()))
+                out.zeros(2)
+                out.int16(Int(filter.value(index * 4 + 3).rounded()))
+            }
+            if mono {
+                row(3)
+                out.zeros(3 * 5 * 2)
+            } else {
+                for index in 0..<4 { row(index) }
+            }
+            return ([("mixr", out.data)], 1)
         case .photoFilter:
             let color = filter.color ?? LayerFilter.Kind.photoFilter.defaultColor!
             out.uint16(2)

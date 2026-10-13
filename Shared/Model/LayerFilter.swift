@@ -117,6 +117,12 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case fibers
         /// Light caught in a lens, shining into the picture.
         case lensFlare
+        /// Each channel made from a mix of all three.
+        case channelMixer
+        /// Grey at each colour's lightness.
+        case desaturate
+        /// Shades spread so each is as common as any other.
+        case equalize
 
         var id: String { rawValue }
 
@@ -125,14 +131,14 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         static let groups: [[Kind]] = [
             [.blackAndWhite, .sepia, .saturation, .brightness, .contrast],
             [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor],
-            [.exposure, .vibrance, .photoFilter, .invert, .posterize, .threshold, .solarize],
+            [.exposure, .vibrance, .photoFilter, .channelMixer, .desaturate, .invert, .posterize, .threshold, .solarize],
             [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur, .blur, .blurMore, .average],
             [.noiseReduction, .reduceNoise, .despeckle, .addNoise, .median, .dustAndScratches, .minimum, .maximum],
             [.unsharpMask, .sharpen, .sharpenMore, .sharpenEdges, .highPass, .lensCorrection],
             [.twirl, .pinch, .spherize, .zigzag, .ripple, .wave, .shear, .polarCoordinates, .offset],
             [.emboss, .findEdges, .traceContour, .wind, .diffuse, .tiles, .extrude],
             [.mosaic, .halftone, .crystallize, .pointillize, .mezzotint, .facet, .fragment],
-            [.spinBlur, .deInterlace, .ntscColors],
+            [.spinBlur, .deInterlace, .ntscColors, .equalize],
             [.clouds, .differenceClouds, .fibers, .lensFlare],
             [.custom],
         ]
@@ -143,7 +149,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
-                 .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare:
+                 .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
+                 .channelMixer, .desaturate, .equalize:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -223,6 +230,9 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .differenceClouds: return "cloud.fill"
             case .fibers: return "line.3.horizontal.decrease.circle"
             case .lensFlare: return "sun.min"
+            case .channelMixer: return "slider.horizontal.3"
+            case .desaturate: return "drop.degreesign.slash"
+            case .equalize: return "chart.bar.xaxis"
             case .blackAndWhite: return "circle.righthalf.filled"
             case .sepia: return "sun.dust"
             case .saturation: return "drop.halffull"
@@ -279,7 +289,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
-                 .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare: return 1
+                 .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
+                 .channelMixer, .desaturate, .equalize: return 1
             }
         }
 
@@ -297,7 +308,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Filters that are simply on or off.
         var hasNoSettings: Bool {
             [.invert, .solarize, .blur, .blurMore, .average, .sharpen, .sharpenMore, .sharpenEdges, .despeckle,
-             .findEdges, .facet, .ntscColors, .clouds, .differenceClouds].contains(self)
+             .findEdges, .facet, .ntscColors, .clouds, .differenceClouds, .desaturate, .equalize].contains(self)
         }
 
         var hasAngle: Bool { [.motionBlur, .emboss].contains(self) }

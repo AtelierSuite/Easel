@@ -267,6 +267,20 @@ enum PSDSmartFilters {
             // Gaussian blur, going back to Photoshop as it was.
             guard let radius = number("Rds ") else { return nil }
             return make(.gaussianBlur) { $0.amount = radius * 0.5 / (50 * unit) }
+        case "ChnM":
+            return make(.channelMixer) { filter in
+                var values = filter.kind.parameters.map(\.defaultValue)
+                for (index, key) in ["Rd  ", "Grn ", "Bl  ", "Gry "].enumerated() {
+                    guard let mix = settings[key]?.descriptor else { continue }
+                    for (column, part) in ["Rd  ", "Grn ", "Bl  ", "Cnst"].enumerated() {
+                        if let value = mix[part]?.number { values[index * 4 + column] = value }
+                    }
+                }
+                values[16] = settings["Mnch"]?.bool == true ? 1 : 0
+                filter.values = values
+            }
+        case "Dstt": return LayerFilter(kind: .desaturate)
+        case "Eqlz": return LayerFilter(kind: .equalize)
         case "Invr":
             return LayerFilter(kind: .invert)
         case "Slrz":
@@ -647,6 +661,20 @@ enum PSDSmartFilters {
                 ("FlrC", .descriptor(PSDDescriptor(classID: "Pnt ", items: [("Hrzn", .double(filter.centerX)), ("Vrtc", .double(filter.centerY))]))),
                 ("Lns ", .enumerated(type: "Lns ", value: ["Zm  ", "Nkn ", "Nkn1", "PnVs"][min(max(Int(filter.value(1).rounded()), 0), 3)])),
             ])
+        case .channelMixer:
+            func mix(_ index: Int) -> PSDDescriptor.Value {
+                .descriptor(PSDDescriptor(classID: "ChMx", items: ["Rd  ", "Grn ", "Bl  ", "Cnst"].enumerated().map { column, key in
+                    (key, .unit("#Prc", filter.value(index * 4 + column)))
+                }))
+            }
+            let mono = filter.value(16) >= 0.5
+            var items: [(key: String, value: PSDDescriptor.Value)] = [
+                ("presetKind", .enumerated(type: "presetKindType", value: "presetKindCustom")), ("Mnch", .bool(mono)),
+            ]
+            items += mono ? [("Gry ", mix(3))] : [("Rd  ", mix(0)), ("Grn ", mix(1)), ("Bl  ", mix(2))]
+            return entry("Channel Mixer...", "ChnM", items)
+        case .desaturate: return entry("Desaturate", "Dstt", noSettings)
+        case .equalize: return entry("Equalize", "Eqlz", noSettings)
         case .invert:
             return entry("Invert", "Invr", noSettings)
         case .solarize:

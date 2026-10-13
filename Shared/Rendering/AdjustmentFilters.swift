@@ -62,6 +62,33 @@ extension LayerFilter {
                 }
                 color += (result - color) * strength
             }
+        case .channelMixer:
+            let mono = value(16) >= 0.5
+            let rows = (0..<4).map { row in (0..<4).map { value(row * 4 + $0) / 100 } }
+            return PixelFilters.map(input) { color in
+                func mix(_ row: [Double]) -> Double { color.x * row[0] + color.y * row[1] + color.z * row[2] + 255 * row[3] }
+                color = mono ? SIMD3(repeating: mix(rows[3])) : SIMD3(mix(rows[0]), mix(rows[1]), mix(rows[2]))
+            }
+        case .desaturate:
+            return PixelFilters.map(input) { color in color = SIMD3(repeating: (color.max() + color.min()) / 2) }
+        case .equalize:
+            return PixelFilters.process(input) { pixels in
+                // One histogram for all three channels, as Photoshop pools them.
+                var histogram = [Double](repeating: 0, count: 256), total = 0.0
+                for index in stride(from: 0, to: pixels.bytes.count, by: 4) where pixels.bytes[index + 3] > 0 {
+                    for channel in 0..<3 { histogram[Int(pixels.bytes[index + channel])] += 1 }
+                    total += 3
+                }
+                guard total > 0 else { return }
+                var running = 0.0
+                let table = histogram.map { count -> UInt8 in
+                    running += count
+                    return PixelFilters.byte(running / total * 255)
+                }
+                for index in stride(from: 0, to: pixels.bytes.count, by: 4) where pixels.bytes[index + 3] > 0 {
+                    for channel in 0..<3 { pixels.bytes[index + channel] = table[Int(pixels.bytes[index + channel])] }
+                }
+            }
         default:
             return input
         }

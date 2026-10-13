@@ -228,7 +228,7 @@ struct PSDSmartObjectTests {
         "offset", "custom", "findEdges", "traceContour", "fragment", "facet", "wind", "diffuse", "tiles", "extrude",
         "crystallize", "pointillize", "mezzotint", "halftone", "emboss",
         "spherize", "polarCoordinates", "shear", "zigzag", "ripple", "wave", "spinBlur", "deInterlace", "ntscColors",
-        "clouds", "differenceClouds", "fibers", "lensFlare",
+        "clouds", "differenceClouds", "fibers", "lensFlare", "channelMixer", "desaturate", "equalize",
     ])
     func photoshopsFiltersComeBack(_ kind: String) throws {
         var filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)

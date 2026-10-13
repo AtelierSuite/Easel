@@ -210,6 +210,12 @@ extension LayerFilter.Kind {
                     "LayerFilters.ZoomLens", "LayerFilters.Prime35", "LayerFilters.Prime105", "LayerFilters.MoviePrime",
                 ])),
             ]
+        case .channelMixer:
+            // For red, green, blue and then grey: how much of red, green and
+            // blue go into it, and a constant; then whether it is grey.
+            let identity: [Double] = [100, 0, 0, 0, 0, 100, 0, 0, 0, 0, 100, 0, 40, 40, 20, 0]
+            return identity.map { FilterParameter(labelKey: "LayerFilters.Weight", range: -200...200, defaultValue: $0, style: .signedPercent) }
+                + [FilterParameter(labelKey: "LayerFilters.Monochrome", range: 0...1, defaultValue: 0, style: .toggle)]
         case .custom:
             // Five rows of five weights, then the divisor and the offset.
             let weights = [Double](repeating: 0, count: 12) + [1] + [Double](repeating: 0, count: 12)

@@ -156,6 +156,8 @@ struct FilterRow: View {
     var isAdjustment = false
     /// The colour band the HSL sliders change.
     @State private var band = 0
+    /// The channel the Channel Mixer sliders make.
+    @State private var mixerOutput = 0
     @State private var histogram: [Double] = []
 
     var body: some View {
@@ -286,6 +288,8 @@ struct FilterRow: View {
     private var parameterControls: some View {
         if filter.kind == .custom {
             customControls
+        } else if filter.kind == .channelMixer {
+            mixerControls
         } else {
             settingControls
         }
@@ -303,6 +307,39 @@ struct FilterRow: View {
                 set: { color in state.updateFilter(filter.id) { $0.backgroundColor = RGBAColor(color) } }
             ), supportsOpacity: false)
             .font(.subheadline)
+        }
+    }
+
+    /// One output channel's mix of red, green and blue and its constant,
+    /// or grey's when the mix is monochrome.
+    @ViewBuilder
+    private var mixerControls: some View {
+        let mono = filter.value(16) >= 0.5
+        Toggle("LayerFilters.Monochrome", isOn: Binding(
+            get: { mono },
+            set: { value in state.updateFilter(filter.id) { $0.setValue(value ? 1 : 0, at: 16) } }
+        ))
+        .font(.subheadline)
+        if !mono {
+            Picker("LayerFilters.OutputChannel", selection: $mixerOutput) {
+                Text("LayerFilters.Red").tag(0)
+                Text("LayerFilters.Green").tag(1)
+                Text("LayerFilters.Blue").tag(2)
+            }
+            .pickerStyle(.segmented)
+        }
+        let row = mono ? 3 : mixerOutput
+        let labels: [LocalizedStringKey] = ["LayerFilters.Red", "LayerFilters.Green", "LayerFilters.Blue", "LayerFilters.Constant"]
+        ForEach(0..<4, id: \.self) { column in
+            let index = row * 4 + column
+            LabeledSlider(
+                label: labels[column],
+                value: Binding(
+                    get: { filter.value(index) },
+                    set: { value in state.updateFilter(filter.id) { $0.setValue(value, at: index) } }
+                ),
+                range: -200...200, valueText: "\(Int(filter.value(index).rounded()))%"
+            )
         }
     }
 

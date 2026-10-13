@@ -898,6 +898,15 @@ S = {
 "LayerFilters.Prime105": ("105mm Prime", "105mm", "105mm 단초점", "105 毫米聚焦", "105 釐米定焦"),
 "LayerFilters.MoviePrime": ("Movie Prime", "ムービープライム", "동영상 단초점", "电影镜头", "電影定焦"),
 "LayerFilters.Point %lld": ("Point %lld", "ポイント %lld", "점 %lld", "点 %lld", "點 %lld"),
+"LayerFilter.ChannelMixer": ("Channel Mixer", "チャンネルミキサー", "채널 혼합", "通道混合器", "色版混合器"),
+"LayerFilter.Desaturate": ("Desaturate", "彩度を下げる", "채도 감소", "去色", "去除飽和度"),
+"LayerFilter.Equalize": ("Equalize", "平均化 (イコライズ)", "평균화", "色调均化", "均勻分配"),
+"LayerFilters.Monochrome": ("Monochrome", "モノクロ", "단색", "单色", "單色"),
+"LayerFilters.OutputChannel": ("Output Channel", "出力先チャンネル", "출력 채널", "输出通道", "輸出色版"),
+"LayerFilters.Red": ("Red", "レッド", "빨강", "红色", "紅色"),
+"LayerFilters.Green": ("Green", "グリーン", "녹색", "绿色", "綠色"),
+"LayerFilters.Blue": ("Blue", "ブルー", "파랑", "蓝色", "藍色"),
+"LayerFilters.Constant": ("Constant", "定数", "상수", "常数", "常數"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]
