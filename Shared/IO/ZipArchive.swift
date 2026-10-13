@@ -182,14 +182,16 @@ enum ZipArchive {
 
     private static func extract(_ bytes: Data, record: DirectoryRecord) throws -> Data {
         let name = record.name
-        guard record.localHeaderOffset >= 0, record.localHeaderOffset + 30 <= bytes.count,
+        // Compared against what is left, as a ZIP64 offset or size can be
+        // large enough to overflow when added.
+        guard record.localHeaderOffset >= 0, record.localHeaderOffset <= bytes.count - 30,
               readUInt32(bytes, record.localHeaderOffset) == localHeaderSignature else {
             throw ZipError.corruptEntry(name)
         }
         let nameLength = Int(readUInt16(bytes, record.localHeaderOffset + 26))
         let extraLength = Int(readUInt16(bytes, record.localHeaderOffset + 28))
         let start = record.localHeaderOffset + 30 + nameLength + extraLength
-        guard record.compressedSize >= 0, start + record.compressedSize <= bytes.count else {
+        guard record.compressedSize >= 0, start <= bytes.count, record.compressedSize <= bytes.count - start else {
             throw ZipError.corruptEntry(name)
         }
         let payload = Data(bytes[start..<(start + record.compressedSize)])

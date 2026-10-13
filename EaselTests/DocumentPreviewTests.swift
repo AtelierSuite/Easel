@@ -66,6 +66,24 @@ struct DocumentPreviewTests {
         #expect(DocumentPreview.image(at: url)?.width == 16)
     }
 
+    /// A ZIP64 size too large to add to an offset is damage, not a crash.
+    @Test func hugeZip64SizesAreRefused() {
+        func le<T: FixedWidthInteger>(_ value: T) -> Data { withUnsafeBytes(of: value.littleEndian) { Data($0) } }
+        let name = Data("QuickLook/Thumbnail.png".utf8), body = Data([1, 2, 3])
+        var archive = le(UInt32(0x04034B50)) + le(UInt16(20)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt32(0))
+        archive += le(UInt32(0)) + le(UInt32(3)) + le(UInt32(3)) + le(UInt16(name.count)) + le(UInt16(0)) + name + body
+        let start = UInt32(archive.count)
+        var central = le(UInt32(0x02014B50)) + le(UInt16(45)) + le(UInt16(45)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt32(0))
+        central += le(UInt32(0)) + le(UInt32(0xFFFF_FFFF)) + le(UInt32(3)) + le(UInt16(name.count)) + le(UInt16(12))
+        central += le(UInt16(0)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt32(0)) + le(UInt32(0)) + name
+        central += le(UInt16(1)) + le(UInt16(8)) + le(UInt64(Int64.max - 8))
+        archive += central
+        archive += le(UInt32(0x06054B50)) + le(UInt16(0)) + le(UInt16(0)) + le(UInt16(1)) + le(UInt16(1))
+        archive += le(UInt32(central.count)) + le(start) + le(UInt16(0))
+        #expect(throws: (any Error).self) { try ZipArchive.entry(named: "QuickLook/Thumbnail.png", in: archive) }
+        #expect(throws: (any Error).self) { try ZipArchive.entries(in: archive) }
+    }
+
     @Test func missingPreviewsGiveNothing() {
         #expect(DocumentPreview.image(at: URL(fileURLWithPath: "/nonexistent.easel")) == nil)
     }
