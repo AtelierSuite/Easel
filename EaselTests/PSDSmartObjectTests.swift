@@ -128,6 +128,25 @@ struct PSDSmartObjectTests {
         for (a, b) in zip(back, points) { #expect(hypot(a.x - b.x, a.y - b.y) < 0.01) }
     }
 
+    @Test func cylindersComeBackAsCylinders() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        let corners = [CGPoint(x: 20, y: 10), CGPoint(x: 60, y: 10), CGPoint(x: 60, y: 44), CGPoint(x: 20, y: 44)]
+        let shape = WarpShape.cylinder(corners: corners, depth: 0.2)
+        layer.setSmartObjectWarp(shape)
+        let read = try #require(try roundTrip([layer]).layers.first)
+        guard case .cylinder(let back) = try #require(read.canvasWarp) else { Issue.record("not a cylinder"); return }
+        for (a, b) in zip(back, shape.handles) { #expect(hypot(a.x - b.x, a.y - b.y) < 0.01) }
+    }
+
+    @Test func aCylinderCrowdsThePictureToItsSides() {
+        let shape = WarpShape.cylinder(corners: [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0), CGPoint(x: 100, y: 50), CGPoint(x: 0, y: 50)], depth: 0.2)
+        // The middle of the top dips the curve's depth; its corners stay.
+        #expect(abs(shape.point(0.5, 0).y - 10) < 1e-6)
+        #expect(abs(shape.point(0, 0).y) < 1e-6 && abs(shape.point(1, 1).x - 100) < 1e-6)
+        // A quarter of the way across the picture is nearer the side.
+        #expect(abs(shape.point(0.25, 0.5).x - (50 - 50 * sin(Double.pi / 4))) < 1e-6)
+    }
+
     @Test func aBendStaysWhenTheContentsChange() throws {
         var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
         layer.setSmartObjectWarp(.perspective([CGPoint(x: 20, y: 10), CGPoint(x: 60, y: 18), CGPoint(x: 64, y: 50), CGPoint(x: 16, y: 44)]))

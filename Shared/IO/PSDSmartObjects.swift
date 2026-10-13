@@ -17,6 +17,7 @@ enum PSDSmartObjects {
         // scaled so it spans their size, as Photoshop keeps it.
         var quad = layer.corners
         var mesh: [CGPoint]?
+        var cylinder: Double?
         switch layer.canvasWarp {
         case .perspective(let corners):
             quad = corners
@@ -26,6 +27,15 @@ enum PSDSmartObjects {
             quad = [CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
                     CGPoint(x: rect.maxX, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY)]
             mesh = points.map { CGPoint(x: ($0.x - rect.minX) / rect.width * size.width, y: ($0.y - rect.minY) / rect.height * size.height) }
+        case .cylinder(let points):
+            // Photoshop's bounds are the contents' size, their top corners
+            // half the curve above the top; the corners are where all of
+            // it, curve and all, lies.
+            let depth = WarpShape.cylinderDepth(points), corners = Array(points.prefix(4))
+            let reach = abs(depth) / 2
+            quad = [(0, depth / 2 - reach), (1, depth / 2 - reach), (1, 1 + depth / 2 + reach), (0, 1 + depth / 2 + reach)]
+                .map { WarpShape.projective(corners, $0.0, $0.1) }
+            cylinder = depth * size.height / max(size.width / 2, 0.0001)
         case nil:
             break
         }
@@ -44,6 +54,14 @@ enum PSDSmartObjects {
             ]))),
             ("uOrder", .integer(4)), ("vOrder", .integer(4)),
         ])
+        if let cylinder {
+            warp.items = [
+                ("warpStyle", .enumerated(type: "warpStyle", value: "warpCylinder")),
+                // The bounds, how deep the curve is against half the width,
+                // and two values Photoshop sets that Easel leaves as it does.
+                ("warpValues", .list([0, size.height, size.width, 0, cylinder, 0.5, 0.5708295036764706].map { .double($0) })),
+            ] + warp.items.filter { !["warpStyle", "warpValue"].contains($0.key) }
+        }
         if let mesh {
             warp.items.append(("customEnvelopeWarp", .descriptor(PSDDescriptor(classID: "customEnvelopeWarp", items: [
                 ("meshPoints", .objectArray(count: 16, PSDDescriptor(classID: "rationalPoint", items: [
@@ -180,10 +198,20 @@ enum PSDSmartObjects {
         let corners = stride(from: 0, to: 8, by: 2).map { CGPoint(x: values[$0], y: values[$0 + 1]) }
         var mesh: [CGPoint]?
         if let warp = descriptor["warp"]?.descriptor, !isUnwarped(warp) {
-            // A grid of its own, or one of Photoshop's presets made into one.
-            guard let points = warp["warpStyle"]?.enumValue == "warpCustom" ? meshPoints(warp) : presetMesh(warp) else { return nil }
-            // The grid's own extent is what is placed on the corners.
-            let xs = points.map(\.x), ys = points.map(\.y)
+            // A grid of its own, a cylinder, or one of Photoshop's presets
+            // made into a grid.
+            let points: [CGPoint]?
+            switch warp["warpStyle"]?.enumValue {
+            case "warpCustom": points = meshPoints(warp)
+            case "warpCylinder": points = cylinderPoints(warp)
+            default: points = presetMesh(warp)
+            }
+            guard let points else { return nil }
+            // The grid's own extent is what is placed on the corners; a
+            // cylinder's is where its curve reaches.
+            let shape = WarpShape(points: points)
+            let reached = points.count == 5 ? (0...16).flatMap { u in [shape.point(Double(u) / 16, 0), shape.point(Double(u) / 16, 1)] } : points
+            let xs = reached.map(\.x), ys = reached.map(\.y)
             let minX = xs.min()!, minY = ys.min()!
             let width = max(xs.max()! - minX, 0.0001), height = max(ys.max()! - minY, 0.0001)
             let placed = WarpShape.perspective(corners)
@@ -204,6 +232,24 @@ enum PSDSmartObjects {
             horizontalDistortion: warp["warpPerspective"]?.number ?? 0, verticalDistortion: warp["warpPerspectiveOther"]?.number ?? 0,
             bounds: CGRect(x: left, y: top, width: right - left, height: bottom - top)
         )
+    }
+
+    /// A cylinder's five points over its bounds: its top corners half the
+    /// curve above the bounds' top, the bottom ones as far above the
+    /// bottom, and the middle of its top half the curve below. The curve
+    /// is as deep as the first value after the bounds times half the width.
+    /// Wrapped top to bottom, it is not Easel's.
+    private static func cylinderPoints(_ warp: PSDDescriptor) -> [CGPoint]? {
+        guard warp["warpRotate"]?.enumValue != "Vrtc",
+              let values = warp["warpValues"]?.list?.compactMap(\.number), values.count >= 5,
+              let bounds = warp["bounds"]?.descriptor,
+              let top = bounds["Top "]?.number, let left = bounds["Left"]?.number,
+              let bottom = bounds["Btom"]?.number, let right = bounds["Rght"]?.number,
+              right > left, bottom > top else { return nil }
+        let curve = values[4] * (right - left) / 2
+        let corners = [CGPoint(x: left, y: top - curve / 2), CGPoint(x: right, y: top - curve / 2),
+                       CGPoint(x: right, y: bottom - curve / 2), CGPoint(x: left, y: bottom - curve / 2)]
+        return WarpShape.cylinder(corners: corners, depth: curve / (bottom - top)).handles
     }
 
     /// A custom bend's sixteen points, four rows of four from the top left.
@@ -246,7 +292,7 @@ enum PSDSmartObjects {
         let shape: WarpShape?
         var transform = LayerTransform(position: .zero)
         if let mesh = placed.mesh {
-            shape = .warp(mesh)
+            shape = WarpShape(points: mesh)
         } else if let moved = self.transform(corners: placed.corners, size: contents.size) {
             shape = nil
             transform = moved

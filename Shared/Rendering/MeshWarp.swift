@@ -10,17 +10,52 @@ enum WarpShape: Equatable, Sendable {
     /// A bicubic Bézier patch on sixteen points, four rows of four from the
     /// top left. The corners lie on the layer's edges; the others pull it.
     case warp([CGPoint])
+    /// Wrapped round the front of a cylinder: the layer's corners pinned
+    /// to four points as in perspective, then a fifth, the middle of its
+    /// top edge, setting how deep the curve runs. Across, the picture
+    /// crowds towards the sides as a label on a can does.
+    case cylinder([CGPoint])
 
     func point(_ u: Double, _ v: Double) -> CGPoint {
         switch self {
         case .perspective(let corners): return Self.projective(corners, u, v)
         case .warp(let points): return Self.patch(points, u, v)
+        case .cylinder(let points):
+            let corners = Array(points.prefix(4))
+            let depth = Self.cylinderDepth(points)
+            let angle = (u - 0.5) * Double.pi
+            return Self.projective(corners, 0.5 + sin(angle) / 2, v + depth * cos(angle))
         }
+    }
+
+    /// The five points of a cylinder over `corners`, its curve `depth` of
+    /// the layer's height deep; less than 0 bows it the other way.
+    static func cylinder(corners: [CGPoint], depth: Double) -> WarpShape {
+        .cylinder(corners + [projective(corners, 0.5, depth)])
+    }
+
+    /// How deep a cylinder's curve runs, as a part of its height: where on
+    /// the line down its middle the fifth point lies.
+    static func cylinderDepth(_ points: [CGPoint]) -> Double {
+        guard points.count == 5 else { return 0 }
+        let corners = Array(points.prefix(4)), target = points[4]
+        func distance(_ v: Double) -> Double {
+            let point = projective(corners, 0.5, v)
+            return hypot(point.x - target.x, point.y - target.y)
+        }
+        // The nearest point on the line, narrowed down a golden step at a time.
+        var low = -2.0, high = 2.0
+        let ratio = (5.0.squareRoot() - 1) / 2
+        for _ in 0..<60 {
+            let a = high - (high - low) * ratio, b = low + (high - low) * ratio
+            if distance(a) < distance(b) { high = b } else { low = a }
+        }
+        return (low + high) / 2
     }
 
     /// The unit square taken onto `corners` by the projective map that does
     /// so, which keeps straight lines straight.
-    private static func projective(_ p: [CGPoint], _ u: Double, _ v: Double) -> CGPoint {
+    static func projective(_ p: [CGPoint], _ u: Double, _ v: Double) -> CGPoint {
         let sx = p[0].x - p[1].x + p[2].x - p[3].x
         let sy = p[0].y - p[1].y + p[2].y - p[3].y
         var g = 0.0, h = 0.0
@@ -63,6 +98,16 @@ enum WarpShape: Equatable, Sendable {
         let shape = WarpShape.perspective(quad)
         return (0..<16).map { index in
             shape.point(Double(index % 4) / 3, Double(index / 4) / 3)
+        }
+    }
+
+    /// The handles `mode` starts with for the layer laid out as `quad`: a
+    /// cylinder starts a little curved, so there is something to see.
+    static func points(for mode: TransformMode, quad: [CGPoint]) -> [CGPoint] {
+        switch mode {
+        case .distort: return quad
+        case .warp: return points(warp: true, quad: quad)
+        case .cylinder: return cylinder(corners: quad, depth: 0.15).handles
         }
     }
 

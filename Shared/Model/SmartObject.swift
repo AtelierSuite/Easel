@@ -20,13 +20,14 @@ struct SmartObjectLink: Codable, Equatable, Sendable {
 }
 
 /// Where a smart object's contents are bent to, in the layer's own pixels:
-/// four corners in perspective, or a grid of sixteen points.
+/// four corners in perspective, those and a fifth for a cylinder, or a
+/// grid of sixteen points.
 struct SmartObjectWarp: Codable, Equatable, Sendable {
     var points: [CGPoint]
     /// The size of the layer's pixels the points are in.
     var size: CGSize
 
-    var shape: WarpShape { points.count == 16 ? .warp(points) : .perspective(points) }
+    var shape: WarpShape { WarpShape(points: points) }
 }
 
 extension Layer {
@@ -57,15 +58,24 @@ extension Layer {
     var canvasWarp: WarpShape? {
         guard let warp = smartObject?.warp else { return nil }
         let points = warp.points.map { $0.applying(affineTransform) }
-        return points.count == 16 ? .warp(points) : .perspective(points)
+        return WarpShape(points: points)
     }
 }
 
 extension WarpShape {
+    /// The shape `points` set, told apart by how many there are.
+    init(points: [CGPoint]) {
+        switch points.count {
+        case 16: self = .warp(points)
+        case 5: self = .cylinder(points)
+        default: self = .perspective(points)
+        }
+    }
+
     /// The points that set the shape.
     var handles: [CGPoint] {
         switch self {
-        case .perspective(let points), .warp(let points): return points
+        case .perspective(let points), .warp(let points), .cylinder(let points): return points
         }
     }
 

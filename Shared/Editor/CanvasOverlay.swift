@@ -227,6 +227,12 @@ struct CanvasOverlay: View {
             lines.move(to: shape.point(fraction, 0).applying(transform))
             for step in 1...steps { lines.addLine(to: shape.point(fraction, Double(step) / Double(steps)).applying(transform)) }
         }
+        if case .cylinder(let points) = shape {
+            // The top's middle pulls the curve, from the middle of the corners.
+            let corners = Array(points.prefix(4))
+            lines.move(to: WarpShape.projective(corners, 0.5, 0).applying(transform))
+            lines.addLine(to: points[4].applying(transform))
+        }
         context.stroke(lines, with: .color(.black.opacity(0.4)), lineWidth: 2.5)
         context.stroke(lines, with: .color(.accentColor), lineWidth: 1.25)
         if draft.mode == .warp {

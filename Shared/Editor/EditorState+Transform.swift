@@ -7,6 +7,9 @@ enum TransformMode: String, CaseIterable, Identifiable, Sendable {
     case distort
     /// Drag a grid of points: bend the layer like a sheet.
     case warp
+    /// Drag the corners and the middle of the top: wrap the layer round a
+    /// cylinder.
+    case cylinder
 
     var id: String { rawValue }
 }
@@ -17,13 +20,14 @@ struct TransformDraft: Equatable {
     var layerID: Layer.ID
     var mode: TransformMode
     /// Where the handles are, in canvas pixels: four corners for distort,
-    /// sixteen points for warp.
+    /// those and the top's middle for cylinder, sixteen points for warp.
     var points: [CGPoint]
     /// Where they started, so an untouched draft is not applied.
     var original: [CGPoint]
 
-    var shape: WarpShape { mode == .warp ? .warp(points) : .perspective(points) }
-    var isChanged: Bool { points != WarpShape.points(warp: mode == .warp, quad: original) }
+    var shape: WarpShape { WarpShape(points: points) }
+    /// A cylinder always bends the layer; the others, once a handle moves.
+    var isChanged: Bool { mode == .cylinder || points != WarpShape.points(for: mode, quad: original) }
 
     /// The handles that move with the one at `index`: in warp, a corner's
     /// neighbours go with it so its curves keep their shape.
@@ -52,7 +56,7 @@ extension EditorState {
         }
         if let draft = transformDraft, draft.layerID == layer.id { return }
         let quad = layer.corners
-        var points = WarpShape.points(warp: transformMode == .warp, quad: quad)
+        var points = WarpShape.points(for: transformMode, quad: quad)
         // A bent smart object picks up its bend where it left off.
         if let shape = layer.canvasWarp {
             points = Self.points(of: shape, as: transformMode)
@@ -62,11 +66,17 @@ extension EditorState {
     }
 
     /// The handles for `shape` in `mode`: a warp grid laid over a
-    /// perspective, or a warp's corners.
+    /// perspective, or a shape's corners, a cylinder keeping its depth.
     private static func points(of shape: WarpShape, as mode: TransformMode) -> [CGPoint] {
-        mode == .warp
-            ? (0..<16).map { shape.point(Double($0 % 4) / 3, Double($0 / 4) / 3) }
-            : shape.corners
+        switch mode {
+        case .warp:
+            return (0..<16).map { shape.point(Double($0 % 4) / 3, Double($0 / 4) / 3) }
+        case .distort:
+            return shape.corners
+        case .cylinder:
+            if case .cylinder(let points) = shape { return points }
+            return WarpShape.points(for: .cylinder, quad: shape.corners)
+        }
     }
 
     /// Changes between distort and warp, keeping the shape as near as the
@@ -102,8 +112,13 @@ extension EditorState {
     func transformMoved(to point: CGPoint) {
         guard let drag = transformDrag, var draft = transformDraft else { return }
         let dx = point.x - drag.start.x, dy = point.y - drag.start.y
+        // A cylinder's curve stays as deep while its corners move.
+        let depth = draft.mode == .cylinder ? WarpShape.cylinderDepth(draft.points) : nil
         for handle in drag.handles {
             draft.points[handle.index] = CGPoint(x: handle.origin.x + dx, y: handle.origin.y + dy)
+        }
+        if let depth, drag.handles.count == 1, drag.handles[0].index < 4 {
+            draft.points[4] = WarpShape.projective(Array(draft.points.prefix(4)), 0.5, depth)
         }
         transformDraft = draft
         updateTransformPreview()
@@ -116,7 +131,7 @@ extension EditorState {
     /// Puts the handles back on the layer's corners.
     func resetTransformDraft() {
         guard var draft = transformDraft else { return }
-        draft.points = WarpShape.points(warp: draft.mode == .warp, quad: draft.original)
+        draft.points = WarpShape.points(for: draft.mode, quad: draft.original)
         transformDraft = draft
         transformPreview = nil
     }
@@ -200,7 +215,7 @@ extension EditorState {
             func bend(_ mask: LayerMask) -> CGImage {
                 guard layer.smartObject?.warp == nil else { return Self.mask(mask.image.cgImage, of: layer, in: bounds) }
                 let local = shape.handles.map { CGPoint(x: $0.x - bounds.minX, y: $0.y - bounds.minY) }
-                return MeshWarp.renderMask(mask.image.cgImage, shape: local.count == 16 ? .warp(local) : .perspective(local), size: bounds.size)
+                return MeshWarp.renderMask(mask.image.cgImage, shape: WarpShape(points: local), size: bounds.size)
             }
             if let mask = layer.mask { bent.mask?.image = LayerImage(bend(mask)) }
             if let mask = layer.filterMask { bent.filterMask?.image = LayerImage(bend(mask)) }

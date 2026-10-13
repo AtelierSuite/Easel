@@ -328,6 +328,9 @@ struct ToolOptionsBar: View {
                 GlassIconButton(symbol: "squareshape.split.3x3", label: "Transform.Warp", isOn: state.transformMode == .warp) {
                     state.setTransformMode(.warp)
                 }
+                GlassIconButton(symbol: "cylinder", label: "Transform.Cylinder", isOn: state.transformMode == .cylinder) {
+                    state.setTransformMode(.cylinder)
+                }
             }
             GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(symbol: "xmark", label: "Transform.Reset") {

@@ -917,6 +917,7 @@ S = {
 "FilterCategory.Render": ("Render", "描画", "렌더", "渲染", "演算上色"),
 "FilterCategory.Video": ("Video", "ビデオ", "비디오", "视频", "視訊"),
 "FilterCategory.Other": ("Other", "その他", "기타", "其它", "其他"),
+"Transform.Cylinder": ("Cylinder", "円柱", "원통", "圆柱", "圓柱"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]
