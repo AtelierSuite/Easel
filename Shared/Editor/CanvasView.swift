@@ -341,17 +341,21 @@ struct CanvasView: View {
     }
 
     /// A layer with the strokes and retouching being done to it drawn over.
-    /// An image with effects worked out has its mask in it already.
+    /// An image with effects worked out has its mask in it already; strokes
+    /// into the mask show over it until the effects are worked out again.
     private func liveLayerView(
         _ layer: Layer, displayed: CGImage, padding: Double? = nil, _ viewport: CanvasViewport
     ) -> some View {
-        LayerView(
+        let maskStrokes = strokes(on: layer.id, mask: true)
+        let reveals = padding != nil && maskStrokes.contains { !$0.isEraser }
+        return LayerView(
             layer: layer,
             displayed: displayed,
             padding: padding ?? 0,
             masksItself: padding == nil,
+            unmasked: reveals ? state.displayImage(for: layer) : nil,
             strokes: strokes(on: layer.id, mask: false),
-            maskStrokes: strokes(on: layer.id, mask: true),
+            maskStrokes: maskStrokes,
             retouch: retouch(on: layer.id),
             canvasSize: composition.size,
             viewport: viewport,
@@ -474,6 +478,9 @@ private struct LayerView: View {
     var padding = 0.0
     /// Whether the layer's mask still has to be applied to `displayed`.
     var masksItself = true
+    /// The layer's pixels without its mask, when `displayed` has the mask in
+    /// it already: what strokes revealing more of it show.
+    var unmasked: CGImage?
     let strokes: [Stroke]
     /// Strokes on their way into the layer's mask.
     let maskStrokes: [Stroke]
@@ -495,12 +502,25 @@ private struct LayerView: View {
         )
 
         let paintStrokes = strokes.filter(\.kind.isPaint)
+        // The eraser on a mask paints it white, revealing the layer.
+        let reveals = masksItself || unmasked == nil ? [] : maskStrokes.filter { !$0.isEraser }
         Group {
-            if paintStrokes.isEmpty && retouch == nil {
+            if paintStrokes.isEmpty && retouch == nil && reveals.isEmpty {
                 content
             } else {
                 ZStack(alignment: .topLeading) {
                     content
+                    if let unmasked, !reveals.isEmpty {
+                        // Its own pixels, until its effects are worked out
+                        // with them.
+                        ZStack(alignment: .topLeading) {
+                            placed(Image(decorative: unmasked, scale: 1))
+                        }
+                        .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
+                        .mask(alignment: .topLeading) {
+                            StrokePreview(strokes: reveals, canvasSize: canvasSize, viewport: viewport)
+                        }
+                    }
                     if let retouch { RetouchPreview(retouch: retouch, canvasSize: canvasSize, viewport: viewport) }
                     // Strokes that blend with the layer under them can only
                     // do so as views of their own: each run of strokes in
@@ -546,6 +566,15 @@ private struct LayerView: View {
                 if !maskStrokes.isEmpty {
                     StrokePreview(strokes: maskStrokes, canvasSize: canvasSize, viewport: viewport)
                 }
+            }
+            .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
+            .compositingGroup()
+        } else if maskStrokes.contains(where: \.isEraser) {
+            // The mask is in the image already: the brush on a mask hides,
+            // so only its strokes are cut out of what shows.
+            ZStack(alignment: .topLeading) {
+                Rectangle()
+                StrokePreview(strokes: maskStrokes.filter(\.isEraser), canvasSize: canvasSize, viewport: viewport)
             }
             .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
             .compositingGroup()
