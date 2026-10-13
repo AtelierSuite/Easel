@@ -393,6 +393,10 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     /// ranges the four limits in degrees and its hue, saturation and
     /// lightness.
     var photoshopHueSaturation: [Double]?
+    /// Hue/Saturation's Colorize, from a Photoshop file: the hue in
+    /// degrees, -180...180, the saturation and the lightness every colour
+    /// takes.
+    var photoshopColorize: [Double]?
 
     /// The filter with any settings kept from a Photoshop file let go of.
     var withoutPhotoshopSettings: LayerFilter {
@@ -400,6 +404,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         copy.photoshopBrightness = nil
         copy.photoshopContrast = nil
         copy.photoshopHueSaturation = nil
+        copy.photoshopColorize = nil
         copy.photoshopFilter = nil
         return copy
     }

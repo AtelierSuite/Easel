@@ -109,12 +109,15 @@ extension LayerFilter {
     var hasPhotoshopSettings: Bool {
         switch kind {
         case .brightness, .contrast: return photoshopBrightness != nil || photoshopContrast != nil
-        case .hsl: return photoshopHueSaturation?.count == 45
+        case .hsl: return photoshopHueSaturation?.count == 45 || photoshopColorize?.count == 3
         default: return false
         }
     }
 
     func applyPhotoshopSettings(to input: CIImage) -> CIImage {
+        if kind == .hsl, let colorize = photoshopColorize, colorize.count == 3 {
+            return ColorTransforms.apply(input) { Self.photoshopColorize(colorize, $0) }
+        }
         if kind == .hsl, let settings = photoshopHueSaturation, settings.count == 45 {
             return ColorTransforms.apply(input) { Self.photoshopHueSaturation(settings, $0) }
         }
@@ -150,6 +153,18 @@ extension LayerFilter {
         if let t = along(values[0], values[1]) { return t }
         if let t = along(values[2], values[3]) { return 1 - t }
         return 0
+    }
+
+    /// Colorize: every colour takes the one hue and saturation, keeping its
+    /// HSL lightness, moved towards black or white as the master is.
+    static func photoshopColorize(_ settings: [Double], _ color: SIMD3<Double>) -> SIMD3<Double> {
+        var hsl = ColorTransforms.hsl(color)
+        // Photoshop keeps the hue as -180...180.
+        hsl.x = ((settings[0] / 360).truncatingRemainder(dividingBy: 1) + 1).truncatingRemainder(dividingBy: 1)
+        hsl.y = min(max(settings[1], 0), 100) / 100
+        let l = min(max(settings[2], -100), 100) / 100
+        hsl.z = l >= 0 ? hsl.z + (1 - hsl.z) * l : hsl.z * (1 + l)
+        return ColorTransforms.rgb(hsl)
     }
 
     static func photoshopHueSaturation(_ settings: [Double], _ color: SIMD3<Double>) -> SIMD3<Double> {

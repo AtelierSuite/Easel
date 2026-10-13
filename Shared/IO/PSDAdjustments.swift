@@ -214,13 +214,12 @@ enum PSDAdjustments {
 
     private static func hueSaturation(_ data: [UInt8]) -> LayerFilter? {
         var reader = BigEndianReader(bytes: data)
-        guard (try? reader.uint16()) == 2, let colorize = try? reader.uint8(), colorize == 0,
-              (try? reader.uint8()) != nil else { return nil }
+        guard (try? reader.uint16()) == 2, let colorize = try? reader.uint8(), (try? reader.uint8()) != nil else { return nil }
         func triple() -> [Double]? {
             guard let a = try? reader.int16(), let b = try? reader.int16(), let c = try? reader.int16() else { return nil }
             return [Double(a), Double(b), Double(c)]
         }
-        guard triple() != nil, let master = triple() else { return nil }
+        guard let colorized = triple(), let master = triple() else { return nil }
         var ranges: [[Double]] = []
         var raw: [Double] = []
         for _ in 0..<6 {
@@ -230,7 +229,11 @@ enum PSDAdjustments {
             ranges.append(values)
             raw += limits + values
         }
-        return hueSaturation(master: master, ranges: ranges, raw: raw)
+        var filter = hueSaturation(master: master, ranges: ranges, raw: raw)
+        // Colorize leaves the rest aside while it is on; they are kept for
+        // when it is turned off in Photoshop.
+        if colorize != 0 { filter.photoshopColorize = colorized }
+        return filter
     }
 
     /// Easel's HSL filter for Photoshop's Hue/Saturation: the master hue,
@@ -308,7 +311,7 @@ enum PSDAdjustments {
     /// hue, saturation and lightness, then for each of its six ranges its
     /// four limits and its three.
     static func hueSaturationSettings(for filter: LayerFilter) -> [Double]? {
-        if filter.kind == .hsl, filter.hasPhotoshopSettings { return filter.photoshopHueSaturation }
+        if filter.kind == .hsl, let kept = filter.photoshopHueSaturation, kept.count == 45 { return kept }
         guard filter.kind == .hsl || filter.kind == .saturation else { return nil }
         var settings: [Double] = filter.kind == .saturation ? [0, (filter.amount * 100).rounded(), 0] : [0, 0, 0]
         let bands = filter.hslBands?.count == 24 ? filter.hslBands! : LayerFilter.neutralHSL
@@ -392,10 +395,11 @@ enum PSDAdjustments {
             return ([("curv", out.data)], 1)
         case .hsl, .saturation:
             guard let settings = hueSaturationSettings(for: filter) else { return nil }
+            let colorize = filter.photoshopColorize?.count == 3 ? filter.photoshopColorize : nil
             out.uint16(2)
+            out.uint8(colorize == nil ? 0 : 1)
             out.uint8(0)
-            out.uint8(0)
-            for _ in 0..<3 { out.int16(0) }
+            for value in colorize ?? [0, 0, 0] { out.int16(Int(value.rounded())) }
             for value in settings { out.int16(Int(value.rounded())) }
             return ([("hue2", out.data)], 1)
         case .brightness, .contrast:

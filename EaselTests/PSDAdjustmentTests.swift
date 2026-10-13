@@ -68,6 +68,22 @@ struct PSDAdjustmentTests {
         #expect(abs((read.hslBands?[5 * 3 + 1] ?? 0) + 0.6) < 0.02)
     }
 
+    @Test func colorizeComesBack() throws {
+        var filter = PSDAdjustments.hueSaturation(master: [0, 0, 0], ranges: Array(repeating: [0, 0, 0], count: 6),
+                                                  raw: PSDAdjustments.rangeLimits.flatMap { $0 + [0, 0, 0] })
+        filter.photoshopColorize = [120, 50, 0]
+        let layer = try roundTrip(filter)
+        let read = try #require(layer.adjustment)
+        #expect(read.photoshopColorize == [120, 50, 0])
+        // Red and blue alike turn the one green, each keeping its lightness.
+        let paper = Layer(name: "Paper", image: LayerImage(TestImages.halves(width: 20, height: 10)), canvasSize: size)
+        let shown = CompositionRenderer.render(Composition(size: size, layers: [paper, layer]))
+        for x in [2, 17] {
+            let pixel = TestImages.pixel(shown, x: x, y: 5)
+            #expect(pixel.green > pixel.red + 40 && pixel.green > pixel.blue + 40)
+        }
+    }
+
     @Test func brightnessAndContrastComeBack() throws {
         var filter = LayerFilter(kind: .contrast)
         filter.amount = 0.4
