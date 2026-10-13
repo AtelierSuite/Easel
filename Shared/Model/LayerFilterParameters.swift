@@ -272,6 +272,16 @@ extension LayerFilter.Kind {
                 FilterParameter(labelKey: "LayerFilters.Vibrance", range: -100...100, defaultValue: 0, style: .signedPercent),
                 FilterParameter(labelKey: "Adjust.Saturation", range: -100...100, defaultValue: 20, style: .signedPercent),
             ]
+        case .matchColor:
+            // Photoshop's: luminance, colour intensity, fade and neutralize;
+            // then the source's colour, kept as the average and spread of
+            // its lightness, a and b, and whether there is one.
+            return [
+                FilterParameter(labelKey: "LayerFilters.Luminance", range: 1...200, defaultValue: 100, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.ColorIntensity", range: 1...200, defaultValue: 100, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.Fade", range: 0...100, defaultValue: 0, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.Neutralize", range: 0...1, defaultValue: 0, style: .toggle),
+            ] + [50.0, 0, 0, 1, 1, 1, 0].map { FilterParameter(labelKey: "LayerFilters.Source", range: -1000...1000, defaultValue: $0, style: .decimal) }
         case .custom:
             // Five rows of five weights, then the divisor and the offset.
             let weights = [Double](repeating: 0, count: 12) + [1] + [Double](repeating: 0, count: 12)

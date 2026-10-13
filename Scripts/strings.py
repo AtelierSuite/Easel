@@ -955,6 +955,15 @@ S = {
 "LayerFilters.Midtones": ("Midtones", "中間調", "중간 영역", "中间调", "中間調"),
 "LayerFilter.HdrToning": ("HDR Toning", "HDR トーン", "HDR 토닝", "HDR 色调", "HDR 色調"),
 "LayerFilters.Detail": ("Detail", "ディテール", "세부", "细节", "細部"),
+"LayerFilter.MatchColor": ("Match Color", "カラーの適用", "색상 일치", "匹配颜色", "符合顏色"),
+"LayerFilters.Luminance": ("Luminance", "輝度", "광도", "明亮度", "明度"),
+"LayerFilters.ColorIntensity": ("Color Intensity", "彩度", "색상 강도", "颜色强度", "顏色強度"),
+"LayerFilters.Fade": ("Fade", "フェード", "페이드", "渐隐", "淡化"),
+"LayerFilters.Neutralize": ("Neutralize", "色かぶりの補正", "중화", "中和", "中和"),
+"LayerFilters.Source": ("Source", "ソース", "소스", "源", "來源"),
+"LayerFilters.NoSource": ("None", "なし", "없음", "无", "無"),
+"LayerFilters.ChooseSource": ("Choose Source Layer", "ソースレイヤーを選択", "소스 레이어 선택", "选择源图层", "選擇來源圖層"),
+"LayerFilters.SourceChosen": ("Matching a Layer", "レイヤーに適用中", "레이어와 일치 중", "正在匹配图层", "正在符合圖層"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

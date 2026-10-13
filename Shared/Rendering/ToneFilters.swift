@@ -22,8 +22,57 @@ extension LayerFilter {
                 shadows: value(5) / 100, highlights: value(6) / 100, vibrance: value(7) / 100, saturation: value(8) / 100
             )
             return PixelFilters.process(input) { Self.hdrToning(&$0, settings) }
+        case .matchColor:
+            let source = value(10) >= 0.5 ? (mean: SIMD3(value(4), value(5), value(6)), spread: SIMD3(value(7), value(8), value(9))) : nil
+            let settings = (luminance: value(0) / 100, intensity: value(1) / 100, fade: value(2) / 100, neutralize: value(3) >= 0.5)
+            return PixelFilters.process(input) { Self.matchColor(&$0, source: source, settings) }
         default:
             return input
+        }
+    }
+
+    /// The average and spread of a picture's lightness, a and b, over its
+    /// pixels that show, every few looked at in a large one.
+    static func labStatistics(_ pixels: PixelFilters.Pixels) -> (mean: SIMD3<Double>, spread: SIMD3<Double>) {
+        let step = max(1, pixels.width * pixels.height / 250_000)
+        var sum = SIMD3<Double>(repeating: 0), squares = sum, count = 0.0
+        for index in stride(from: 0, to: pixels.width * pixels.height, by: step) where pixels.bytes[index * 4 + 3] > 0 {
+            let lab = ColorConversions.lab(srgb: SIMD3(Double(pixels.bytes[index * 4]), Double(pixels.bytes[index * 4 + 1]),
+                                                       Double(pixels.bytes[index * 4 + 2])) / 255)
+            sum += lab
+            squares += lab * lab
+            count += 1
+        }
+        guard count > 0 else { return (SIMD3(50, 0, 0), SIMD3(repeating: 1)) }
+        let mean = sum / count
+        let variance = squares / count - mean * mean
+        return (mean, SIMD3(variance.x.squareRoot(), variance.y.squareRoot(), variance.z.squareRoot()))
+    }
+
+    /// Match Color, done as colour transfer is: each pixel's lightness, a
+    /// and b moved from the layer's own average and spread to the source's.
+    /// Then the lightness is scaled by the luminance, a and b by the
+    /// intensity, any cast left taken out by neutralizing, and the original
+    /// faded back in.
+    static func matchColor(
+        _ pixels: inout PixelFilters.Pixels, source: (mean: SIMD3<Double>, spread: SIMD3<Double>)?,
+        _ settings: (luminance: Double, intensity: Double, fade: Double, neutralize: Bool)
+    ) {
+        let own = labStatistics(pixels)
+        let target = source ?? own
+        let gain = SIMD3(target.spread.x / max(own.spread.x, 0.001), target.spread.y / max(own.spread.y, 0.001),
+                         target.spread.z / max(own.spread.z, 0.001))
+        for index in 0..<(pixels.width * pixels.height) where pixels.bytes[index * 4 + 3] > 0 {
+            let color = SIMD3(Double(pixels.bytes[index * 4]), Double(pixels.bytes[index * 4 + 1]), Double(pixels.bytes[index * 4 + 2])) / 255
+            var lab = (ColorConversions.lab(srgb: color) - own.mean) * gain + target.mean
+            if settings.neutralize { lab.y -= target.mean.y; lab.z -= target.mean.z }
+            lab.x *= settings.luminance
+            lab.y *= settings.intensity
+            lab.z *= settings.intensity
+            let matched = ColorConversions.srgb(lab: [min(max(lab.x, 0), 100), lab.y, lab.z])
+            let result = SIMD3(matched.red, matched.green, matched.blue)
+            let mixed = result + (color - result) * settings.fade
+            for channel in 0..<3 { pixels.bytes[index * 4 + channel] = PixelFilters.byte(mixed[channel] * 255) }
         }
     }
 

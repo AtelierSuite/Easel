@@ -140,6 +140,9 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// A wide range of shades pressed into what shows, local contrast
         /// and detail kept, as Photoshop's HDR Toning does.
         case hdrToning
+        /// Colours given the spread of another layer's, lighter, stronger
+        /// or with a cast taken out, as Photoshop's Match Color does.
+        case matchColor
 
         var id: String { rawValue }
 
@@ -152,7 +155,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         static let categories: [(titleKey: String?, kinds: [Kind])] = [
             (nil, [.blackAndWhite, .sepia, .saturation, .brightness, .contrast]),
             (nil, [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor]),
-            ("FilterCategory.Adjustments", [.exposure, .vibrance, .photoFilter, .channelMixer, .selectiveColor, .variations, .desaturate, .invert, .posterize,
+            ("FilterCategory.Adjustments", [.exposure, .vibrance, .photoFilter, .channelMixer, .selectiveColor, .matchColor, .variations, .desaturate, .invert, .posterize,
                                             .threshold, .solarize, .equalize, .shadowsHighlights, .hdrToning]),
             ("FilterCategory.Blur", [.gaussianBlur, .motionBlur, .zoomBlur, .spinBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur,
                                      .blur, .blurMore, .average]),
@@ -173,7 +176,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .hdrToning, .variations, .displace, .liquify, .shadowsHighlights, .selectiveColor:
+                 .channelMixer, .desaturate, .equalize, .matchColor, .hdrToning, .variations, .displace, .liquify, .shadowsHighlights, .selectiveColor:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -256,6 +259,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .channelMixer: return "slider.horizontal.3"
             case .desaturate: return "drop.degreesign.slash"
             case .equalize: return "chart.bar.xaxis"
+            case .matchColor: return "paintpalette"
             case .hdrToning: return "camera.aperture"
             case .variations: return "square.grid.3x3.square"
             case .displace: return "square.3.layers.3d.down.right"
@@ -319,14 +323,14 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .hdrToning, .variations, .displace, .liquify, .shadowsHighlights, .selectiveColor: return 1
+                 .channelMixer, .desaturate, .equalize, .matchColor, .hdrToning, .variations, .displace, .liquify, .shadowsHighlights, .selectiveColor: return 1
             }
         }
 
         /// Filters that change each pixel by its colour alone, which can
         /// also be adjustment layers changing everything beneath them.
         var isPerPixel: Bool {
-            ![.equalize, .shadowsHighlights, .hdrToning].contains(self) && Self.groups.prefix(3).contains { $0.contains(self) }
+            ![.equalize, .shadowsHighlights, .hdrToning, .matchColor].contains(self) && Self.groups.prefix(3).contains { $0.contains(self) }
         }
 
         /// Filters Core Image works out by mixing neighbouring pixels, which

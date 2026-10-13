@@ -130,6 +130,21 @@ enum PixelFilters {
 
 /// Colours between the spaces Photoshop's records use and sRGB.
 enum ColorConversions {
+    /// An sRGB colour, 0...1, in CIE Lab under D50.
+    static func lab(srgb color: SIMD3<Double>) -> SIMD3<Double> {
+        let r = PixelFilters.srgbToLinear(color.x), g = PixelFilters.srgbToLinear(color.y), b = PixelFilters.srgbToLinear(color.z)
+        // To XYZ under D65, then Bradford to D50.
+        let x65 = 0.4124564 * r + 0.3575761 * g + 0.1804375 * b
+        let y65 = 0.2126729 * r + 0.7151522 * g + 0.0721750 * b
+        let z65 = 0.0193339 * r + 0.1191920 * g + 0.9503041 * b
+        let x = 1.0478112 * x65 + 0.0228866 * y65 - 0.0501270 * z65
+        let y = 0.0295424 * x65 + 0.9904844 * y65 - 0.0170491 * z65
+        let z = -0.0092345 * x65 + 0.0150436 * y65 + 0.7521316 * z65
+        func f(_ t: Double) -> Double { t > pow(6.0 / 29, 3) ? cbrt(t) : t / (3 * pow(6.0 / 29, 2)) + 4.0 / 29 }
+        let fx = f(x / 0.9642), fy = f(y), fz = f(z / 0.8249)
+        return SIMD3(116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz))
+    }
+
     /// CIE Lab under D50, as Photoshop keeps it, in sRGB.
     static func srgb(lab: [Double]) -> RGBAColor {
         let fy = (lab[0] + 16) / 116, fx = fy + lab[1] / 500, fz = fy - lab[2] / 200

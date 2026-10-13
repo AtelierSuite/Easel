@@ -363,4 +363,24 @@ struct ColorFilterTests {
         #expect(toned[2, 4, 0] > 10)
         #expect(toned[29, 4, 0] < 250)
     }
+
+    @Test func matchColorTakesOnTheSourcesColour() {
+        var pixels = PixelFilters.Pixels(width: 8, height: 8)
+        for index in 0..<64 {
+            let shade = UInt8(60 + index % 8 * 20)
+            pixels.bytes.replaceSubrange((index * 4)..<(index * 4 + 4), with: [shade, shade, shade, 255])
+        }
+        // A warm source with a spread of colour turns the greys warm.
+        var matched = pixels
+        LayerFilter.matchColor(&matched, source: (SIMD3(60, 20, 30), SIMD3(20, 5, 5)), (1, 1, 0, false))
+        #expect(matched[4, 4, 0] > matched[4, 4, 2] + 20)
+        // Faded all the way, nothing changes.
+        var faded = pixels
+        LayerFilter.matchColor(&faded, source: (SIMD3(60, 20, 30), SIMD3(20, 5, 5)), (1, 1, 1, false))
+        #expect(abs(Int(faded[4, 4, 0]) - Int(pixels[4, 4, 0])) <= 1)
+        // Sound round the colour space and back.
+        let lab = ColorConversions.lab(srgb: SIMD3(0.8, 0.3, 0.1))
+        let back = ColorConversions.srgb(lab: [lab.x, lab.y, lab.z])
+        #expect(abs(back.red - 0.8) < 0.002 && abs(back.green - 0.3) < 0.002 && abs(back.blue - 0.1) < 0.002)
+    }
 }

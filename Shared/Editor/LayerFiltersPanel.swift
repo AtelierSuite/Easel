@@ -1,3 +1,4 @@
+import CoreImage
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -294,6 +295,8 @@ struct FilterRow: View {
             customControls
         } else if filter.kind == .channelMixer {
             mixerControls
+        } else if filter.kind == .matchColor {
+            settingControls(from: 0, to: 4)
         } else if filter.kind == .variations {
             rangedControls(
                 ranges: ["Adjust.Shadows", "LayerFilters.Midtones", "Adjust.Highlights"],
@@ -312,6 +315,7 @@ struct FilterRow: View {
         }
         if filter.kind == .shear { shearControls }
         if filter.kind == .displace { mapControls }
+        if filter.kind == .matchColor { sourceControls }
         if filter.kind.hasColor, filter.kind != .blackAndWhite || filter.value(6) >= 0.5 {
             ColorPicker(filter.kind.hasBackgroundColor ? "LayerFilters.Foreground" : "LayerFilters.Color", selection: Binding(
                 get: { (filter.color ?? filter.kind.defaultColor ?? .white).color },
@@ -385,6 +389,32 @@ struct FilterRow: View {
             )
         }
         settingControls(from: extra)
+    }
+
+    /// Match Color's source: another layer whose colours it takes on.
+    private var sourceControls: some View {
+        let others = state.composition.layers.filter { $0.id != state.activeLayer?.id && !$0.isAdjustment }
+        return Menu {
+            Button("LayerFilters.NoSource") {
+                state.updateFilter(filter.id) { $0.setValue(0, at: 10) }
+            }
+            ForEach(others.reversed()) { layer in
+                Button(layer.name) {
+                    guard let pixels = PixelFilters.pixels(of: CIImage(cgImage: layer.renderedImage)) else { return }
+                    let statistics = LayerFilter.labStatistics(pixels)
+                    state.updateFilter(filter.id) { filter in
+                        for (index, value) in ([statistics.mean.x, statistics.mean.y, statistics.mean.z, statistics.spread.x,
+                                                statistics.spread.y, statistics.spread.z, 1] as [Double]).enumerated() {
+                            filter.setValue(value, at: 4 + index)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(filter.value(10) >= 0.5 ? "LayerFilters.SourceChosen" : "LayerFilters.ChooseSource", systemImage: "square.2.layers.3d")
+                .font(.subheadline)
+        }
+        .accessibilityIdentifier("matchColorSource")
     }
 
     /// Displace's map: which file it is, and a way to choose another.
@@ -470,11 +500,11 @@ struct FilterRow: View {
 
     private var settingControls: some View { settingControls(from: 0) }
 
-    /// Controls for the settings from `first` on.
+    /// Controls for the settings from `first` on, up to `end` if given.
     @ViewBuilder
-    private func settingControls(from first: Int) -> some View {
+    private func settingControls(from first: Int, to end: Int? = nil) -> some View {
         let parameters = filter.kind.parameters
-        ForEach(Array(parameters.indices.dropFirst(first)), id: \.self) { index in
+        ForEach(Array(parameters.indices[first..<min(end ?? parameters.count, parameters.count)]), id: \.self) { index in
             let parameter = parameters[index]
             let value = Binding(
                 get: { filter.value(index) },
