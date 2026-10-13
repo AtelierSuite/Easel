@@ -38,19 +38,48 @@ enum DocumentConversion {
             error: &coordinationError
         ) { source, target in
             do {
-                try FileManager.default.moveItem(at: source, to: target)
-                coordinator.item(at: source, didMoveTo: target)
-                // After the move, so the document reading it back already
-                // knows it by its new type. A package is a folder, so the
-                // picture moved there is replaced outright.
-                try FileManager.default.removeItem(at: target)
-                try wrapper.write(to: target, options: .atomic, originalContentsURL: nil)
+                try replace(source, at: target, with: wrapper, coordinator: coordinator)
             } catch {
                 failure = error
             }
         }
         if let error = coordinationError ?? failure { throw error }
         return destination
+    }
+
+    /// Moves the picture at `source` to `target` and puts the package in its
+    /// place. The package is written aside first, and the picture is only
+    /// removed once the package is where it was; until then a failure puts
+    /// the picture back as it was.
+    private static func replace(
+        _ source: URL, at target: URL, with wrapper: FileWrapper, coordinator: NSFileCoordinator
+    ) throws {
+        let manager = FileManager.default
+        let staging = try manager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: target, create: true)
+        defer { try? manager.removeItem(at: staging) }
+        let package = staging.appending(path: target.lastPathComponent)
+        try wrapper.write(to: package, options: .atomic, originalContentsURL: nil)
+
+        try manager.moveItem(at: source, to: target)
+        coordinator.item(at: source, didMoveTo: target)
+        // After the move, so the document reading it back already knows it
+        // by its new type. A package is a folder, so the picture moved there
+        // is set aside and the package moved in.
+        let picture = staging.appending(path: "Original-\(source.lastPathComponent)")
+        do {
+            try manager.moveItem(at: target, to: picture)
+            do {
+                try manager.moveItem(at: package, to: target)
+            } catch {
+                try? manager.moveItem(at: picture, to: target)
+                throw error
+            }
+        } catch {
+            if (try? manager.moveItem(at: target, to: source)) != nil {
+                coordinator.item(at: target, didMoveTo: source)
+            }
+            throw error
+        }
     }
 
     /// Points the open document at a copy already saved elsewhere, as though

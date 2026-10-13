@@ -19,6 +19,10 @@ struct DocumentConversionTests {
         #expect(easel.lastPathComponent == "Photo.easel")
         #expect(FileManager.default.fileExists(atPath: easel.path))
         #expect(!FileManager.default.fileExists(atPath: picture.path))
+        // The package took the picture's place, and nothing else was left.
+        var isFolder: ObjCBool = false
+        #expect(FileManager.default.fileExists(atPath: easel.path, isDirectory: &isFolder) && isFolder.boolValue)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["Photo.easel"])
     }
 
     /// Photoshop and Pixelmator Pro files are saved as an Easel copy
