@@ -58,6 +58,39 @@ extension LayerFilter.Kind {
                 FilterParameter(labelKey: "LayerFilters.Density", range: 1...100, defaultValue: 25, style: .signedPercent),
                 FilterParameter(labelKey: "LayerFilters.PreserveLuminosity", range: 0...1, defaultValue: 1, style: .toggle),
             ]
+        case .boxBlur, .median:
+            return [FilterParameter(labelKey: "LayerFilters.Radius", range: 0.1...100, defaultValue: 4, style: .length)]
+        case .minimum, .maximum:
+            return [FilterParameter(labelKey: "LayerFilters.Radius", range: 0.1...50, defaultValue: 1, style: .length)]
+        case .surfaceBlur:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Radius", range: 0.1...50, defaultValue: 5, style: .length),
+                FilterParameter(labelKey: "LayerFilters.Threshold", range: 2...255, defaultValue: 15, style: .integer),
+            ]
+        case .smartBlur:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Radius", range: 0.1...50, defaultValue: 3, style: .length),
+                FilterParameter(labelKey: "LayerFilters.Threshold", range: 0.1...100, defaultValue: 25, style: .decimal),
+            ]
+        case .dustAndScratches:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Radius", range: 0.1...50, defaultValue: 1, style: .length),
+                FilterParameter(labelKey: "LayerFilters.Threshold", range: 0...255, defaultValue: 0, style: .integer),
+            ]
+        case .reduceNoise:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Strength", range: 0...10, defaultValue: 6, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.PreserveDetails", range: 0...100, defaultValue: 60, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.ReduceColorNoise", range: 0...100, defaultValue: 45, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.SharpenDetails", range: 0...100, defaultValue: 25, style: .signedPercent),
+            ]
+        case .addNoise:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Amount", range: 0.1...400, defaultValue: 12.5, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.Distribution", range: 0...1, defaultValue: 1,
+                                style: .choice(["LayerFilters.Uniform", "LayerFilters.Gaussian"])),
+                FilterParameter(labelKey: "LayerFilters.Monochromatic", range: 0...1, defaultValue: 0, style: .toggle),
+            ]
         default:
             return []
         }

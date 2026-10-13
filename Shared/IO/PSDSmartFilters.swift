@@ -126,6 +126,52 @@ enum PSDSmartFilters {
             return make(.colorBalance) { $0.balance = midtones.map { min(max($0 / 100, -1), 1) } }
         case "GrMp", "GdMp":
             return gradientMap(settings)
+        case "boxblur":
+            guard let radius = number("Rds ") else { return nil }
+            return make(.boxBlur) { $0.setValue(radius / unit, at: 0) }
+        case "Blr ": return LayerFilter(kind: .blur)
+        case "BlrM": return LayerFilter(kind: .blurMore)
+        case "Avrg": return LayerFilter(kind: .average)
+        case "Shrp": return LayerFilter(kind: .sharpen)
+        case "ShrM": return LayerFilter(kind: .sharpenMore)
+        case "ShrE": return LayerFilter(kind: .sharpenEdges)
+        case "surfaceBlur":
+            guard let radius = number("Rds ") else { return nil }
+            return make(.surfaceBlur) { $0.values = [radius / unit, number("Thsh") ?? 15] }
+        case "SmrB":
+            // Only its normal mode; the others draw edges alone.
+            guard settings["SmBM"]?.enumValue ?? "SBMN" == "SBMN", let radius = number("Rds ") else { return nil }
+            return make(.smartBlur) { $0.values = [radius / unit, number("Thsh") ?? 25] }
+        case "Mdn ":
+            guard let radius = number("Rds ") else { return nil }
+            return make(.median) { $0.setValue(radius / unit, at: 0) }
+        case "Mnm ", "Mxm ":
+            guard let radius = number("Rds ") else { return nil }
+            return make(settings.classID == "Mnm " ? .minimum : .maximum) { $0.setValue(radius / unit, at: 0) }
+        case "DstS":
+            guard let radius = number("Rds ") else { return nil }
+            return make(.dustAndScratches) { $0.values = [radius / unit, number("Thsh") ?? 0] }
+        case "AdNs":
+            guard let amount = number("Nose") else { return nil }
+            return make(.addNoise) {
+                $0.values = [amount, settings["Dstr"]?.enumValue == "Unfr" ? 0 : 1, settings["Mnch"]?.bool == true ? 1 : 0]
+            }
+        // Photoshop's own noise reduction and smart sharpening Easel draws
+        // only near enough; their settings go back to Photoshop as they were.
+        case "denoise":
+            let channel = settings["channelDenoise"]?.list?.first?.descriptor
+            return make(.reduceNoise) {
+                $0.values = [channel?["Amnt"]?.number ?? 6, channel?["EdgF"]?.number ?? 60, number("ClNs") ?? 45, number("Shrp") ?? 25]
+            }
+        case "Dspc":
+            return LayerFilter(kind: .despeckle)
+        case "smartSharpen":
+            guard let amount = number("Amnt"), let radius = number("Rds ") else { return nil }
+            return make(.unsharpMask) {
+                // Fitted to Photoshop's sample: its sharpening is gentler.
+                $0.amount = amount / 800
+                $0.radius = radius / (10 * unit)
+            }
         case "Invr":
             return LayerFilter(kind: .invert)
         case "Slrz":
@@ -304,6 +350,10 @@ enum PSDSmartFilters {
             let id = classID.utf8.reduce(Int64(0)) { $0 << 8 | Int64($1) }
             return (name, Int32(truncatingIfNeeded: id), PSDDescriptor(classID: classID, items: items))
         }
+        /// Filters Photoshop numbers rather than names in four letters.
+        func numbered(_ name: String, _ id: Int32, _ classID: String, _ items: [(key: String, value: PSDDescriptor.Value)]) -> (String, Int32, PSDDescriptor) {
+            (name, id, PSDDescriptor(classID: classID, items: items))
+        }
         switch filter.kind {
         case .gaussianBlur:
             return entry("Gaussian Blur...", "GsnB", [("Rds ", .unit("#Pxl", filter.amount * 50 * unit))])
@@ -338,6 +388,48 @@ enum PSDSmartFilters {
             ])
         case .mosaic:
             return entry("Mosaic...", "Msc ", [("ClSz", .unit("#Pxl", max(2, filter.amount * 60 * unit)))])
+        case .boxBlur:
+            return numbered("Box Blur...", 697, "boxblur", [("Rds ", .unit("#Pxl", filter.value(0) * unit))])
+        case .blur: return entry("Blur", "Blr ", noSettings)
+        case .blurMore: return entry("Blur More", "BlrM", noSettings)
+        case .average: return entry("Average", "Avrg", noSettings)
+        case .sharpen: return entry("Sharpen", "Shrp", noSettings)
+        case .sharpenMore: return entry("Sharpen More", "ShrM", noSettings)
+        case .sharpenEdges: return entry("Sharpen Edges", "ShrE", noSettings)
+        case .surfaceBlur:
+            return numbered("Surface Blur...", 701, "surfaceBlur", [
+                ("Rds ", .unit("#Pxl", filter.value(0) * unit)), ("Thsh", .integer(Int32(filter.value(1).rounded()))),
+            ])
+        case .smartBlur:
+            return entry("Smart Blur...", "SmrB", [
+                ("Rds ", .double(filter.value(0) * unit)), ("Thsh", .double(filter.value(1))),
+                ("SmBQ", .enumerated(type: "SmBQ", value: "SBQH")), ("SmBM", .enumerated(type: "SmBM", value: "SBMN")),
+            ])
+        case .median:
+            return entry("Median...", "Mdn ", [("Rds ", .unit("#Pxl", filter.value(0) * unit))])
+        case .minimum, .maximum:
+            let isMinimum = filter.kind == .minimum
+            return entry(isMinimum ? "Minimum..." : "Maximum...", isMinimum ? "Mnm " : "Mxm ", [("Rds ", .unit("#Pxl", filter.value(0) * unit))])
+        case .dustAndScratches:
+            return entry("Dust & Scratches...", "DstS", [
+                ("Rds ", .integer(Int32(max(1, (filter.value(0) * unit).rounded())))), ("Thsh", .integer(Int32(filter.value(1).rounded()))),
+            ])
+        case .addNoise:
+            return entry("Add Noise...", "AdNs", [
+                ("Dstr", .enumerated(type: "Dstr", value: filter.value(1) >= 0.5 ? "Gsn " : "Unfr")),
+                ("Nose", .unit("#Prc", filter.value(0))), ("Mnch", .bool(filter.value(2) >= 0.5)), ("FlRs", .integer(1)),
+            ])
+        case .reduceNoise:
+            let channel = PSDDescriptor(classID: "channelDenoiseParams", items: [
+                ("Chnl", .enumReference(classID: "Chnl", type: "Chnl", value: "Cmps")),
+                ("Amnt", .integer(Int32(filter.value(0).rounded()))), ("EdgF", .integer(Int32(filter.value(1).rounded()))),
+            ])
+            return numbered("Reduce Noise...", 633, "denoise", [
+                ("ClNs", .unit("#Prc", filter.value(2))), ("Shrp", .unit("#Prc", filter.value(3))),
+                ("removeJPEGArtifact", .bool(false)), ("channelDenoise", .list([.descriptor(channel)])), ("preset", .text("Default")),
+            ])
+        case .despeckle:
+            return entry("Despeckle", "Dspc", noSettings)
         case .invert:
             return entry("Invert", "Invr", noSettings)
         case .solarize:

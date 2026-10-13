@@ -28,6 +28,9 @@ extension LayerFilter {
         case .blackAndWhite where values != nil,
              .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize:
             output = applyAdjustment(to: input)
+        case .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
+             .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle:
+            output = applyNeighbourhood(to: input)
         case .blackAndWhite:
             let filter = CIFilter.colorControls()
             filter.inputImage = input

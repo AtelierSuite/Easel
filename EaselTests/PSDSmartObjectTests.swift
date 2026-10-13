@@ -222,9 +222,28 @@ struct PSDSmartObjectTests {
         #expect(read.layers.first?.filterMask?.image.size == CGSize(width: 20, height: 20))
     }
 
+    @Test(arguments: [
+        "boxBlur", "blur", "blurMore", "average", "surfaceBlur", "smartBlur", "sharpen", "sharpenMore", "sharpenEdges",
+        "median", "minimum", "maximum", "dustAndScratches", "addNoise", "reduceNoise", "despeckle",
+    ])
+    func photoshopsFiltersComeBack(_ kind: String) throws {
+        var filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)
+        // Photoshop keeps this radius in whole pixels: two, on a layer
+        // forty across.
+        if filter.kind == .dustAndScratches { filter.values = [50, 4] }
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30), scaleX: 2, scaleY: 2))
+        layer.filters = [filter]
+        let read = try #require(try roundTrip([layer]).layers.first)
+        #expect(read.isSmartObject)
+        #expect(read.filters.map(\.kind) == [filter.kind])
+        for index in filter.kind.parameters.indices {
+            #expect(abs(read.filters[0].value(index) - filter.value(index)) < 0.6)
+        }
+    }
+
     @Test func aFilterLeftAloneGoesBackAsPhotoshopHadIt() throws {
         var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
-        layer.filters = [LayerFilter(kind: .gaussianBlur)]
+        layer.filters = [LayerFilter(kind: .reduceNoise)]
         let first = try #require(try roundTrip([layer]).layers.first)
         let record = try #require(first.filters.first?.photoshopFilter)
         let second = try #require(try roundTrip([first]).layers.first)

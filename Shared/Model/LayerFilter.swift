@@ -42,6 +42,29 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case photoFilter
         /// Light shades turned dark, as film exposed to light while developing.
         case solarize
+        /// Each pixel the plain average of a square round it.
+        case boxBlur
+        /// A light blur, and a stronger one.
+        case blur, blurMore
+        /// The whole layer the average of its colours.
+        case average
+        /// Blurred within areas of like colour, edges kept.
+        case surfaceBlur, smartBlur
+        /// Sharpened a little, more, or only along edges.
+        case sharpen, sharpenMore, sharpenEdges
+        /// Each pixel the middle of those round it, which removes specks.
+        case median
+        /// Dark or light areas spread by the darkest or lightest round them.
+        case minimum, maximum
+        /// Specks unlike those round them replaced by their median.
+        case dustAndScratches
+        /// Grain, as of film.
+        case addNoise
+        /// Photoshop's noise reduction: colour noise smoothed away and
+        /// detail sharpened back.
+        case reduceNoise
+        /// Specks smoothed away where there are no edges.
+        case despeckle
 
         var id: String { rawValue }
 
@@ -51,14 +74,17 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             [.blackAndWhite, .sepia, .saturation, .brightness, .contrast],
             [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor],
             [.exposure, .vibrance, .photoFilter, .invert, .posterize, .threshold, .solarize],
-            [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic],
-            [.unsharpMask, .highPass, .lensCorrection],
+            [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur, .blur, .blurMore, .average, .mosaic],
+            [.noiseReduction, .reduceNoise, .despeckle, .addNoise, .median, .dustAndScratches, .minimum, .maximum],
+            [.unsharpMask, .sharpen, .sharpenMore, .sharpenEdges, .highPass, .lensCorrection],
             [.twirl, .pinch, .emboss, .halftone],
         ]
 
         var label: String {
             switch self {
-            case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize:
+            case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize,
+                 .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
+                 .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -96,6 +122,22 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .vibrance: return "rainbow"
             case .photoFilter: return "camera.filters"
             case .solarize: return "sun.horizon"
+            case .boxBlur: return "square.dashed"
+            case .blur: return "drop"
+            case .blurMore: return "drop.fill"
+            case .average: return "equal.square"
+            case .surfaceBlur: return "circle.dotted"
+            case .smartBlur: return "circle.dotted.circle"
+            case .sharpen: return "rhombus"
+            case .sharpenMore: return "rhombus.fill"
+            case .sharpenEdges: return "square.on.square.dashed"
+            case .median: return "line.3.horizontal.decrease"
+            case .minimum: return "arrow.down.right.and.arrow.up.left"
+            case .maximum: return "arrow.up.left.and.arrow.down.right"
+            case .dustAndScratches: return "sparkles"
+            case .addNoise: return "aqi.high"
+            case .reduceNoise: return "wand.and.rays"
+            case .despeckle: return "wand.and.rays.inverse"
             case .blackAndWhite: return "circle.righthalf.filled"
             case .sepia: return "sun.dust"
             case .saturation: return "drop.halffull"
@@ -148,7 +190,9 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .pinch: return 0.4
             case .emboss: return 0.6
             case .halftone: return 0.3
-            case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize: return 1
+            case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize,
+                 .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
+                 .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle: return 1
             }
         }
 
@@ -160,13 +204,18 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// it is given shades as they look to mix.
         var mixesShades: Bool {
             [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic, .unsharpMask,
-             .twirl, .pinch, .halftone, .lensCorrection].contains(self)
+             .twirl, .pinch, .halftone, .lensCorrection, .blur, .blurMore, .sharpen, .sharpenMore].contains(self)
+        }
+
+        /// Filters that are simply on or off.
+        var hasNoSettings: Bool {
+            [.invert, .solarize, .blur, .blurMore, .average, .sharpen, .sharpenMore, .sharpenEdges, .despeckle].contains(self)
         }
 
         var hasAngle: Bool { [.motionBlur, .emboss, .halftone].contains(self) }
         /// Filters set with their own controls rather than one amount.
         var hasAmount: Bool {
-            ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor].contains(self)
+            ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor].contains(self) && !hasNoSettings
                 && (parameters.isEmpty || self == .blackAndWhite)
         }
         var hasCenter: Bool { [.zoomBlur, .twirl, .pinch].contains(self) }
