@@ -359,6 +359,7 @@ struct Composition: Equatable, Sendable {
             var flat = layer.aligned(in: oldSize)
             flat.image = LayerImage(flattened(flat.image.cgImage))
             if let mask = flat.mask { flat.mask?.image = LayerImage(flattened(mask.image.cgImage)) }
+            if let mask = flat.filterMask { flat.filterMask?.image = LayerImage(flattened(mask.image.cgImage)) }
             flat.transform = LayerTransform(position: CGPoint(x: newSize.width / 2, y: newSize.height / 2))
             return flat
         }
@@ -463,21 +464,24 @@ extension Layer {
         // Moved off its own pixels, it can no longer be drawn from its contents.
         result.smartObject = nil
         result.transform = LayerTransform(position: CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2))
-        if let mask {
-            // Off the layer's old edges the mask shows everything, so paint
-            // added there later is seen.
-            let transform = affineTransform
-            let size = image.size
-            let image = Bitmap.render(size: canvasSize) { context in
-                context.setFillColor(RGBAColor.white.cgColor)
-                context.fill(CGRect(origin: .zero, size: canvasSize))
-                context.concatenate(transform)
-                context.clear(CGRect(origin: .zero, size: size))
-                Bitmap.draw(mask.image.cgImage, in: CGRect(origin: .zero, size: size), context: context)
-            }
-            result.mask?.image = LayerImage(image)
-        }
+        if let mask { result.mask?.image = LayerImage(onCanvas(mask, canvasSize: canvasSize)) }
+        if let filterMask { result.filterMask?.image = LayerImage(onCanvas(filterMask, canvasSize: canvasSize)) }
         return result
+    }
+
+    /// One of the layer's masks drawn where it lies on the canvas. Off the
+    /// layer's old edges it shows everything, so paint added there later
+    /// is seen.
+    private func onCanvas(_ mask: LayerMask, canvasSize: CGSize) -> CGImage {
+        let transform = affineTransform
+        let size = image.size
+        return Bitmap.render(size: canvasSize) { context in
+            context.setFillColor(RGBAColor.white.cgColor)
+            context.fill(CGRect(origin: .zero, size: canvasSize))
+            context.concatenate(transform)
+            context.clear(CGRect(origin: .zero, size: size))
+            Bitmap.draw(mask.image.cgImage, in: CGRect(origin: .zero, size: size), context: context)
+        }
     }
 
     /// The layer as it shows, filters and all, drawn into plain pixels that
@@ -487,6 +491,7 @@ extension Layer {
             var result = self
             result.smartObject = nil
             result.filters = []
+            result.filterMask = nil
             result.effects = []
             result.mask = nil
             return result
@@ -502,6 +507,7 @@ extension Layer {
         result.vector = nil
         result.smartObject = nil
         result.filters = []
+        result.filterMask = nil
         result.effects = []
         result.mask = nil
         result.transform = LayerTransform(position: CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2))

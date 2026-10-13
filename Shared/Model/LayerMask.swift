@@ -73,7 +73,28 @@ struct LayerMask: Equatable, Sendable {
     }
 }
 
+extension LayerMask {
+    /// `filtered` where the mask shows and `original` where it hides.
+    func blend(_ filtered: CIImage, over original: CIImage) -> CIImage {
+        let mask = CIImage(cgImage: image.cgImage)
+        let scaled = mask.transformed(by: CGAffineTransform(
+            scaleX: original.extent.width / mask.extent.width, y: original.extent.height / mask.extent.height
+        ))
+        let filter = CIFilter.blendWithAlphaMask()
+        filter.inputImage = filtered
+        filter.backgroundImage = original
+        filter.maskImage = scaled
+        return filter.outputImage?.cropped(to: original.extent) ?? filtered
+    }
+}
+
 extension Layer {
+    /// The filter mask, if it is in use.
+    var activeFilterMask: LayerMask? {
+        guard let filterMask, filterMask.isEnabled, hasActiveFilters else { return nil }
+        return filterMask
+    }
+
     /// The mask, if it is in use.
     var activeMask: LayerMask? {
         guard let mask, mask.isEnabled else { return nil }

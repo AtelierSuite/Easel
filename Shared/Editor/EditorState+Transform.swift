@@ -166,13 +166,15 @@ extension EditorState {
         enqueue({ () -> TransformedPixels? in
             let image = MeshWarp.render(layer.image.cgImage, shape: shape, size: size)
             let mask = layer.mask.map { MeshWarp.renderMask($0.image.cgImage, shape: shape, size: size) }
-            return TransformedPixels(image: image, mask: mask)
+            let filterMask = layer.filterMask.map { MeshWarp.renderMask($0.image.cgImage, shape: shape, size: size) }
+            return TransformedPixels(image: image, mask: mask, filterMask: filterMask)
         }, apply: { [weak self] result in
             guard let self else { return }
             update { composition in
                 guard var current = composition[draft.layerID] else { return }
                 current.image = LayerImage(result.image)
                 if let mask = result.mask { current.mask?.image = LayerImage(mask) }
+                if let mask = result.filterMask { current.filterMask?.image = LayerImage(mask) }
                 current.text = nil
                 current.vector = nil
                 current.transform = LayerTransform(position: CGPoint(x: size.width / 2, y: size.height / 2))
@@ -191,19 +193,17 @@ extension EditorState {
         enqueue({ () -> Layer? in
             var bent = layer
             bent.setSmartObjectWarp(shape)
-            if let mask = layer.mask {
-                let bounds = shape.bounds
-                let image: CGImage
-                if layer.smartObject?.warp == nil {
-                    // Painted on the contents as they were, it bends with them.
-                    let local = shape.handles.map { CGPoint(x: $0.x - bounds.minX, y: $0.y - bounds.minY) }
-                    image = MeshWarp.renderMask(mask.image.cgImage, shape: local.count == 16 ? .warp(local) : .perspective(local), size: bounds.size)
-                } else {
-                    // Painted on the bent layer, it stays where it was.
-                    image = Self.mask(mask.image.cgImage, of: layer, in: bounds)
-                }
-                bent.mask?.image = LayerImage(image)
+            let bounds = shape.bounds
+            /// One of the layer's masks, bent with the contents if it was
+            /// painted on them as they were; painted on the bent layer, it
+            /// stays where it was.
+            func bend(_ mask: LayerMask) -> CGImage {
+                guard layer.smartObject?.warp == nil else { return Self.mask(mask.image.cgImage, of: layer, in: bounds) }
+                let local = shape.handles.map { CGPoint(x: $0.x - bounds.minX, y: $0.y - bounds.minY) }
+                return MeshWarp.renderMask(mask.image.cgImage, shape: local.count == 16 ? .warp(local) : .perspective(local), size: bounds.size)
             }
+            if let mask = layer.mask { bent.mask?.image = LayerImage(bend(mask)) }
+            if let mask = layer.filterMask { bent.filterMask?.image = LayerImage(bend(mask)) }
             return bent
         }, apply: { [weak self] bent in
             guard let self else { return }
@@ -245,4 +245,5 @@ struct TransformedPixels: @unchecked Sendable {
     // Unchecked: `CGImage` is immutable once made.
     var image: CGImage
     var mask: CGImage?
+    var filterMask: CGImage?
 }

@@ -360,12 +360,15 @@ final class FilterCache: Sendable {
         /// The mask's pixels, when the result is masked. The canvas masks
         /// layers itself, so what it shows leaves this out.
         var maskID: UUID?
+        /// The filter mask's pixels, if the filters show only through it.
+        var filterMaskID: UUID?
 
         init(layer: Layer, maxPixelSize: Int?, includesMask: Bool = false) {
             imageID = layer.image.id
             filters = layer.activeFilters
             self.maxPixelSize = maxPixelSize
             maskID = includesMask ? layer.activeMask?.image.id : nil
+            filterMaskID = layer.activeFilterMask?.image.id
         }
     }
 
@@ -383,12 +386,14 @@ final class FilterCache: Sendable {
         }
     }
 
-    func image(for key: Key, source: LayerImage, mask: LayerMask? = nil) -> CGImage {
+    func image(for key: Key, source: LayerImage, mask: LayerMask? = nil, filterMask: LayerMask? = nil) -> CGImage {
         if let cached = cached(key) { return cached }
         let input = key.maxPixelSize.map { source.preview(maxPixelSize: $0) } ?? source.cgImage
         let applyMask = key.maskID != nil ? mask : nil
+        let applyFilterMask = key.filterMaskID != nil ? filterMask : nil
         let image = ImageProcessing.apply({ image in
-            let filtered = LayerFilter.apply(key.filters, to: image)
+            var filtered = LayerFilter.apply(key.filters, to: image)
+            if let applyFilterMask { filtered = applyFilterMask.blend(filtered, over: image) }
             return applyMask?.apply(to: filtered) ?? filtered
         }, to: input)
         entries.withLock { entries in

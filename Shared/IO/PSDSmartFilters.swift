@@ -167,7 +167,7 @@ enum PSDSmartFilters {
 
     /// The filters as a `filterFX` item, or nil if any is one Photoshop has
     /// nothing like.
-    static func style(for filters: [LayerFilter], placement: Placement) -> PSDDescriptor? {
+    static func style(for filters: [LayerFilter], placement: Placement, maskEnabled: Bool = false) -> PSDDescriptor? {
         guard !filters.isEmpty else { return nil }
         var list: [PSDDescriptor.Value] = []
         for filter in filters {
@@ -184,7 +184,7 @@ enum PSDSmartFilters {
         }
         return PSDDescriptor(classID: "filterFXStyle", items: [
             ("enab", .bool(true)), ("validAtPosition", .bool(true)),
-            ("filterMaskEnable", .bool(false)), ("filterMaskLinked", .bool(false)), ("filterMaskExtendWithWhite", .bool(true)),
+            ("filterMaskEnable", .bool(maskEnabled)), ("filterMaskLinked", .bool(false)), ("filterMaskExtendWithWhite", .bool(true)),
             ("filterFXList", .list(list)),
         ])
     }

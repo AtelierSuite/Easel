@@ -629,8 +629,10 @@ extension EditorState {
             // Filters stay filters: only the mask is painted in.
             var masked = layer
             masked.filters = []
+            masked.filterMask = nil
             var result = masked.rasterized(in: size)
             result.filters = layer.filters
+            result.filterMask = layer.filterMask
             composition[layer.id] = result
         }
         isEditingMask = false
@@ -664,6 +666,31 @@ extension EditorState {
             }
         }
         updateActiveLayer { $0.mask?.image = LayerImage(image) }
+    }
+}
+
+// MARK: - Filter masks
+
+extension EditorState {
+    /// Gives the active layer a filter mask showing its filters everywhere;
+    /// painting goes into it next.
+    func addFilterMask() {
+        guard let layer = activeLayer, layer.filterMask == nil else { return }
+        updateActiveLayer { $0.filterMask = .revealingAll(size: layer.image.size) }
+        isEditingFilterMask = true
+    }
+
+    func deleteFilterMask() {
+        updateActiveLayer { $0.filterMask = nil }
+        isEditingFilterMask = false
+    }
+
+    func setFilterMaskEnabled(_ isEnabled: Bool) {
+        updateActiveLayer { $0.filterMask?.isEnabled = isEnabled }
+    }
+
+    func invertFilterMask() {
+        updateActiveLayer { $0.filterMask = $0.filterMask?.inverted() }
     }
 }
 

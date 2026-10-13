@@ -725,6 +725,13 @@ S = {
 "LinkedFile.Choose": ("Choose…", "選択…", "선택…", "选择…", "選擇…"),
 "LinkedFile.Dismiss": ("Dismiss", "閉じる", "닫기", "关闭", "關閉"),
 "Error.LinkedFileUnreadable": ("That file can’t be used for this smart object.", "このファイルはこのスマートオブジェクトに使用できません。", "이 파일은 이 고급 개체에 사용할 수 없습니다.", "此文件无法用于此智能对象。", "此檔案無法用於此智慧型物件。"),
+"FilterMask.Add": ("Add Filter Mask", "フィルターマスクを追加", "필터 마스크 추가", "添加滤镜蒙版", "加入濾鏡遮色片"),
+"FilterMask.Paint": ("Paint", "ペイント", "칠하기", "绘制", "繪製"),
+"FilterMask.Delete": ("Delete Filter Mask", "フィルターマスクを削除", "필터 마스크 삭제", "删除滤镜蒙版", "刪除濾鏡遮色片"),
+"FilterMask.Enable": ("Turn On Filter Mask", "フィルターマスクをオン", "필터 마스크 켜기", "打开滤镜蒙版", "開啟濾鏡遮色片"),
+"FilterMask.Disable": ("Turn Off Filter Mask", "フィルターマスクをオフ", "필터 마스크 끄기", "关闭滤镜蒙版", "關閉濾鏡遮色片"),
+"FilterMask.Editing": ("Painting Filter Mask", "フィルターマスクをペイント中", "필터 마스크 칠하는 중", "正在绘制滤镜蒙版", "正在繪製濾鏡遮色片"),
+"FilterMask.Footer": ("The filters show only where the filter mask is white. Paint it with the brush to hide them, and with the eraser to bring them back.", "フィルターはフィルターマスクが白い部分にだけ適用されます。ブラシでペイントすると隠れ、消しゴムで戻ります。", "필터는 필터 마스크가 흰색인 곳에만 적용됩니다. 브러시로 칠하면 가려지고 지우개로 되돌릴 수 있습니다.", "滤镜只在滤镜蒙版为白色的地方显示。用画笔绘制可将其隐藏，用橡皮擦可恢复。", "濾鏡只在濾鏡遮色片為白色的地方顯示。用筆刷繪製可將其隱藏，用橡皮擦可恢復。"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

@@ -32,6 +32,13 @@ struct LayerFiltersPanel: View {
             } footer: {
                 if !layer.filters.isEmpty { Text("LayerFilters.Footer") }
             }
+            if !layer.filters.isEmpty {
+                Section {
+                    FilterMaskRow(layer: layer, state: state)
+                } footer: {
+                    Text("FilterMask.Footer")
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
@@ -68,7 +75,11 @@ struct LayerFiltersPanel: View {
                         }
                         .disabled(!layer.hasActiveFilters || layer.isLocked)
                         Button("LayerFilters.RemoveAll", systemImage: "trash", role: .destructive) {
-                            state.updateActiveLayer { $0.filters = [] }
+                            state.updateActiveLayer { layer in
+                                layer.filters = []
+                                layer.filterMask = nil
+                            }
+                            state.isEditingFilterMask = false
                         }
                     }
                     .accessibilityIdentifier("filtersMore")
@@ -76,6 +87,59 @@ struct LayerFiltersPanel: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)
+        }
+    }
+}
+
+/// Where the filters show: a mask painted like a layer's, hiding them
+/// where it is dark.
+private struct FilterMaskRow: View {
+    let layer: Layer
+    @Bindable var state: EditorState
+
+    var body: some View {
+        if let mask = layer.filterMask {
+            HStack(spacing: 12) {
+                Image(decorative: mask.preview(maxPixelSize: 96), scale: 1)
+                    .resizable()
+                    .interpolation(.medium)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 40, height: 40)
+                    .clipShape(.rect(cornerRadius: 6))
+                    .opacity(mask.isEnabled ? 1 : 0.4)
+                Toggle("FilterMask.Paint", systemImage: "paintbrush.pointed", isOn: $state.isEditingFilterMask)
+                    .toggleStyle(.button)
+                    .accessibilityIdentifier("paintFilterMask")
+                Spacer()
+                Menu {
+                    Button("Mask.Invert", systemImage: "circle.lefthalf.filled.inverse") { state.invertFilterMask() }
+                    Button("FilterMask.Delete", systemImage: "trash", role: .destructive) { state.deleteFilterMask() }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Layers.More")
+                .accessibilityIdentifier("filterMaskMenu")
+                Button {
+                    state.setFilterMaskEnabled(!mask.isEnabled)
+                } label: {
+                    Image(systemName: mask.isEnabled ? "eye" : "eye.slash")
+                        .foregroundStyle(mask.isEnabled ? Color.primary : Color.secondary)
+                        .frame(width: 36, height: 32)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel(mask.isEnabled ? "FilterMask.Disable" : "FilterMask.Enable")
+                .accessibilityIdentifier("filterMaskEnabled")
+            }
+        } else {
+            Button("FilterMask.Add", systemImage: "circle.lefthalf.filled") { state.addFilterMask() }
+                .disabled(layer.isLocked)
+                .accessibilityIdentifier("addFilterMask")
         }
     }
 }

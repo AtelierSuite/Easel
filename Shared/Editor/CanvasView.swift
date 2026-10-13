@@ -288,11 +288,24 @@ struct CanvasView: View {
     }
 
     private func strokes(on layerID: Layer.ID, mask: Bool) -> [Stroke] {
-        var strokes = state.pendingStrokes.filter { $0.layerID == layerID && $0.isMask == mask }.map(\.stroke)
-        if let active = state.activeStroke, state.activeLayerID == layerID, state.editsMask == mask {
+        var strokes = state.pendingStrokes.filter { $0.layerID == layerID && $0.isMask == mask && !$0.isFilterMask }.map(\.stroke)
+        if let active = state.activeStroke, state.activeLayerID == layerID, !state.editsFilterMask, state.editsMask == mask {
             strokes.append(contentsOf: state.mirrored(active))
         }
-        return strokes
+        guard !mask else { return strokes }
+        // Strokes into the filter mask show as a tint over the layer until
+        // the filters are worked out again.
+        var onFilterMask = state.pendingStrokes.filter { $0.layerID == layerID && $0.isFilterMask }.map(\.stroke)
+        if let active = state.activeStroke, state.activeLayerID == layerID, state.editsFilterMask {
+            onFilterMask.append(contentsOf: state.mirrored(active))
+        }
+        return strokes + onFilterMask.map { stroke in
+            var tinted = stroke
+            tinted.kind = .paint
+            tinted.settings.color = stroke.kind == .erase ? RGBAColor(red: 1, green: 0.2, blue: 0.3) : RGBAColor(red: 0.2, green: 0.6, blue: 1)
+            tinted.settings.opacity = 0.4
+            return tinted
+        }
     }
 }
 

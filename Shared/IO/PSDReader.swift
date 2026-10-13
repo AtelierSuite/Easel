@@ -259,7 +259,8 @@ enum PSDReader {
                         (whole.left, whole.top, whole.right, whole.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
                         return makeMask(mask, plane: planes[-2], layer: whole)
                     }
-                    if PSDSmartObjects.place(&layer, placed, contents: contents) {
+                    let filterMask = placed.placedID.flatMap { shared.filterMasks[$0] }
+                    if PSDSmartObjects.place(&layer, placed, contents: contents, filterMask: filterMask) {
                         layer.mask = canvasMask.map { mask in
                             LayerMask(image: LayerImage(inLayerSpace(mask.image.cgImage, of: layer, outside: record.mask?.defaultColor ?? 255)),
                                       isEnabled: mask.isEnabled)
@@ -308,6 +309,8 @@ enum PSDReader {
         var files: [String: [UInt8]] = [:]
         /// The names of files smart objects link to and do not keep, by id.
         var links: [String: String] = [:]
+        /// Smart filters' masks, by the `placed` id of their smart object.
+        var filterMasks: [String: PSDFilterEffects.Mask] = [:]
         var tiles: [PSDPatterns.Tile] = []
     }
 
@@ -327,6 +330,8 @@ enum PSDReader {
                 let found = PSDSmartObjects.embeddedFiles(from: try reader.bytes(length))
                 blocks.files.merge(found.files) { first, _ in first }
                 blocks.links.merge(found.links) { first, _ in first }
+            } else if key == "FEid" || key == "FXid" {
+                blocks.filterMasks.merge(PSDFilterEffects.masks(from: try reader.bytes(length))) { first, _ in first }
             } else if ["Patt", "Pat2", "Pat3"].contains(key) {
                 blocks.tiles += PSDPatterns.tiles(from: try reader.bytes(length))
             }

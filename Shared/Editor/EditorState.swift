@@ -15,6 +15,7 @@ final class EditorState {
         didSet {
             if activeLayerID != oldValue {
                 isEditingMask = false
+                isEditingFilterMask = false
                 activeGroupID = nil
                 if tool == .transform { cancelTransform() }
             }
@@ -24,7 +25,14 @@ final class EditorState {
     var activeGroupID: UUID?
     /// Whether painting goes into the active layer's mask rather than its
     /// pixels: the brush hides, the eraser reveals.
-    var isEditingMask = false
+    var isEditingMask = false {
+        didSet { if isEditingMask { isEditingFilterMask = false } }
+    }
+    /// Whether painting goes into the active layer's filter mask: the brush
+    /// hides the filters, the eraser brings them back.
+    var isEditingFilterMask = false {
+        didSet { if isEditingFilterMask { isEditingMask = false } }
+    }
     var brush = BrushSettings(size: 24, color: .black)
     var eraser = BrushSettings(size: 60, softness: 0.3)
     /// For the retouching brushes, opacity is strength: how far a smear
@@ -247,7 +255,7 @@ final class EditorState {
     private var filteredDisplay: [Layer.ID: (key: FilterCache.Key, image: CGImage)] = [:]
     /// The filtering each layer is waiting for. Only the newest is kept: a
     /// slider being dragged asks far faster than filters can run.
-    @ObservationIgnored private var wantedFilters: [Layer.ID: (key: FilterCache.Key, source: LayerImage)] = [:]
+    @ObservationIgnored private var wantedFilters: [Layer.ID: (key: FilterCache.Key, source: LayerImage, filterMask: LayerMask?)] = [:]
     @ObservationIgnored private var filteringLayers: Set<Layer.ID> = []
     /// The same for layers with effects.
     private var styledDisplay: [Layer.ID: (key: StyleCache.Key, styled: StyledLayer)] = [:]
@@ -260,6 +268,8 @@ final class EditorState {
         var stroke: Stroke
         /// Painted into the layer's mask rather than its pixels.
         var isMask = false
+        /// Painted into the layer's filter mask.
+        var isFilterMask = false
     }
 
     struct LayerPreview {
@@ -396,19 +406,19 @@ final class EditorState {
         let key = FilterCache.Key(layer: layer, maxPixelSize: Self.filterDisplaySize)
         let shown = filteredDisplay[layer.id]
         if let shown, shown.key == key { return shown.image }
-        requestFiltering(layer.id, key: key, source: layer.image)
+        requestFiltering(layer.id, key: key, source: layer.image, filterMask: layer.activeFilterMask)
         return shown?.image ?? layer.image.cgImage
     }
 
-    private func requestFiltering(_ layerID: Layer.ID, key: FilterCache.Key, source: LayerImage) {
+    private func requestFiltering(_ layerID: Layer.ID, key: FilterCache.Key, source: LayerImage, filterMask: LayerMask?) {
         // Asked for during a canvas update: only note it here, and start the
         // work once the update is over.
-        wantedFilters[layerID] = (key, source)
+        wantedFilters[layerID] = (key, source, filterMask)
         guard filteringLayers.insert(layerID).inserted else { return }
         Task { @MainActor in
             while let wanted = wantedFilters.removeValue(forKey: layerID) {
                 let image = await Task.detached(priority: .userInitiated) {
-                    FilterCache.shared.image(for: wanted.key, source: wanted.source)
+                    FilterCache.shared.image(for: wanted.key, source: wanted.source, filterMask: wanted.filterMask)
                 }.value
                 filteredDisplay[layerID] = (wanted.key, image)
             }
@@ -593,10 +603,10 @@ final class EditorState {
     func paintingBlocker() -> String? {
         guard let layer = activeLayer else { return String(localized: "Error.NoLayer") }
         if composition.isLocked(layer) { return String(localized: "Error.LayerLocked") }
-        if editsMask, ![Tool.brush, .eraser, .gradient].contains(tool) {
+        if editsAnyMask, ![Tool.brush, .eraser, .gradient].contains(tool) {
             return String(localized: "Error.MaskTool")
         }
-        if layer.isSmartObject, !editsMask, tool.paintsPixels {
+        if layer.isSmartObject, !editsAnyMask, tool.paintsPixels {
             return String(localized: "Error.SmartObject")
         }
         if !layer.isVisible || composition.ancestors(of: layer.groupID).contains(where: { !$0.isVisible }) {
@@ -607,7 +617,14 @@ final class EditorState {
 
     /// Whether painting goes into a mask right now.
     /// An adjustment layer has nothing else to paint on.
-    var editsMask: Bool { (isEditingMask || activeLayer?.isAdjustment == true) && activeLayer?.mask != nil }
+    var editsMask: Bool {
+        !editsFilterMask && (isEditingMask || activeLayer?.isAdjustment == true) && activeLayer?.mask != nil
+    }
+
+    /// Whether painting goes into the active layer's filter mask right now.
+    var editsFilterMask: Bool { isEditingFilterMask && activeLayer?.filterMask != nil }
+
+    var editsAnyMask: Bool { editsMask || editsFilterMask }
 
     /// Selection outline for clipping, in canvas pixels.
     var selectionPath: CGPath? {
@@ -647,7 +664,7 @@ final class EditorState {
                 guard let source = cloneSource, !isPickingCloneSource else { return }
                 if cloneOffset == nil { cloneOffset = CGVector(dx: source.x - point.x, dy: source.y - point.y) }
             }
-            if editsMask {
+            if editsAnyMask {
                 // On a mask the brush hides and the eraser reveals.
                 var settings = currentBrush
                 settings.color = .white
@@ -860,8 +877,8 @@ final class EditorState {
             if case .clone(let offset) = stroke.kind, let last = stroke.points.last?.location {
                 cloneSource = CGPoint(x: last.x + offset.dx, y: last.y + offset.dy)
             }
-            if editsMask {
-                commitMask(stroke, to: layerID)
+            if editsAnyMask {
+                commitMask(stroke, to: layerID, filters: editsFilterMask)
             } else {
                 commit(stroke, to: layerID)
             }
@@ -1214,6 +1231,7 @@ final class EditorState {
                         current.vector = nil
                         current.transform = result.transform
                         if let mask = result.mask { current.mask?.image = mask.image }
+                        if let mask = result.filterMask { current.filterMask?.image = mask.image }
                         composition[layerID] = current
                     }
                 }
@@ -1227,16 +1245,18 @@ final class EditorState {
     /// a canvas-sized image — is opaque. The mask is changed where the layer
     /// sits, however it is moved or turned, so text, vector and smart object
     /// layers stay what they are.
+    /// `filters` edits the filter mask instead.
     func editMask(
-        of layerID: Layer.ID, hides: Bool, finally: @escaping @MainActor () -> Void = {},
+        of layerID: Layer.ID, hides: Bool, filters: Bool = false, finally: @escaping @MainActor () -> Void = {},
         coverage: @escaping @Sendable (CGSize) -> CGImage?
     ) {
+        let target: WritableKeyPath<Layer, LayerMask?> = filters ? \.filterMask : \.mask
         let previous = queue
         runningJobs += 1
         queue = Task { @MainActor in
             await previous?.value
             let composition = read()
-            if let layer = composition[layerID], let mask = layer.mask {
+            if let layer = composition[layerID], let mask = layer[keyPath: target] {
                 let size = composition.size
                 let result = await Task.detached(priority: .userInitiated) { () -> CGImage? in
                     guard let painted = coverage(size) else { return nil }
@@ -1244,8 +1264,9 @@ final class EditorState {
                 }.value
                 if let result {
                     update { composition in
-                        guard composition[layerID]?.mask != nil else { return }
-                        composition[layerID]?.mask?.image = LayerImage(result)
+                        guard var current = composition[layerID], current[keyPath: target] != nil else { return }
+                        current[keyPath: target]?.image = LayerImage(result)
+                        composition[layerID] = current
                     }
                 }
             }
@@ -1261,14 +1282,14 @@ final class EditorState {
         return symmetry.strokes(for: stroke, in: composition.size)
     }
 
-    private func commitMask(_ stroke: Stroke, to layerID: Layer.ID) {
+    private func commitMask(_ stroke: Stroke, to layerID: Layer.ID, filters: Bool) {
         let strokes = mirrored(stroke)
-        let pending = strokes.map { PendingStroke(layerID: layerID, stroke: $0, isMask: true) }
+        let pending = strokes.map { PendingStroke(layerID: layerID, stroke: $0, isMask: !filters, isFilterMask: filters) }
         pendingStrokes.append(contentsOf: pending)
         let ids = Set(pending.map(\.id))
         // The brush hides and the eraser reveals; mirrored copies alike.
         let hides = stroke.kind == .erase
-        editMask(of: layerID, hides: hides, finally: { [weak self] in
+        editMask(of: layerID, hides: hides, filters: filters, finally: { [weak self] in
             self?.pendingStrokes.removeAll { ids.contains($0.id) }
         }) { size in
             Bitmap.render(size: size) { context in
@@ -1341,14 +1362,15 @@ final class EditorState {
     private func applyGradient(from start: CGPoint, to end: CGPoint) {
         guard let layerID = activeLayerID else { return }
         // On a mask, a gradient fades the layer out from where it starts.
-        let onMask = editsMask
+        let onMask = editsAnyMask
+        let onFilterMask = editsFilterMask
         let gradient = onMask
             ? PaintGradient.fading(.white, kind: gradientKind)
             : PaintGradient(kind: gradientKind, stops: gradientStopsShown)
         let opacity = gradientOpacity
         let selection = selection
         if onMask {
-            editMask(of: layerID, hides: true) { size in
+            editMask(of: layerID, hides: true, filters: onFilterMask) { size in
                 Painter.gradient(
                     gradient, from: start, to: end, opacity: opacity, clip: selection,
                     onto: Bitmap.solid(size: size, color: .clear)

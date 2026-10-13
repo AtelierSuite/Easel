@@ -232,7 +232,8 @@ extension Layer {
     var renderedImage: CGImage {
         guard hasActiveFilters || activeMask != nil else { return image.cgImage }
         return FilterCache.shared.image(
-            for: FilterCache.Key(layer: self, maxPixelSize: nil, includesMask: true), source: image, mask: activeMask
+            for: FilterCache.Key(layer: self, maxPixelSize: nil, includesMask: true), source: image, mask: activeMask,
+            filterMask: activeFilterMask
         )
     }
 }

@@ -199,11 +199,12 @@ struct EditorView<Actions: View>: View {
                 .accessibilityLabel("Canvas.FitToScreen")
                 .accessibilityIdentifier("zoomLevel")
             }
-            if state.editsMask, state.activeLayer?.isAdjustment != true {
+            if state.editsAnyMask, state.activeLayer?.isAdjustment != true {
                 Button {
                     state.isEditingMask = false
+                    state.isEditingFilterMask = false
                 } label: {
-                    Label("Mask.Editing", systemImage: "xmark.circle.fill")
+                    Label(state.editsFilterMask ? "FilterMask.Editing" : "Mask.Editing", systemImage: "xmark.circle.fill")
                         .font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 12)
                         .frame(height: 32)
@@ -220,7 +221,7 @@ struct EditorView<Actions: View>: View {
         }
         .padding(.top, 8)
         .animation(.snappy(duration: 0.2), value: state.isBusy)
-        .animation(.snappy(duration: 0.2), value: state.editsMask)
+        .animation(.snappy(duration: 0.2), value: state.editsAnyMask)
     }
 
     @ViewBuilder

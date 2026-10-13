@@ -56,6 +56,10 @@ enum PSDWriter {
         if !tiles.isEmpty {
             section.taggedBlock("Patt", PSDPatterns.block(for: tiles), padding: 4)
         }
+        let filterEffects = records.compactMap(\.filterEffect)
+        if !filterEffects.isEmpty {
+            section.taggedBlock("FEid", PSDFilterEffects.block(for: filterEffects), padding: 4)
+        }
         // The contents of smart objects, embedded once for the document.
         let embedded = records.compactMap(\.embeddedFile)
         if !embedded.isEmpty {
@@ -84,6 +88,8 @@ enum PSDWriter {
         var embeddedFile: [UInt8]?
         /// The tiles its pattern overlays show.
         var tiles: [PSDPatterns.Tile] = []
+        /// A smart object's pixels before its filters, and their mask.
+        var filterEffect: [UInt8]?
     }
 
     /// Records bottom first, with group folders around their layers: a
@@ -132,15 +138,19 @@ enum PSDWriter {
         }
         // A smart object keeps its contents as a document of their own.
         var embeddedFile: [UInt8]?
+        var filterEffect: [UInt8]?
         // Its filters go as smart filters; with any Photoshop has nothing
         // like, it goes as the pixels it shows.
         let smartFilters = layer.filters.isEmpty ? nil
-            : PSDSmartFilters.style(for: layer.filters, placement: .init(layer.transform, size: layer.image.size))
+            : PSDSmartFilters.style(for: layer.filters, placement: .init(layer.transform, size: layer.image.size),
+                                    maskEnabled: layer.filterMask?.isEnabled ?? false)
         if adjustment == nil, let smart = layer.smartObject, layer.filters.isEmpty || smartFilters != nil,
            let contents = try? data(for: smart.contents) {
             let id = layer.id.uuidString.lowercased()
             blocks += PSDSmartObjects.blocks(for: layer, id: id, filters: smartFilters)
             embeddedFile = PSDSmartObjects.embeddedFile(id: id, name: "\(layer.name).psd", data: [UInt8](contents))
+            // Photoshop keeps the pixels before the filters, and their mask.
+            if smartFilters != nil { filterEffect = PSDFilterEffects.entry(id: id, layer: layer, canvasSize: canvasSize) }
         }
         let opacity = layer.opacity * (adjustment?.opacity ?? 1)
         // The layer as it shows, without its mask, opacity or blend mode,
@@ -221,7 +231,7 @@ enum PSDWriter {
         header.uint32(extra.data.count)
         header.bytes(extra.data)
         return Record(header: header.data, channels: channels.flatMap(\.data), embeddedFile: embeddedFile,
-                      tiles: effects == nil ? [] : tile.map { [$0] } ?? [])
+                      tiles: effects == nil ? [] : tile.map { [$0] } ?? [], filterEffect: filterEffect)
     }
 
     private static func folderRecord(name: String, opacity: Double, isVisible: Bool, type: Int) -> Record {

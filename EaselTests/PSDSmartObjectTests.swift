@@ -180,4 +180,45 @@ struct PSDSmartObjectTests {
         let read = try CompositionArchive.composition(from: data, original: nil)
         #expect(read.layers.first?.missingLink == layer.missingLink)
     }
+
+    @Test func aFilterMaskComesBackAndHidesTheFilters() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30), scaleX: 2, scaleY: 2))
+        var curves = LayerFilter(kind: .curves)
+        curves.curve = [1, 1, 1, 1, 1]
+        layer.filters = [curves]
+        // The filters show only on the right half.
+        layer.filterMask = LayerMask(image: LayerImage(Bitmap.render(size: CGSize(width: 20, height: 20)) { context in
+            context.setFillColor(RGBAColor.white.cgColor)
+            context.fill(CGRect(x: 10, y: 0, width: 10, height: 20))
+        }))
+        let before = CompositionRenderer.render(Composition(size: size, layers: [layer]))
+        let read = try #require(try roundTrip([layer]).layers.first)
+        #expect(read.isSmartObject)
+        #expect(read.filterMask?.isEnabled == true)
+        let after = CompositionRenderer.render(Composition(size: size, layers: [read]))
+        // Red where the mask hides the curve, white where it lets it through.
+        #expect(TestImages.pixel(after, x: 25, y: 15).green < 80)
+        #expect(TestImages.pixel(after, x: 50, y: 40).green > 235)
+        for (x, y) in [(25, 15), (50, 40), (35, 25), (45, 45)] {
+            #expect(abs(Int(TestImages.pixel(before, x: x, y: y).green) - Int(TestImages.pixel(after, x: x, y: y).green)) < 10)
+        }
+    }
+
+    @Test func aTurnedOffFilterMaskStaysOff() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        layer.filters = [LayerFilter(kind: .gaussianBlur)]
+        layer.filterMask = LayerMask(image: LayerImage(Bitmap.solid(size: CGSize(width: 20, height: 20), color: .clear)), isEnabled: false)
+        let read = try #require(try roundTrip([layer]).layers.first)
+        #expect(read.filterMask?.isEnabled == false)
+    }
+
+    @Test func aFilterMaskIsSavedWithThePicture() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        layer.filters = [LayerFilter(kind: .gaussianBlur)]
+        layer.filterMask = LayerMask(image: LayerImage(Bitmap.solid(size: CGSize(width: 20, height: 20), color: .white)), isEnabled: false)
+        let data = try CompositionArchive.data(for: Composition(size: size, layers: [layer]), original: nil)
+        let read = try CompositionArchive.composition(from: data, original: nil)
+        #expect(read.layers.first?.filterMask?.isEnabled == false)
+        #expect(read.layers.first?.filterMask?.image.size == CGSize(width: 20, height: 20))
+    }
 }

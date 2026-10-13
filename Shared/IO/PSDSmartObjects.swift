@@ -167,6 +167,8 @@ enum PSDSmartObjects {
         var corners: [CGPoint]
         var mesh: [CGPoint]?
         var filters: PSDDescriptor?
+        /// What Photoshop's per-document pixels for it are keyed by.
+        var placedID: String?
     }
 
     static func placement(from data: [UInt8]) -> Placement? {
@@ -187,7 +189,8 @@ enum PSDSmartObjects {
             let placed = WarpShape.perspective(corners)
             mesh = points.map { placed.point(($0.x - minX) / width, ($0.y - minY) / height) }
         }
-        return Placement(id: id, corners: corners, mesh: mesh, filters: descriptor["filterFX"]?.descriptor)
+        return Placement(id: id, corners: corners, mesh: mesh, filters: descriptor["filterFX"]?.descriptor,
+                         placedID: descriptor["placed"]?.text)
     }
 
     /// A custom bend's sixteen points, four rows of four from the top left.
@@ -225,7 +228,8 @@ enum PSDSmartObjects {
     /// Makes `layer` the smart object `placed` describes, showing
     /// `contents`, with its smart filters. False, leaving it as it was, if
     /// it is placed or filtered in a way Easel cannot.
-    static func place(_ layer: inout Layer, _ placed: Placement, contents: Composition) -> Bool {
+    /// `filterMask` is its smart filters' mask, as it lies on the canvas.
+    static func place(_ layer: inout Layer, _ placed: Placement, contents: Composition, filterMask: PSDFilterEffects.Mask? = nil) -> Bool {
         let shape: WarpShape?
         var transform = LayerTransform(position: .zero)
         if let mesh = placed.mesh {
@@ -248,6 +252,12 @@ enum PSDSmartObjects {
         layer.transform = transform
         if let shape { layer.setSmartObjectWarp(shape) }
         layer.filters = filters
+        layer.filterMask = nil
+        if !filters.isEmpty, let filterMask {
+            var mask = PSDFilterEffects.inLayerSpace(filterMask, of: layer)
+            mask.isEnabled = placed.filters?["filterMaskEnable"]?.bool ?? true
+            layer.filterMask = mask
+        }
         layer.missingLink = nil
         return true
     }

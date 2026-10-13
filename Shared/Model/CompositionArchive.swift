@@ -65,6 +65,9 @@ enum CompositionArchive {
         var missingLink: SmartObjectLink?
         var maskFile: String?
         var maskEnabled: Bool?
+        /// The filter mask's pixels, and whether it is on.
+        var filterMaskFile: String?
+        var filterMaskEnabled: Bool?
         var transform: LayerTransform
         var opacity: Double
         var blendMode: LayerBlendMode
@@ -167,13 +170,20 @@ enum CompositionArchive {
                 try write(name, try mask.image.pngData())
                 maskFile = name
             }
+            var filterMaskFile: String?
+            if let mask = layer.filterMask {
+                let name = "\(layer.id.uuidString)-filtermask.png"
+                try write(name, try mask.image.pngData())
+                filterMaskFile = name
+            }
             records.append(LayerRecord(
                 id: layer.id, name: layer.name, file: file, text: layer.text, vector: layer.vector,
                 filters: layer.filters.isEmpty ? nil : layer.filters,
                 effects: layer.effects.isEmpty ? nil : layer.effects,
                 adjustment: layer.adjustment,
                 smartFile: smartFile, smartWarp: layer.smartObject?.warp, missingLink: layer.missingLink,
-                maskFile: maskFile, maskEnabled: layer.mask.map(\.isEnabled), transform: layer.transform,
+                maskFile: maskFile, maskEnabled: layer.mask.map(\.isEnabled),
+                filterMaskFile: filterMaskFile, filterMaskEnabled: layer.filterMask.map(\.isEnabled), transform: layer.transform,
                 opacity: layer.opacity, blendMode: layer.blendMode, isClipped: layer.isClipped ? true : nil,
                 isVisible: layer.isVisible, isLocked: layer.isLocked,
                 groupID: layer.groupID,
@@ -231,6 +241,12 @@ enum CompositionArchive {
             layer.effects = record.effects ?? []
             layer.adjustment = record.adjustment
             layer.missingLink = record.missingLink
+            if let file = record.filterMaskFile {
+                guard let data = read(file) else { throw Failure.missingLayer(file) }
+                layer.filterMask = LayerMask(
+                    image: LayerImage(try ImageCodec.decode(data), encoded: data), isEnabled: record.filterMaskEnabled ?? true
+                )
+            }
             if let smartFile = record.smartFile {
                 guard let data = read(smartFile) else { throw Failure.missingLayer(smartFile) }
                 layer.smartObject = SmartObject(contents: try composition(from: data, original: nil), warp: record.smartWarp)

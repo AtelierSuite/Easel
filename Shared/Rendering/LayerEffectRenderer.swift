@@ -395,7 +395,9 @@ final class StyleCache: Sendable {
         if key.filterKey.filters.isEmpty, layer.activeMask == nil, key.filterKey.maxPixelSize == nil {
             source = layer.image.cgImage
         } else {
-            source = FilterCache.shared.image(for: key.filterKey, source: layer.image, mask: layer.activeMask)
+            source = FilterCache.shared.image(
+                for: key.filterKey, source: layer.image, mask: layer.activeMask, filterMask: layer.activeFilterMask
+            )
         }
         let styled = LayerEffectRenderer.render(
             key.effects, source: source,
