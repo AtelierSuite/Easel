@@ -6,15 +6,76 @@ import Foundation
 /// layer can be moved, scaled, filtered and styled without touching them.
 struct SmartObject: Equatable, Sendable {
     var contents: Composition
+    /// How the contents are bent, if they are: the layer's pixels are them
+    /// drawn through it, so new contents are bent the same way.
+    var warp: SmartObjectWarp?
+}
+
+/// Where a smart object's contents are bent to, in the layer's own pixels:
+/// four corners in perspective, or a grid of sixteen points.
+struct SmartObjectWarp: Codable, Equatable, Sendable {
+    var points: [CGPoint]
+    /// The size of the layer's pixels the points are in.
+    var size: CGSize
+
+    var shape: WarpShape { points.count == 16 ? .warp(points) : .perspective(points) }
 }
 
 extension Layer {
     var isSmartObject: Bool { smartObject != nil }
 
-    /// Swaps in new contents and draws them out, keeping the layer's place.
+    /// Swaps in new contents and draws them out, keeping the layer's place
+    /// and any bend.
     mutating func setSmartObjectContents(_ contents: Composition) {
-        smartObject = SmartObject(contents: contents)
-        image = LayerImage(CompositionRenderer.render(contents))
+        let warp = smartObject?.warp
+        smartObject = SmartObject(contents: contents, warp: warp)
+        let drawn = CompositionRenderer.render(contents)
+        image = LayerImage(warp.map { MeshWarp.render(drawn, shape: $0.shape, size: $0.size) } ?? drawn)
+    }
+
+    /// Bends the contents to `shape`, given on the canvas, the layer's
+    /// pixels just covering it.
+    mutating func setSmartObjectWarp(_ shape: WarpShape) {
+        guard let smart = smartObject else { return }
+        let bounds = shape.bounds
+        let points = shape.handles.map { CGPoint(x: $0.x - bounds.minX, y: $0.y - bounds.minY) }
+        let warp = SmartObjectWarp(points: points, size: bounds.size)
+        smartObject?.warp = warp
+        image = LayerImage(MeshWarp.render(CompositionRenderer.render(smart.contents), shape: warp.shape, size: warp.size))
+        transform = LayerTransform(position: CGPoint(x: bounds.midX, y: bounds.midY))
+    }
+
+    /// The bend on the canvas, where the layer now sits.
+    var canvasWarp: WarpShape? {
+        guard let warp = smartObject?.warp else { return nil }
+        let points = warp.points.map { $0.applying(affineTransform) }
+        return points.count == 16 ? .warp(points) : .perspective(points)
+    }
+}
+
+extension WarpShape {
+    /// The points that set the shape.
+    var handles: [CGPoint] {
+        switch self {
+        case .perspective(let points), .warp(let points): return points
+        }
+    }
+
+    /// Whole pixels just covering the shape.
+    var bounds: CGRect {
+        var minX = Double.infinity, minY = Double.infinity, maxX = -Double.infinity, maxY = -Double.infinity
+        for row in 0...16 {
+            for column in 0...16 {
+                let point = point(Double(column) / 16, Double(row) / 16)
+                minX = min(minX, point.x)
+                minY = min(minY, point.y)
+                maxX = max(maxX, point.x)
+                maxY = max(maxY, point.y)
+            }
+        }
+        let rect = CGRect(x: minX.rounded(.down), y: minY.rounded(.down),
+                          width: maxX.rounded(.up) - minX.rounded(.down), height: maxY.rounded(.up) - minY.rounded(.down))
+        return CGRect(origin: rect.origin, size: CGSize(width: max(rect.width, 1), height: max(rect.height, 1)))
     }
 }
 

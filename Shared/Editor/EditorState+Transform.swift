@@ -52,11 +52,21 @@ extension EditorState {
         }
         if let draft = transformDraft, draft.layerID == layer.id { return }
         let quad = layer.corners
-        transformDraft = TransformDraft(
-            layerID: layer.id, mode: transformMode,
-            points: WarpShape.points(warp: transformMode == .warp, quad: quad), original: quad
-        )
+        var points = WarpShape.points(warp: transformMode == .warp, quad: quad)
+        // A bent smart object picks up its bend where it left off.
+        if let shape = layer.canvasWarp {
+            points = Self.points(of: shape, as: transformMode)
+        }
+        transformDraft = TransformDraft(layerID: layer.id, mode: transformMode, points: points, original: quad)
         transformPreview = nil
+    }
+
+    /// The handles for `shape` in `mode`: a warp grid laid over a
+    /// perspective, or a warp's corners.
+    private static func points(of shape: WarpShape, as mode: TransformMode) -> [CGPoint] {
+        mode == .warp
+            ? (0..<16).map { shape.point(Double($0 % 4) / 3, Double($0 / 4) / 3) }
+            : shape.corners
     }
 
     /// Changes between distort and warp, keeping the shape as near as the
@@ -66,10 +76,7 @@ extension EditorState {
         guard var draft = transformDraft, draft.mode != mode else { return }
         let shape = draft.shape
         draft.mode = mode
-        // A warp grid laid over the perspective, or a warp's corners.
-        draft.points = mode == .warp
-            ? (0..<16).map { shape.point(Double($0 % 4) / 3, Double($0 / 4) / 3) }
-            : shape.corners
+        draft.points = Self.points(of: shape, as: mode)
         transformDraft = draft
         updateTransformPreview()
     }
@@ -152,6 +159,10 @@ extension EditorState {
               !composition.isLocked(layer) else { return }
         let size = composition.size
         let shape = draft.shape
+        if layer.isSmartObject {
+            applySmartObjectWarp(shape, to: layer)
+            return
+        }
         enqueue({ () -> TransformedPixels? in
             let image = MeshWarp.render(layer.image.cgImage, shape: shape, size: size)
             let mask = layer.mask.map { MeshWarp.renderMask($0.image.cgImage, shape: shape, size: size) }
@@ -171,6 +182,54 @@ extension EditorState {
             transformPreview = nil
             beginTransformDraft()
         })
+    }
+
+    /// Bends a smart object's contents to `shape`, keeping them whole: the
+    /// bend is kept, and drawn again whenever the contents change.
+    private func applySmartObjectWarp(_ shape: WarpShape, to layer: Layer) {
+        let layerID = layer.id
+        enqueue({ () -> Layer? in
+            var bent = layer
+            bent.setSmartObjectWarp(shape)
+            if let mask = layer.mask {
+                let bounds = shape.bounds
+                let image: CGImage
+                if layer.smartObject?.warp == nil {
+                    // Painted on the contents as they were, it bends with them.
+                    let local = shape.handles.map { CGPoint(x: $0.x - bounds.minX, y: $0.y - bounds.minY) }
+                    image = MeshWarp.renderMask(mask.image.cgImage, shape: local.count == 16 ? .warp(local) : .perspective(local), size: bounds.size)
+                } else {
+                    // Painted on the bent layer, it stays where it was.
+                    image = Self.mask(mask.image.cgImage, of: layer, in: bounds)
+                }
+                bent.mask?.image = LayerImage(image)
+            }
+            return bent
+        }, apply: { [weak self] bent in
+            guard let self else { return }
+            update { composition in
+                guard composition[layerID] != nil else { return }
+                composition[layerID] = bent
+            }
+            transformDraft = nil
+            transformPreview = nil
+            beginTransformDraft()
+        })
+    }
+
+    /// `layer`'s mask as it lies on the canvas, cut to `rect`; off the layer
+    /// it shows everything.
+    nonisolated private static func mask(_ mask: CGImage, of layer: Layer, in rect: CGRect) -> CGImage {
+        let size = layer.image.size
+        let transform = layer.affineTransform
+        return Bitmap.render(size: rect.size) { context in
+            context.setFillColor(RGBAColor.white.cgColor)
+            context.fill(CGRect(origin: .zero, size: rect.size))
+            context.translateBy(x: -rect.minX, y: -rect.minY)
+            context.concatenate(transform)
+            context.clear(CGRect(origin: .zero, size: size))
+            Bitmap.draw(mask, in: CGRect(origin: .zero, size: size), context: context)
+        }
     }
 
     func cancelTransform() {

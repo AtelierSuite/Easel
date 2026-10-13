@@ -59,6 +59,8 @@ enum CompositionArchive {
         var adjustment: LayerFilter?
         /// A smart object's contents, kept as a file of their own.
         var smartFile: String?
+        /// How a smart object's contents are bent.
+        var smartWarp: SmartObjectWarp?
         var maskFile: String?
         var maskEnabled: Bool?
         var transform: LayerTransform
@@ -168,7 +170,7 @@ enum CompositionArchive {
                 filters: layer.filters.isEmpty ? nil : layer.filters,
                 effects: layer.effects.isEmpty ? nil : layer.effects,
                 adjustment: layer.adjustment,
-                smartFile: smartFile,
+                smartFile: smartFile, smartWarp: layer.smartObject?.warp,
                 maskFile: maskFile, maskEnabled: layer.mask.map(\.isEnabled), transform: layer.transform,
                 opacity: layer.opacity, blendMode: layer.blendMode, isClipped: layer.isClipped ? true : nil,
                 isVisible: layer.isVisible, isLocked: layer.isLocked,
@@ -228,7 +230,7 @@ enum CompositionArchive {
             layer.adjustment = record.adjustment
             if let smartFile = record.smartFile {
                 guard let data = read(smartFile) else { throw Failure.missingLayer(smartFile) }
-                layer.smartObject = SmartObject(contents: try composition(from: data, original: nil))
+                layer.smartObject = SmartObject(contents: try composition(from: data, original: nil), warp: record.smartWarp)
             }
             return layer
         }
