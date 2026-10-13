@@ -69,6 +69,31 @@ struct VectorPatternTests {
         #expect(TestImages.isBlue(square(carried).image.cgImage, x: 20, y: 20))
     }
 
+    @Test func tilesStayPutWhenTheLayerGrows() throws {
+        var checker = PatternChoice(preset: .checker)
+        checker.color = RGBAColor(red: 1, green: 0, blue: 0)
+        var path = VectorPath.shape(ShapeSpec(kind: .rectangle, start: CGPoint(x: 40, y: 40), end: CGPoint(x: 140, y: 140),
+                                              isFilled: true, lineWidth: 1, color: .black))[0]
+        path.fillPattern = checker
+        let layer = Layer.vector([path], name: "Square")
+        var grown = layer
+        var content = try #require(layer.vector)
+        // Another shape up and to the left moves the image's corner.
+        content.paths.append(VectorPath.shape(ShapeSpec(kind: .rectangle, start: CGPoint(x: -37, y: -29), end: CGPoint(x: -27, y: -19),
+                                                        isFilled: true, lineWidth: 1, color: .black))[0])
+        grown.setVector(content)
+        func red(_ layer: Layer, _ x: Int, _ y: Int) -> Bool {
+            let image = layer.image.cgImage
+            let left = layer.transform.position.x - Double(image.width) / 2, top = layer.transform.position.y - Double(image.height) / 2
+            return TestImages.isRed(image, x: x - Int(left.rounded()), y: y - Int(top.rounded()))
+        }
+        for x in stride(from: 50, to: 130, by: 7) {
+            for y in stride(from: 50, to: 130, by: 7) {
+                #expect(red(layer, x, y) == red(grown, x, y))
+            }
+        }
+    }
+
     @Test func svgDrawsPatternedShapesAsPixels() throws {
         let composition = Composition(size: CGSize(width: 48, height: 48), layers: [square(PatternChoice(preset: .dots))])
         let svg = try #require(String(data: SVGWriter.data(for: composition), encoding: .utf8))

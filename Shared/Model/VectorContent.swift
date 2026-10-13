@@ -6,6 +6,11 @@ import Foundation
 /// layer moves, turns and mixes like any other while staying editable.
 struct VectorContent: Codable, Equatable, Sendable {
     var paths: [VectorPath]
+    /// Where pattern fills start their tiles, in the paths' coordinates.
+    /// It moves along with them when the image is drawn again larger or
+    /// smaller, so the tiles stay put under the shapes. Nil for the
+    /// paths' origin, as older files had it.
+    var patternOrigin: CGPoint?
 
     /// The area the paths cover, strokes included.
     var bounds: CGRect {
@@ -16,6 +21,8 @@ struct VectorContent: Codable, Equatable, Sendable {
     func offset(by delta: CGPoint) -> VectorContent {
         var copy = self
         copy.paths = paths.map { $0.offset(by: delta) }
+        let origin = patternOrigin ?? .zero
+        copy.patternOrigin = CGPoint(x: origin.x + delta.x, y: origin.y + delta.y)
         return copy
     }
 }

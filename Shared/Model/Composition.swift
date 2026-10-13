@@ -277,11 +277,12 @@ struct Composition: Equatable, Sendable {
             layers[index].transform.scaleY *= scaleY
             if let vector = layers[index].vector {
                 // Paths are scaled and drawn again rather than stretched.
+                let scaling = CGAffineTransform(scaleX: scaleX, y: scaleY)
                 let scaled = VectorContent(paths: vector.paths.map { path in
-                    var path = path.mappingNodes { $0.mapped(CGAffineTransform(scaleX: scaleX, y: scaleY)) }
+                    var path = path.mappingNodes { $0.mapped(scaling) }
                     path.strokeWidth *= (scaleX + scaleY) / 2
                     return path
-                })
+                }, patternOrigin: vector.patternOrigin?.applying(scaling))
                 let center = layers[index].transform.position
                 layers[index].transform.scaleX /= scaleX
                 layers[index].transform.scaleY /= scaleY

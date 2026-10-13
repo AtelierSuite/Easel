@@ -29,7 +29,11 @@ enum VectorRenderer {
                 context.saveGState()
                 context.addPath(cgPath)
                 context.clip(using: .evenOdd)
-                pattern.draw(in: context, rect: cgPath.boundingBoxOfPath.integral, swatches: [])
+                // Tiled from the layer's own fixed point, not its image's
+                // corner, which moves as the shapes grow and shrink.
+                let origin = content.patternOrigin ?? .zero
+                context.translateBy(x: origin.x, y: origin.y)
+                pattern.draw(in: context, rect: cgPath.boundingBoxOfPath.integral.offsetBy(dx: -origin.x, dy: -origin.y), swatches: [])
                 context.restoreGState()
             } else if let gradient = path.fillGradient, path.fill != nil, path.isClosed {
                 context.saveGState()
