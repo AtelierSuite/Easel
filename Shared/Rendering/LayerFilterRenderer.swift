@@ -10,6 +10,43 @@ extension LayerFilter {
     /// rather than in linear light, as Photoshop does: edges between light
     /// and dark come out as they do there.
     func apply(to input: CIImage) -> CIImage {
+        apply(to: input, pixelLimit: PixelFilters.maximumPixels)
+    }
+
+    /// The filter on `input`, with pictures bigger than `pixelLimit` worked
+    /// out on the processor in pieces: colour by colour ones a band at a
+    /// time, the rest on a smaller copy scaled back up, rather than left
+    /// out.
+    func apply(to input: CIImage, pixelLimit: Int) -> CIImage {
+        let extent = input.extent.integral
+        guard kind.usesPixelFilters, Int(extent.width) * Int(extent.height) >= pixelLimit, extent.width >= 1 else {
+            return applyShaded(to: input)
+        }
+        if kind.isPerPixel || kind == .ntscColors {
+            let rows = max(1, pixelLimit / Int(extent.width) - 1)
+            var output = CIImage.empty()
+            for top in stride(from: extent.minY, to: extent.maxY, by: CGFloat(rows)) {
+                let band = CGRect(x: extent.minX, y: top, width: extent.width, height: min(CGFloat(rows), extent.maxY - top))
+                output = applyShaded(to: input.cropped(to: band)).cropped(to: band).composited(over: output)
+            }
+            return output
+        }
+        let scale = (Double(pixelLimit - 1) / (extent.width * extent.height)).squareRoot() * 0.99
+        // Edges carried on, so the copy's own edges do not fade.
+        let small = input.clampedToExtent()
+            .applyingFilter("CILanczosScaleTransform", parameters: [kCIInputScaleKey: scale, kCIInputAspectRatioKey: 1])
+        let smallExtent = CGRect(
+            x: (extent.minX * scale).rounded(.down), y: (extent.minY * scale).rounded(.down),
+            width: max(1, (extent.width * scale).rounded(.down)), height: max(1, (extent.height * scale).rounded(.down))
+        )
+        let filtered = applyShaded(to: small.cropped(to: smallExtent))
+        let back = CGAffineTransform(translationX: -smallExtent.minX, y: -smallExtent.minY)
+            .concatenating(CGAffineTransform(scaleX: extent.width / smallExtent.width, y: extent.height / smallExtent.height))
+            .concatenating(CGAffineTransform(translationX: extent.minX, y: extent.minY))
+        return filtered.clampedToExtent().transformed(by: back).cropped(to: input.extent)
+    }
+
+    private func applyShaded(to input: CIImage) -> CIImage {
         guard kind.mixesShades else { return applyFilter(to: input) }
         let shades = input.applyingFilter("CILinearToSRGBToneCurve")
         return applyFilter(to: shades).applyingFilter("CISRGBToneCurveToLinear")
@@ -298,6 +335,21 @@ extension LayerFilter {
     /// A chain of filters, run in order.
     static func apply(_ filters: [LayerFilter], to input: CIImage) -> CIImage {
         filters.reduce(input) { image, filter in filter.apply(to: image) }
+    }
+}
+
+extension LayerFilter.Kind {
+    /// Filters worked out on the processor, with `PixelFilters`.
+    var usesPixelFilters: Bool {
+        [.invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize, .channelMixer, .desaturate, .equalize,
+         .selectiveColor, .variations, .blackAndWhite,
+         .boxBlur, .average, .surfaceBlur, .smartBlur, .sharpenEdges, .median, .minimum, .maximum, .dustAndScratches,
+         .addNoise, .reduceNoise, .despeckle,
+         .motionBlur, .twirl, .pinch, .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace,
+         .liquify, .displace,
+         .emboss, .halftone, .mosaic, .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles,
+         .extrude, .crystallize, .pointillize, .mezzotint,
+         .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare, .shadowsHighlights, .hdrToning, .matchColor].contains(self)
     }
 }
 

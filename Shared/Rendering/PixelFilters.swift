@@ -38,6 +38,10 @@ enum PixelFilters {
 
     static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
 
+    /// The most pixels worked on at once; `LayerFilter.apply(to:)` splits
+    /// or shrinks bigger pictures to fit.
+    static let maximumPixels = 80_000_000
+
     /// `image` as pixels, or nil if it is empty or too big.
     static func pixels(of image: CIImage) -> Pixels? {
         var result: Pixels?
@@ -49,7 +53,7 @@ enum PixelFilters {
     static func process(_ input: CIImage, _ body: (inout Pixels) -> Void) -> CIImage {
         let extent = input.extent.integral
         let width = Int(extent.width), height = Int(extent.height)
-        guard width > 0, height > 0, width * height < 80_000_000 else { return input }
+        guard width > 0, height > 0, width * height < maximumPixels else { return input }
         var bytes = [UInt8](repeating: 0, count: width * height * 4)
         ImageProcessing.context.render(
             input, toBitmap: &bytes, rowBytes: width * 4, bounds: extent, format: .RGBA8, colorSpace: colorSpace

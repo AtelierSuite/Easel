@@ -54,6 +54,23 @@ struct LayerFilterTests {
         }
     }
 
+    @Test func picturesTooBigToFilterAtOnceAreFilteredInPieces() throws {
+        let source = TestImages.halves(width: 64, height: 32)
+        // Colour by colour, band by band, just as it would be whole.
+        let invert = LayerFilter(kind: .invert)
+        let whole = try #require(Bitmap.pixels(of: ImageProcessing.apply({ invert.apply(to: $0) }, to: source)))
+        let banded = try #require(Bitmap.pixels(of: ImageProcessing.apply({ invert.apply(to: $0, pixelLimit: 500) }, to: source)))
+        #expect(whole.bytes == banded.bytes)
+        // The rest on a smaller copy, rather than not at all.
+        let average = LayerFilter(kind: .average)
+        let shrunk = ImageProcessing.apply({ average.apply(to: $0, pixelLimit: 500) }, to: source)
+        #expect(shrunk.width == 64 && shrunk.height == 32)
+        for x in [2, 61] {
+            let pixel = TestImages.pixel(shrunk, x: x, y: 16)
+            #expect(pixel.red > 80 && pixel.blue > 80 && pixel.alpha > 250)
+        }
+    }
+
     @Test func mosaicMakesBlocks() {
         let source = TestImages.halves(width: 200, height: 100)
         var filter = LayerFilter(kind: .mosaic)
