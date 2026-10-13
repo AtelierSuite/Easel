@@ -1280,15 +1280,21 @@ final class EditorState {
                 }.value
                 if let result {
                     // Whatever happened to the layer meanwhile besides its
-                    // pixels — a rename, a new opacity — is kept.
+                    // pixels — a rename, a new opacity, a move — is kept.
                     update { composition in
                         guard var current = composition[layerID] else { return }
+                        if current.transform == layer.transform {
+                            current.transform = result.transform
+                        } else if result.transform != layer.transform {
+                            // Moved while the edit was worked out, from
+                            // pixels lined up anew: they follow the move.
+                            current.transform = Self.placement(of: result, carriedFrom: layer, to: current)
+                        }
                         current.image = result.image
                         current.text = nil
                         current.vector = nil
                         // Its pixels are no longer drawn from its contents.
                         current.smartObject = nil
-                        current.transform = result.transform
                         if let mask = result.mask { current.mask?.image = mask.image }
                         if let mask = result.filterMask { current.filterMask?.image = mask.image }
                         composition[layerID] = current
@@ -1298,6 +1304,24 @@ final class EditorState {
             finally()
             runningJobs -= 1
         }
+    }
+
+    /// Where `edited` — worked out from `original` — goes when the layer has
+    /// since been moved, turned or scaled to where `moved` is: carried by
+    /// that same change. A skew, which a placement cannot hold, is dropped.
+    nonisolated static func placement(of edited: Layer, carriedFrom original: Layer, to moved: Layer) -> LayerTransform {
+        let change = original.affineTransform.inverted().concatenating(moved.affineTransform)
+        let size = edited.image.size
+        // The placement without its last step, moving the centre to the origin.
+        let placed = CGAffineTransform(translationX: size.width / 2, y: size.height / 2)
+            .concatenating(edited.affineTransform)
+            .concatenating(change)
+        let scaleX = hypot(placed.a, placed.b)
+        guard scaleX > 0 else { return edited.transform }
+        return LayerTransform(
+            position: CGPoint(x: placed.tx, y: placed.ty), scaleX: scaleX,
+            scaleY: (placed.a * placed.d - placed.b * placed.c) / scaleX, rotation: atan2(placed.b, placed.a)
+        )
     }
 
     /// Hides or reveals parts of a layer's mask where `coverage` — drawn on

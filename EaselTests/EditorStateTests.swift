@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Testing
 @testable import Easel
 
@@ -56,6 +57,30 @@ struct EditorStateTests {
         host.state.addEmptyLayer()
         #expect(host.published.layers.count == 3)
         #expect(Set(host.published.layers.map(\.name)).count == 3)
+    }
+
+    @Test func aLayerMovedDuringAnEditKeepsTheMove() async throws {
+        var composition = Composition.blank(size: CGSize(width: 40, height: 20))
+        // Half the canvas's size, doubled to cover it, so the edit lines
+        // its pixels up with the canvas anew.
+        composition.layers[0].image = LayerImage(TestImages.solid(.white, width: 20, height: 10))
+        composition.layers[0].transform = LayerTransform(position: CGPoint(x: 20, y: 10), scaleX: 2, scaleY: 2)
+        let host = Host(composition)
+        let id = composition.layers[0].id
+        host.state.editPixels(of: id) { image, _ in
+            Thread.sleep(forTimeInterval: 0.3)
+            return Painter.fill(Selection(shape: .rectangle(CGRect(x: 0, y: 0, width: 4, height: 20))),
+                                with: RGBAColor(red: 1, green: 0, blue: 0), onto: image)
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        host.state.updateTransform { $0.position.x += 4 }
+        for _ in 0..<100 where host.state.isBusy { try await Task.sleep(for: .milliseconds(20)) }
+        let layer = try #require(host.published[id])
+        #expect(abs(layer.transform.position.x - 24) < 0.001)
+        #expect(abs(layer.transform.scaleX - 1) < 0.001)
+        let picture = CompositionRenderer.render(host.published)
+        #expect(TestImages.isRed(picture, x: 6, y: 10))
+        #expect(!TestImages.isRed(picture, x: 10, y: 10))
     }
 
     @Test func theLastLayerCannotBeDeleted() {
