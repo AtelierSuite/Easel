@@ -344,7 +344,10 @@ enum PSDReader {
     }
 
     /// Blocks whose length takes eight bytes in a large document.
-    private static let longKeys: Set<String> = ["LMsk", "Lr16", "Lr32", "Layr", "Mt16", "Mt32", "Mtrn", "Alph", "FMsk", "lnk2", "FEid", "FXid", "PxSD"]
+    private static let longKeys: Set<String> = [
+        "LMsk", "Lr16", "Lr32", "Layr", "Mt16", "Mt32", "Mtrn", "Alph", "FMsk", "lnk2", "lnk3", "lnkE", "FEid", "FXid", "FELS",
+        "PxSD", "pths", "extd", "extn", "cinf", "artd",
+    ]
 
     private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "fxrp"])
 
