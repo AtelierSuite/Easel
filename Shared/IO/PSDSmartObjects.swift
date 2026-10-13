@@ -10,7 +10,8 @@ enum PSDSmartObjects {
 
     /// The layer's placement: which embedded file it shows, and where. As
     /// Photoshop does, it goes both as `SoLd` and as the older `PlLd`.
-    static func blocks(for layer: Layer, id: String) -> [(key: String, data: [UInt8])] {
+    /// `filters` are its smart filters, if it has any.
+    static func blocks(for layer: Layer, id: String, filters: PSDDescriptor? = nil) -> [(key: String, data: [UInt8])] {
         let size = layer.image.size
         let points = layer.corners.flatMap { [$0.x, $0.y] }
         let corners = points.map { PSDDescriptor.Value.double($0) }
@@ -27,7 +28,7 @@ enum PSDSmartObjects {
             ]))),
             ("uOrder", .integer(4)), ("vOrder", .integer(4)),
         ])
-        let descriptor = PSDDescriptor(classID: "null", items: [
+        var descriptor = PSDDescriptor(classID: "null", items: [
             ("Idnt", .text(id)), ("placed", .text(id)), ("PgNm", .integer(1)), ("totalPages", .integer(1)),
             ("frameStep", frame(0)), ("duration", frame(0)), ("frameCount", .integer(1)),
             ("Annt", .integer(16)), ("Type", .integer(2)),
@@ -36,6 +37,7 @@ enum PSDSmartObjects {
             ("Rslt", .unit("#Rsl", 72)), ("comp", .integer(-1)),
             ("compInfo", .descriptor(PSDDescriptor(classID: "null", items: [("compID", .integer(-1)), ("originalCompID", .integer(-1))]))),
         ])
+        if let filters { descriptor.items.append(("filterFX", .descriptor(filters))) }
         var smart = PSDBinaryWriter()
         smart.ascii("soLD")
         smart.uint32(4)
@@ -110,9 +112,15 @@ enum PSDSmartObjects {
         return (id, try reader.bytes(size))
     }
 
-    /// Which embedded file a layer shows, and where its corners sit on the
-    /// canvas, clockwise from top left.
-    static func placement(from data: [UInt8]) -> (id: String, corners: [CGPoint])? {
+    /// Which embedded file a layer shows, where its corners sit on the
+    /// canvas, clockwise from top left, and its smart filters, if any.
+    struct Placement {
+        var id: String
+        var corners: [CGPoint]
+        var filters: PSDDescriptor?
+    }
+
+    static func placement(from data: [UInt8]) -> Placement? {
         var reader = BigEndianReader(bytes: data)
         guard (try? reader.ascii(4)) == "soLD", (try? reader.uint32()) != nil, (try? reader.uint32()) == 16,
               let descriptor = try? PSDDescriptor.read(&reader), let id = descriptor["Idnt"]?.text else { return nil }
@@ -121,7 +129,7 @@ enum PSDSmartObjects {
         let values = (descriptor["nonAffineTransform"] ?? descriptor["Trnf"])?.list?.compactMap(\.number) ?? []
         guard values.count == 8 else { return nil }
         let corners = stride(from: 0, to: 8, by: 2).map { CGPoint(x: values[$0], y: values[$0 + 1]) }
-        return (id, corners)
+        return Placement(id: id, corners: corners, filters: descriptor["filterFX"]?.descriptor)
     }
 
     /// Whether a warp leaves the contents as they are: none, or a custom

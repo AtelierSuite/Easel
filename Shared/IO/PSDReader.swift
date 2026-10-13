@@ -251,7 +251,10 @@ enum PSDReader {
             }
             if let placed = record.blocks["SoLd"].flatMap(PSDSmartObjects.placement(from:)),
                let file = embedded[placed.id], let contents = PSDSmartObjects.contents(from: file),
-               let transform = PSDSmartObjects.transform(corners: placed.corners, size: contents.size) {
+               let transform = PSDSmartObjects.transform(corners: placed.corners, size: contents.size),
+               let filters = placed.filters.map({
+                   PSDSmartFilters.filters(from: $0, placement: .init(transform, size: contents.size))
+               }) ?? [] {
                 // A smart object: its contents whole, drawn where its
                 // corners sit. Ones Easel cannot place stay as pixels.
                 let canvasMask = record.mask.flatMap { mask -> LayerMask? in
@@ -261,6 +264,7 @@ enum PSDReader {
                 }
                 layer.setSmartObjectContents(contents)
                 layer.transform = transform
+                layer.filters = filters
                 layer.mask = canvasMask.map { mask in
                     LayerMask(image: LayerImage(inLayerSpace(mask.image.cgImage, of: layer, outside: record.mask?.defaultColor ?? 255)),
                               isEnabled: mask.isEnabled)

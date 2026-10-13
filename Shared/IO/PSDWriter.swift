@@ -132,9 +132,14 @@ enum PSDWriter {
         }
         // A smart object keeps its contents as a document of their own.
         var embeddedFile: [UInt8]?
-        if adjustment == nil, let smart = layer.smartObject, let contents = try? data(for: smart.contents) {
+        // Its filters go as smart filters; with any Photoshop has nothing
+        // like, it goes as the pixels it shows.
+        let smartFilters = layer.filters.isEmpty ? nil
+            : PSDSmartFilters.style(for: layer.filters, placement: .init(layer.transform, size: layer.image.size))
+        if adjustment == nil, let smart = layer.smartObject, layer.filters.isEmpty || smartFilters != nil,
+           let contents = try? data(for: smart.contents) {
             let id = layer.id.uuidString.lowercased()
-            blocks += PSDSmartObjects.blocks(for: layer, id: id)
+            blocks += PSDSmartObjects.blocks(for: layer, id: id, filters: smartFilters)
             embeddedFile = PSDSmartObjects.embeddedFile(id: id, name: "\(layer.name).psd", data: [UInt8](contents))
         }
         let opacity = layer.opacity * (adjustment?.opacity ?? 1)

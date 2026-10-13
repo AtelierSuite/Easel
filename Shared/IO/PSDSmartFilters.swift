@@ -1,0 +1,286 @@
+import CoreGraphics
+import Foundation
+
+/// Photoshop's smart filters, kept with a smart object's placement (the
+/// `filterFX` item of its `SoLd` block), as Easel's layer filters and back.
+///
+/// Photoshop runs them on the smart object as placed on the canvas, Easel
+/// on its contents before they are placed, so lengths are scaled by how
+/// much the layer is, and directions turned by how far.
+enum PSDSmartFilters {
+    /// How the layer is placed: the scale lengths shrink by and the turn
+    /// directions take, in degrees anticlockwise as Photoshop's are.
+    struct Placement {
+        var scale: Double
+        var turn: Double
+        /// The contents' size, which Easel's filter lengths are fractions of.
+        var size: CGSize
+
+        init(_ transform: LayerTransform, size: CGSize) {
+            scale = max(sqrt(abs(transform.scaleX * transform.scaleY)), 0.0001)
+            turn = -transform.rotation * 180 / .pi
+            self.size = size
+        }
+
+        /// A thousandth of the contents' longer side, in canvas pixels:
+        /// Easel's filters measure lengths in these.
+        var unit: Double { max(size.width, size.height) / 1000 * scale }
+    }
+
+    /// Easel's strength for a Photoshop motion blur's distance, and twirl's
+    /// angle, fitted to Photoshop's sample renders.
+    private static let motionScale = 0.275
+    private static let twirlScale = 0.7
+
+    // MARK: - Reading
+
+    /// The filters in a smart object's `filterFX`, first run first, or nil
+    /// if any is one Easel has nothing like, or is faded or blended, which
+    /// Easel's filters cannot be.
+    static func filters(from style: PSDDescriptor, placement: Placement) -> [LayerFilter]? {
+        guard let list = style["filterFXList"]?.list?.compactMap(\.descriptor), !list.isEmpty else { return nil }
+        let allOn = style["enab"]?.bool ?? true
+        var filters: [LayerFilter] = []
+        for entry in list {
+            if let blend = entry["blendOptions"]?.descriptor {
+                guard (blend["Opct"]?.number ?? 100) >= 99.5, (blend["Md  "]?.enumValue ?? "Nrml") == "Nrml" else { return nil }
+            }
+            guard let settings = entry["Fltr"]?.descriptor, var filter = filter(from: settings, placement: placement) else { return nil }
+            filter.isEnabled = allOn && (entry["enab"]?.bool ?? true)
+            filters.append(filter)
+        }
+        return filters
+    }
+
+    private static func filter(from settings: PSDDescriptor, placement: Placement) -> LayerFilter? {
+        let unit = placement.unit
+        func number(_ key: String) -> Double? { settings[key]?.number }
+        switch settings.classID {
+        case "GsnB":
+            guard let radius = number("Rds ") else { return nil }
+            return make(.gaussianBlur) { $0.amount = radius / (50 * unit) }
+        case "MtnB":
+            guard let distance = number("Dstn") else { return nil }
+            return make(.motionBlur) {
+                // Fitted to Photoshop's own: its distance runs further.
+                $0.amount = distance * motionScale / (80 * unit)
+                // Easel's turns clockwise on screen.
+                $0.angle = -((number("Angl") ?? 0) + placement.turn)
+            }
+        case "RdlB":
+            guard settings["BlrM"]?.enumValue == "Zm  ", let amount = number("Amnt") else { return nil }
+            return make(.zoomBlur) {
+                $0.amount = amount / 100
+                if let center = settings["Cntr"]?.descriptor, let x = center["Hrzn"]?.number, let y = center["Vrtc"]?.number {
+                    $0.centerX = x / 100
+                    $0.centerY = y / 100
+                }
+            }
+        case "UnsM":
+            guard let amount = number("Amnt"), let radius = number("Rds "), (number("Thsh") ?? 0) <= 2 else { return nil }
+            return make(.unsharpMask) {
+                $0.amount = amount / 200
+                $0.radius = radius / (10 * unit)
+            }
+        case "HghP":
+            guard let radius = number("Rds ") else { return nil }
+            return make(.highPass) { $0.amount = radius / (20 * unit) }
+        case "Twrl":
+            guard let angle = number("Angl") else { return nil }
+            // Photoshop's turns the other way, and eases off sooner.
+            return make(.twirl) { $0.amount = -angle * twirlScale / 360 }
+        case "Pnch":
+            guard let amount = number("Amnt") else { return nil }
+            return make(.pinch) { $0.amount = amount / 100 }
+        case "Embs":
+            guard let amount = number("Amnt") else { return nil }
+            return make(.emboss) {
+                $0.amount = amount / 200 * (number("Hght") ?? 3) / 3
+                $0.angle = (number("Angl") ?? 135) + placement.turn
+            }
+        case "Msc ":
+            guard let size = number("ClSz") else { return nil }
+            return make(.mosaic) { $0.amount = size / (60 * unit) }
+        case "Crvs":
+            return curves(settings)
+        case "Lvls":
+            return levels(settings)
+        case "BrgC":
+            guard settings["useLegacy"]?.bool != true else { return nil }
+            let brightness = number("Brgh") ?? 0, contrast = number("Cntr") ?? 0
+            return make(brightness == 0 && contrast != 0 ? .contrast : .brightness) {
+                $0.amount = $0.kind == .brightness ? min(max(brightness / 150, -1), 1) : min(max(contrast / 100, -1), 1)
+                $0.photoshopBrightness = brightness
+                $0.photoshopContrast = contrast
+            }
+        default:
+            return nil
+        }
+    }
+
+    private static func make(_ kind: LayerFilter.Kind, _ set: (inout LayerFilter) -> Void) -> LayerFilter {
+        var filter = LayerFilter(kind: kind)
+        set(&filter)
+        return filter
+    }
+
+    /// The channel an adjustment names: 0 for the combined one, then red,
+    /// green and blue.
+    private static func channel(_ value: PSDDescriptor.Value?) -> Int? {
+        guard case .enumReference(_, _, let name) = value ?? .enumReference(classID: "Chnl", type: "Chnl", value: "Cmps") else { return nil }
+        return ["Cmps": 0, "Rd  ": 1, "Grn ": 2, "Bl  ": 3][name]
+    }
+
+    private static func curves(_ settings: PSDDescriptor) -> LayerFilter? {
+        var curves: [[Double]] = Array(repeating: [], count: 4)
+        for adjustment in settings["Adjs"]?.list?.compactMap(\.descriptor) ?? [] {
+            guard let index = channel(adjustment["Chnl"]), let points = adjustment["Crv "]?.list?.compactMap(\.descriptor) else { return nil }
+            curves[index] = points.flatMap { [($0["Hrzn"]?.number ?? 0) / 255, ($0["Vrtc"]?.number ?? 0) / 255] }
+        }
+        var filter = LayerFilter(kind: .curves)
+        let combined = curves[0].isEmpty ? [0, 0, 1, 1] : curves[0]
+        let points = stride(from: 0, to: combined.count - 1, by: 2).map { (x: combined[$0], y: combined[$0 + 1]) }
+        let spline = NaturalSpline(points.sorted { $0.x < $1.x })
+        filter.curve = [0, 0.25, 0.5, 0.75, 1].map { min(max(spline.value(at: $0), 0), 1) }
+        filter.curvePoints = curves
+        return filter
+    }
+
+    private static func levels(_ settings: PSDDescriptor) -> LayerFilter? {
+        var channels = Array(repeating: [0.0, 1, 0, 1, 1], count: 4)
+        for adjustment in settings["Adjs"]?.list?.compactMap(\.descriptor) ?? [] {
+            guard let index = channel(adjustment["Chnl"]) else { return nil }
+            let input = adjustment["Inpt"]?.list?.compactMap(\.number) ?? [0, 255]
+            let output = adjustment["Otpt"]?.list?.compactMap(\.number) ?? [0, 255]
+            guard input.count == 2, output.count == 2 else { return nil }
+            channels[index] = [input[0] / 255, input[1] / 255, output[0] / 255, output[1] / 255, adjustment["Gmm "]?.number ?? 1]
+        }
+        var filter = LayerFilter(kind: .levels)
+        filter.black = channels[0][0]
+        filter.white = channels[0][1]
+        filter.gamma = channels[0][4]
+        filter.levelsChannels = channels
+        return filter
+    }
+
+    // MARK: - Writing
+
+    /// The filters as a `filterFX` item, or nil if any is one Photoshop has
+    /// nothing like.
+    static func style(for filters: [LayerFilter], placement: Placement) -> PSDDescriptor? {
+        guard !filters.isEmpty else { return nil }
+        var list: [PSDDescriptor.Value] = []
+        for filter in filters {
+            guard let (name, id, settings) = settings(for: filter, placement: placement) else { return nil }
+            list.append(.descriptor(PSDDescriptor(classID: "filterFX", items: [
+                ("Nm  ", .text(name)),
+                ("blendOptions", .descriptor(PSDDescriptor(classID: "blendOptions", items: [
+                    ("Opct", .unit("#Prc", 100)), ("Md  ", .enumerated(type: "BlnM", value: "Nrml")),
+                ]))),
+                ("enab", .bool(filter.isEnabled)), ("hasoptions", .bool(true)),
+                ("FrgC", .rgb(.black)), ("BckC", .rgb(.white)),
+                ("Fltr", .descriptor(settings)), ("filterID", .integer(id)),
+            ])))
+        }
+        return PSDDescriptor(classID: "filterFXStyle", items: [
+            ("enab", .bool(true)), ("validAtPosition", .bool(true)),
+            ("filterMaskEnable", .bool(false)), ("filterMaskLinked", .bool(false)), ("filterMaskExtendWithWhite", .bool(true)),
+            ("filterFXList", .list(list)),
+        ])
+    }
+
+    /// Photoshop's name, id and settings for one filter.
+    private static func settings(for filter: LayerFilter, placement: Placement) -> (String, Int32, PSDDescriptor)? {
+        let unit = placement.unit
+        func entry(_ name: String, _ classID: String, _ items: [(key: String, value: PSDDescriptor.Value)]) -> (String, Int32, PSDDescriptor) {
+            // Photoshop's id for a filter is its class's four letters.
+            let id = classID.utf8.reduce(Int64(0)) { $0 << 8 | Int64($1) }
+            return (name, Int32(truncatingIfNeeded: id), PSDDescriptor(classID: classID, items: items))
+        }
+        switch filter.kind {
+        case .gaussianBlur:
+            return entry("Gaussian Blur...", "GsnB", [("Rds ", .unit("#Pxl", filter.amount * 50 * unit))])
+        case .motionBlur:
+            return entry("Motion Blur...", "MtnB", [
+                ("Angl", .integer(Int32((-filter.angle - placement.turn).rounded()))),
+                ("Dstn", .unit("#Pxl", filter.amount * 80 * unit / motionScale)),
+            ])
+        case .zoomBlur:
+            return entry("Radial Blur...", "RdlB", [
+                ("Amnt", .integer(Int32(min(max(filter.amount * 100, 1), 100).rounded()))),
+                ("BlrM", .enumerated(type: "BlrM", value: "Zm  ")), ("BlrQ", .enumerated(type: "BlrQ", value: "Gd  ")),
+                ("Cntr", .descriptor(PSDDescriptor(classID: "Pnt ", items: [
+                    ("Hrzn", .unit("#Prc", filter.centerX * 100)), ("Vrtc", .unit("#Prc", filter.centerY * 100)),
+                ]))),
+            ])
+        case .unsharpMask:
+            return entry("Unsharp Mask...", "UnsM", [
+                ("Amnt", .unit("#Prc", filter.amount * 200)),
+                ("Rds ", .unit("#Pxl", max(0.5, (filter.radius ?? 0.3) * 10 * unit))), ("Thsh", .integer(0)),
+            ])
+        case .highPass:
+            return entry("High Pass...", "HghP", [("Rds ", .unit("#Pxl", max(0.5, filter.amount * 20 * unit)))])
+        case .twirl where abs(filter.centerX - 0.5) < 0.01 && abs(filter.centerY - 0.5) < 0.01:
+            return entry("Twirl...", "Twrl", [("Angl", .integer(Int32((-filter.amount * 360 / twirlScale).rounded())))])
+        case .pinch where abs(filter.centerX - 0.5) < 0.01 && abs(filter.centerY - 0.5) < 0.01:
+            return entry("Pinch...", "Pnch", [("Amnt", .integer(Int32(min(max(filter.amount * 100, -100), 100).rounded())))])
+        case .emboss:
+            return entry("Emboss...", "Embs", [
+                ("Angl", .integer(Int32((filter.angle - placement.turn).rounded()))), ("Hght", .integer(3)),
+                ("Amnt", .integer(Int32(min(max(filter.amount * 200, 1), 500).rounded()))),
+            ])
+        case .mosaic:
+            return entry("Mosaic...", "Msc ", [("ClSz", .unit("#Pxl", max(2, filter.amount * 60 * unit)))])
+        case .curves:
+            var adjustments: [PSDDescriptor.Value] = []
+            for (index, name) in ["Cmps", "Rd  ", "Grn ", "Bl  "].enumerated() {
+                var flat = filter.curvePoints?.indices.contains(index) == true ? filter.curvePoints![index] : []
+                if index == 0, flat.isEmpty {
+                    let values = filter.curve?.count == 5 ? filter.curve! : LayerFilter.straightCurve
+                    flat = zip([0, 0.25, 0.5, 0.75, 1.0], values).flatMap { [$0, $1] }
+                }
+                guard flat.count >= 4 else { continue }
+                let points = stride(from: 0, to: flat.count - 1, by: 2).map { (flat[$0], flat[$0 + 1]) }.sorted { $0.0 < $1.0 }
+                adjustments.append(.descriptor(PSDDescriptor(classID: "CrvA", items: [
+                    ("Chnl", .enumReference(classID: "Chnl", type: "Chnl", value: name)),
+                    ("Crv ", .list(points.map { point in
+                        .descriptor(PSDDescriptor(classID: "Pnt ", items: [
+                            ("Hrzn", .double((min(max(point.0, 0), 1) * 255).rounded())),
+                            ("Vrtc", .double((min(max(point.1, 0), 1) * 255).rounded())),
+                        ]))
+                    })),
+                ])))
+            }
+            return entry("Curves...", "Crvs", [
+                ("presetKind", .enumerated(type: "presetKindType", value: "presetKindCustom")), ("Adjs", .list(adjustments)),
+            ])
+        case .levels:
+            var adjustments: [PSDDescriptor.Value] = []
+            for (index, name) in ["Cmps", "Rd  ", "Grn ", "Bl  "].enumerated() {
+                var values = filter.levelsChannels?.indices.contains(index) == true ? filter.levelsChannels![index] : [0, 1, 0, 1, 1]
+                if index == 0 {
+                    values[0] = filter.black ?? 0
+                    values[1] = filter.white ?? 1
+                    values[4] = filter.gamma ?? 1
+                }
+                guard values != [0, 1, 0, 1, 1] else { continue }
+                func level(_ value: Double) -> PSDDescriptor.Value { .integer(Int32((min(max(value, 0), 1) * 255).rounded())) }
+                adjustments.append(.descriptor(PSDDescriptor(classID: "LvlA", items: [
+                    ("Chnl", .enumReference(classID: "Chnl", type: "Chnl", value: name)),
+                    ("Inpt", .list([level(values[0]), level(values[1])])), ("Gmm ", .double(values[4])),
+                    ("Otpt", .list([level(values[2]), level(values[3])])),
+                ])))
+            }
+            return entry("Levels...", "Lvls", [
+                ("presetKind", .enumerated(type: "presetKindType", value: "presetKindCustom")), ("Adjs", .list(adjustments)),
+            ])
+        case .brightness where filter.hasPhotoshopSettings, .contrast where filter.hasPhotoshopSettings:
+            return entry("Brightness/Contrast...", "BrgC", [
+                ("Brgh", .integer(Int32((filter.photoshopBrightness ?? 0).rounded()))),
+                ("Cntr", .integer(Int32((filter.photoshopContrast ?? 0).rounded()))), ("useLegacy", .bool(false)),
+            ])
+        default:
+            return nil
+        }
+    }
+}

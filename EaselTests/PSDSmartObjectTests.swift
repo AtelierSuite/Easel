@@ -55,6 +55,39 @@ struct PSDSmartObjectTests {
         }
     }
 
+    @Test func smartFiltersComeBackInOrder() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30), scaleX: 2, scaleY: 2))
+        var blur = LayerFilter(kind: .gaussianBlur)
+        blur.amount = 0.2
+        var motion = LayerFilter(kind: .motionBlur)
+        motion.amount = 0.1
+        motion.angle = 30
+        motion.isEnabled = false
+        var curves = LayerFilter(kind: .curves)
+        curves.curve = [0, 0.4, 0.7, 0.9, 1]
+        layer.filters = [blur, motion, curves]
+        let read = try #require(try roundTrip([layer]).layers.first)
+        #expect(read.isSmartObject)
+        #expect(read.filters.map(\.kind) == [.gaussianBlur, .motionBlur, .curves])
+        #expect(abs(read.filters[0].amount - 0.2) < 0.001)
+        #expect(abs(read.filters[1].amount - 0.1) < 0.01)
+        #expect(abs(read.filters[1].angle - 30) < 0.5)
+        #expect(read.filters[1].isEnabled == false)
+        let curve = try #require(read.filters[2].curve)
+        #expect(zip(curve, [0, 0.4, 0.7, 0.9, 1]).allSatisfy { abs($0 - $1) < 0.01 })
+    }
+
+    @Test func filtersPhotoshopLacksLeaveThePixels() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        layer.filters = [LayerFilter(kind: .sepia)]
+        let read = try #require(try roundTrip([layer]).layers.first)
+        // Drawn as it looked, sepia and all, rather than losing the filter.
+        #expect(!read.isSmartObject)
+        #expect(read.filters.isEmpty)
+        let pixel = TestImages.pixel(CompositionRenderer.render(Composition(size: size, layers: [read])), x: 35, y: 25)
+        #expect(pixel.green > 40)
+    }
+
     @Test func nestedSmartObjectsComeBack() throws {
         var outer = Layer(name: "Outer", image: LayerImage(Bitmap.solid(size: size, color: .clear)), canvasSize: size)
         outer.setSmartObjectContents(Composition(size: size, layers: [smartLayer(transform: LayerTransform(position: CGPoint(x: 20, y: 20)))]))

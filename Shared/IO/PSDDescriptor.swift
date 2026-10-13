@@ -17,6 +17,9 @@ struct PSDDescriptor: Equatable {
         case bool(Bool)
         case rawData([UInt8])
         case unitFloats(String, [Double])
+        /// A reference to one thing named by an enumerated value, as curves
+        /// and levels name their channel: class, type and value.
+        case enumReference(classID: String, type: String, value: String)
         /// Kinds kept only so they can be skipped.
         case unsupported
 
@@ -135,13 +138,15 @@ struct PSDDescriptor: Equatable {
             return .descriptor(try read(&reader))
         case "obj ":
             let count = Int(try reader.uint32())
+            var reference: Value = .unsupported
             for _ in 0..<count {
                 switch try reader.ascii(4) {
                 case "Enmr":
                     _ = try readUnicode(&reader)
-                    _ = try readKey(&reader)
-                    _ = try readKey(&reader)
-                    _ = try readKey(&reader)
+                    let classID = try readKey(&reader)
+                    let type = try readKey(&reader)
+                    let value = try readKey(&reader)
+                    if count == 1 { reference = .enumReference(classID: classID, type: type, value: value) }
                 case "Clss":
                     _ = try readUnicode(&reader)
                     _ = try readKey(&reader)
@@ -159,7 +164,7 @@ struct PSDDescriptor: Equatable {
                     throw PSDReader.Failure.damaged
                 }
             }
-            return .unsupported
+            return reference
         default:
             throw PSDReader.Failure.unsupported
         }
@@ -229,6 +234,14 @@ struct PSDDescriptor: Equatable {
             writer.ascii(unit)
             writer.uint32(values.count)
             for value in values { writer.float64(value) }
+        case .enumReference(let classID, let type, let value):
+            writer.ascii("obj ")
+            writer.uint32(1)
+            writer.ascii("Enmr")
+            writer.unicodeString("")
+            writeKey(classID, to: &writer)
+            writeKey(type, to: &writer)
+            writeKey(value, to: &writer)
         case .unsupported:
             // Nothing Easel writes is of a kind it cannot read.
             break
