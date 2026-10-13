@@ -123,4 +123,17 @@ struct AdjustmentLayerTests {
         let grey = ColorCube.image(for: LayerFilter(kind: .blackAndWhite))
         #expect(isGrey(grey, x: n - 1, y: 0))
     }
+
+    @Test func steppedAdjustmentsGetAFinerCubeLookedUpNearest() {
+        let threshold = LayerFilter(kind: .threshold)
+        #expect(ColorCube.isStepped(threshold) && !ColorCube.isStepped(LayerFilter(kind: .curves)))
+        let cube = ColorCube.image(for: threshold)
+        let n = ColorCube.size(for: threshold)
+        #expect(n == ColorCube.steppedSize && cube.width == n * n && cube.height == n)
+        // Every colour of it black or white, nothing in between.
+        for (red, green, blue) in [(n / 2, n / 2, n / 2), (n / 2 + 1, n / 2, n / 2), (n - 1, 0, 0), (0, n - 1, 3)] {
+            let pixel = TestImages.pixel(cube, x: blue * n + red, y: green)
+            #expect(pixel.red < 3 || pixel.red > 252)
+        }
+    }
 }

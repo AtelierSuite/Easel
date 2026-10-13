@@ -13,17 +13,24 @@ using namespace metal;
 }
 
 /// Each pixel's colour looked up in a `ColorCube`: what an adjustment
-/// layer makes of the layers beneath it, on the canvas.
-[[ stitchable ]] half4 colorCube(float2 position, half4 color, texture2d<half> cube, float size) {
+/// layer makes of the layers beneath it, on the canvas. With `nearest`,
+/// the nearest of the cube's colours, for filters with hard steps.
+[[ stitchable ]] half4 colorCube(float2 position, half4 color, texture2d<half> cube, float size, float nearest) {
     if (color.a <= 0.0h) {
         return color;
     }
     float3 rgb = clamp(float3(color.rgb / color.a), 0.0, 1.0) * (size - 1.0);
+    float width = size * size;
+    if (nearest > 0.5) {
+        constexpr sampler point(coord::normalized, address::clamp_to_edge, filter::nearest);
+        float3 index = round(rgb);
+        float2 at = float2((index.b * size + index.r + 0.5) / width, (index.g + 0.5) / size);
+        return half4(cube.sample(point, at).rgb * color.a, color.a);
+    }
     float blue = floor(rgb.b);
     float nextBlue = min(blue + 1.0, size - 1.0);
     float along = rgb.b - blue;
     constexpr sampler linear(coord::normalized, address::clamp_to_edge, filter::linear);
-    float width = size * size;
     // Within a slice, red and green are interpolated by the sampler;
     // between slices, by hand.
     float2 lower = float2((blue * size + rgb.r + 0.5) / width, (rgb.g + 0.5) / size);

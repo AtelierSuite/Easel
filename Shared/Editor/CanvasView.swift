@@ -237,11 +237,13 @@ struct CanvasView: View {
     /// their way into the mask show as they are drawn.
     private func adjusted(_ below: AnyView, by layer: Layer, _ viewport: CanvasViewport) -> AnyView {
         let cube = layer.adjustment.map(ColorCube.image(for:)) ?? Bitmap.empty
+        let cubeSize = layer.adjustment.map(ColorCube.size(for:)) ?? ColorCube.size
+        let nearest: Float = layer.adjustment.map(ColorCube.isStepped) == true ? 1 : 0
         var maskLayer = layer.with(opacity: 1, blendMode: .normal)
         maskLayer.mask = nil
         let changed = below
             .colorEffect(ShaderLibrary.colorCube(
-                .image(Image(decorative: cube, scale: 1)), .float(Float(ColorCube.size))
+                .image(Image(decorative: cube, scale: 1)), .float(Float(cubeSize)), .float(nearest)
             ))
             .mask(alignment: .topLeading) {
                 if let mask = layer.activeMask {

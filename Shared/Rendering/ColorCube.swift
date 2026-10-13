@@ -11,6 +11,18 @@ import Synchronization
 /// are Display P3 as stored, the way the canvas's pixels are.
 enum ColorCube {
     static let size = 33
+    /// For filters with hard steps, which blending between the grid's
+    /// colours would soften: a finer grid, each colour taken from the
+    /// nearest point of it.
+    static let steppedSize = 64
+
+    static func isStepped(_ filter: LayerFilter) -> Bool {
+        [.threshold, .posterize].contains(filter.kind)
+    }
+
+    static func size(for filter: LayerFilter) -> Int {
+        isStepped(filter) ? steppedSize : size
+    }
 
     static func image(for filter: LayerFilter) -> CGImage {
         let key = filter.withoutIdentity
@@ -26,7 +38,7 @@ enum ColorCube {
     private static let cache = Mutex<[LayerFilter: CGImage]>([:])
 
     private static func make(_ filter: LayerFilter) -> CGImage {
-        let n = size
+        let n = size(for: filter)
         let width = n * n
         var values = [Float](repeating: 1, count: width * n * 4)
         for green in 0..<n {
