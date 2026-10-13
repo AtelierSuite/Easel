@@ -907,6 +907,16 @@ S = {
 "LayerFilters.Green": ("Green", "グリーン", "녹색", "绿色", "綠色"),
 "LayerFilters.Blue": ("Blue", "ブルー", "파랑", "蓝色", "藍色"),
 "LayerFilters.Constant": ("Constant", "定数", "상수", "常数", "常數"),
+"FilterCategory.Adjustments": ("Adjustments", "色調補正", "조정", "调整", "調整"),
+"FilterCategory.Blur": ("Blur", "ぼかし", "흐림 효과", "模糊", "模糊"),
+"FilterCategory.Noise": ("Noise", "ノイズ", "노이즈", "杂色", "雜訊"),
+"FilterCategory.Sharpen": ("Sharpen", "シャープ", "선명 효과", "锐化", "銳利化"),
+"FilterCategory.Distort": ("Distort", "変形", "왜곡", "扭曲", "扭曲"),
+"FilterCategory.Stylize": ("Stylize", "表現手法", "스타일화", "风格化", "風格化"),
+"FilterCategory.Pixelate": ("Pixelate", "ピクセレート", "픽셀화", "像素化", "像素"),
+"FilterCategory.Render": ("Render", "描画", "렌더", "渲染", "演算上色"),
+"FilterCategory.Video": ("Video", "ビデオ", "비디오", "视频", "視訊"),
+"FilterCategory.Other": ("Other", "その他", "기타", "其它", "其他"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

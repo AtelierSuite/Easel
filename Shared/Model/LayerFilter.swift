@@ -128,19 +128,25 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
 
         /// Tone and colour first, then the blurs and the mosaic, which is how
         /// the add menu groups them.
-        static let groups: [[Kind]] = [
-            [.blackAndWhite, .sepia, .saturation, .brightness, .contrast],
-            [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor],
-            [.exposure, .vibrance, .photoFilter, .channelMixer, .desaturate, .invert, .posterize, .threshold, .solarize],
-            [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur, .blur, .blurMore, .average],
-            [.noiseReduction, .reduceNoise, .despeckle, .addNoise, .median, .dustAndScratches, .minimum, .maximum],
-            [.unsharpMask, .sharpen, .sharpenMore, .sharpenEdges, .highPass, .lensCorrection],
-            [.twirl, .pinch, .spherize, .zigzag, .ripple, .wave, .shear, .polarCoordinates, .offset],
-            [.emboss, .findEdges, .traceContour, .wind, .diffuse, .tiles, .extrude],
-            [.mosaic, .halftone, .crystallize, .pointillize, .mezzotint, .facet, .fragment],
-            [.spinBlur, .deInterlace, .ntscColors, .equalize],
-            [.clouds, .differenceClouds, .fibers, .lensFlare],
-            [.custom],
+        static let groups: [[Kind]] = categories.map(\.kinds)
+
+        /// The add menu's groups, as Photoshop's Filter menu has them: tone
+        /// and colour first, then menus of their own by what they do.
+        static let categories: [(titleKey: String?, kinds: [Kind])] = [
+            (nil, [.blackAndWhite, .sepia, .saturation, .brightness, .contrast]),
+            (nil, [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor]),
+            ("FilterCategory.Adjustments", [.exposure, .vibrance, .photoFilter, .channelMixer, .desaturate, .invert, .posterize,
+                                            .threshold, .solarize, .equalize]),
+            ("FilterCategory.Blur", [.gaussianBlur, .motionBlur, .zoomBlur, .spinBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur,
+                                     .blur, .blurMore, .average]),
+            ("FilterCategory.Noise", [.noiseReduction, .reduceNoise, .despeckle, .addNoise, .median, .dustAndScratches]),
+            ("FilterCategory.Sharpen", [.unsharpMask, .sharpen, .sharpenMore, .sharpenEdges]),
+            ("FilterCategory.Distort", [.twirl, .pinch, .spherize, .zigzag, .ripple, .wave, .shear, .polarCoordinates, .lensCorrection]),
+            ("FilterCategory.Stylize", [.emboss, .findEdges, .traceContour, .wind, .diffuse, .tiles, .extrude]),
+            ("FilterCategory.Pixelate", [.mosaic, .halftone, .crystallize, .pointillize, .mezzotint, .facet, .fragment]),
+            ("FilterCategory.Render", [.clouds, .differenceClouds, .fibers, .lensFlare]),
+            ("FilterCategory.Video", [.deInterlace, .ntscColors]),
+            ("FilterCategory.Other", [.highPass, .minimum, .maximum, .offset, .custom]),
         ]
 
         var label: String {
@@ -296,7 +302,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
 
         /// Filters that change each pixel by its colour alone, which can
         /// also be adjustment layers changing everything beneath them.
-        var isPerPixel: Bool { Self.groups.prefix(3).contains { $0.contains(self) } }
+        var isPerPixel: Bool { self != .equalize && Self.groups.prefix(3).contains { $0.contains(self) } }
 
         /// Filters Core Image works out by mixing neighbouring pixels, which
         /// it is given shades as they look to mix.

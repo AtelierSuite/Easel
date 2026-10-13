@@ -612,24 +612,30 @@ struct AddFilterMenu<Label: View>: View {
 
     var body: some View {
         Menu {
-            ForEach(Array(LayerFilter.Kind.groups.enumerated()), id: \.offset) { _, kinds in
-                Section {
-                    ForEach(kinds) { kind in
-                        Button {
-                            state.addFilter(kind)
-                        } label: {
-                            SwiftUI.Label {
-                                Text(verbatim: kind.label)
-                            } icon: {
-                                Image(systemName: kind.symbolName)
-                            }
-                        }
-                        .accessibilityIdentifier("addFilter.\(kind.rawValue)")
-                    }
+            ForEach(Array(LayerFilter.Kind.categories.enumerated()), id: \.offset) { _, category in
+                if let title = category.titleKey {
+                    Menu(LocalizedStringKey(title)) { buttons(category.kinds) }
+                } else {
+                    Section { buttons(category.kinds) }
                 }
             }
         } label: {
             label
+        }
+    }
+
+    private func buttons(_ kinds: [LayerFilter.Kind]) -> some View {
+        ForEach(kinds) { kind in
+            Button {
+                state.addFilter(kind)
+            } label: {
+                SwiftUI.Label {
+                    Text(verbatim: kind.label)
+                } icon: {
+                    Image(systemName: kind.symbolName)
+                }
+            }
+            .accessibilityIdentifier("addFilter.\(kind.rawValue)")
         }
     }
 }
