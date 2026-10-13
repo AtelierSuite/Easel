@@ -183,6 +183,23 @@ struct NodeToolTests {
         #expect(abs(still.x - 50) < 0.01 && abs(still.y - 50) < 0.01)
     }
 
+    @Test func undoingThePathLetsGoOfItsPoints() throws {
+        let state = editor()
+        let before = state.composition
+        state.toolBegan(at: CGPoint(x: 150, y: 150), pressure: 1)
+        state.toolEnded(isTap: false, at: CGPoint(x: 150, y: 150))
+        state.isSelectingMultiplePoints = true
+        state.toolBegan(at: CGPoint(x: 50, y: 50), pressure: 1)
+        state.toolEnded(isTap: false, at: CGPoint(x: 50, y: 50))
+        #expect(state.selectedNodes.count == 2)
+        var blank = before
+        blank.layers.removeLast()
+        state.write(blank)
+        state.showRestored(blank)
+        #expect(state.selectedNode == nil)
+        #expect(state.additionalNodes.isEmpty)
+    }
+
     @Test func aCancelledDragPutsThePointBack() {
         let state = editor()
         let before = state.activeLayer

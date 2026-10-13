@@ -442,6 +442,20 @@ final class EditorState {
         if let selection, !composition.canvasRect.intersects(selection.bounds(in: composition.size)) {
             self.selection = nil
         }
+        if let groupID = activeGroupID, composition.group(groupID) == nil { activeGroupID = nil }
+        func resolves(_ ref: VectorNodeRef) -> Bool {
+            guard let paths = composition[ref.layerID]?.vector?.paths, paths.indices.contains(ref.path) else { return false }
+            return paths[ref.path].nodes.indices.contains(ref.node)
+        }
+        if let node = selectedNode, !resolves(node) { selectedNode = nil }
+        additionalNodes.removeAll { !resolves($0) }
+        if let path = penPath, composition[path.layerID]?.vector?.paths.indices.contains(path.path) != true {
+            penPath = nil
+        }
+        // Its regions were cut from paths the change may have taken away.
+        shapeBuilder = nil
+        vectorDrag = nil
+        vectorDragOrigin = nil
     }
 
     // MARK: - Filtered layers
