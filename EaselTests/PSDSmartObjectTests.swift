@@ -221,4 +221,33 @@ struct PSDSmartObjectTests {
         #expect(read.layers.first?.filterMask?.isEnabled == false)
         #expect(read.layers.first?.filterMask?.image.size == CGSize(width: 20, height: 20))
     }
+
+    @Test(arguments: ["hsl", "colorBalance", "gradientMap"])
+    func adjustmentsComeBackAsSmartFilters(_ kind: String) throws {
+        var filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)
+        switch filter.kind {
+        case .hsl:
+            var bands = LayerFilter.neutralHSL
+            bands[0] = 0.5
+            bands[5 * 3 + 1] = -0.6
+            filter.hslBands = bands
+        case .colorBalance:
+            filter.balance = [0.4, -0.2, 0.3]
+        default:
+            filter.amount = 0.6
+            filter.shadowColor = RGBAColor(red: 0, green: 0, blue: 0.5)
+            filter.highlightColor = RGBAColor(red: 1, green: 0.9, blue: 0.2)
+        }
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        layer.filters = [filter]
+        let before = CompositionRenderer.render(Composition(size: size, layers: [layer]))
+        let read = try #require(try roundTrip([layer]).layers.first)
+        #expect(read.isSmartObject)
+        #expect(read.filters.map(\.kind) == [filter.kind])
+        let after = CompositionRenderer.render(Composition(size: size, layers: [read]))
+        for (x, y) in [(35, 25), (45, 35)] {
+            let p = TestImages.pixel(before, x: x, y: y), q = TestImages.pixel(after, x: x, y: y)
+            #expect(abs(p.red - q.red) < 6 && abs(p.green - q.green) < 6 && abs(p.blue - q.blue) < 6)
+        }
+    }
 }

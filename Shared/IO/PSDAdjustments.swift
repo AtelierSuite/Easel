@@ -102,6 +102,13 @@ enum PSDAdjustments {
             ranges.append(values)
             raw += limits + values
         }
+        return hueSaturation(master: master, ranges: ranges, raw: raw)
+    }
+
+    /// Easel's HSL filter for Photoshop's Hue/Saturation: the master hue,
+    /// saturation and lightness, each range's three, and the ranges' own
+    /// limits and values as Photoshop has them, kept to draw them its way.
+    static func hueSaturation(master: [Double], ranges: [[Double]], raw: [Double]) -> LayerFilter {
         var bands: [Double] = []
         for members in bandRanges {
             let summed = (0..<3).map { part in members.map { ranges[$0][part] }.reduce(0, +) / Double(members.count) }
@@ -169,6 +176,31 @@ enum PSDAdjustments {
 
     // MARK: - Writing
 
+    /// Photoshop's Hue/Saturation for an HSL or saturation filter: the master
+    /// hue, saturation and lightness, then for each of its six ranges its
+    /// four limits and its three.
+    static func hueSaturationSettings(for filter: LayerFilter) -> [Double]? {
+        if filter.kind == .hsl, filter.hasPhotoshopSettings { return filter.photoshopHueSaturation }
+        guard filter.kind == .hsl || filter.kind == .saturation else { return nil }
+        var settings: [Double] = filter.kind == .saturation ? [0, (filter.amount * 100).rounded(), 0] : [0, 0, 0]
+        let bands = filter.hslBands?.count == 24 ? filter.hslBands! : LayerFilter.neutralHSL
+        // Photoshop's six ranges sit at Easel's red, yellow, green, aqua,
+        // blue and magenta bands.
+        for (band, limits) in zip([0, 2, 3, 4, 5, 7], rangeLimits) {
+            let isHSL = filter.kind == .hsl
+            settings += limits
+            settings.append(isHSL ? (bands[band * 3] * 60).rounded() : 0)
+            settings.append(isHSL ? (bands[band * 3 + 1] * 100).rounded() : 0)
+            settings.append(isHSL ? (bands[band * 3 + 2] * 100).rounded() : 0)
+        }
+        return settings
+    }
+
+    /// Where Photoshop's six hue ranges begin and end, ramps and all.
+    static let rangeLimits: [[Double]] = [
+        [315, 345, 15, 45], [15, 45, 75, 105], [75, 105, 135, 165], [135, 165, 195, 225], [195, 225, 255, 285], [255, 285, 315, 345],
+    ]
+
     /// Photoshop's record for an Easel adjustment, and what its opacity
     /// must be scaled by for amounts Photoshop sets by fading the layer.
     /// Nil for filters Photoshop has nothing like.
@@ -230,35 +262,13 @@ enum PSDAdjustments {
                 }
             }
             return ([("curv", out.data)], 1)
-        case .hsl where filter.hasPhotoshopSettings:
-            let settings = filter.photoshopHueSaturation!
+        case .hsl, .saturation:
+            guard let settings = hueSaturationSettings(for: filter) else { return nil }
             out.uint16(2)
             out.uint8(0)
             out.uint8(0)
             for _ in 0..<3 { out.int16(0) }
             for value in settings { out.int16(Int(value.rounded())) }
-            return ([("hue2", out.data)], 1)
-        case .hsl, .saturation:
-            out.uint16(2)
-            out.uint8(0)
-            out.uint8(0)
-            for _ in 0..<3 { out.int16(0) }
-            let master = filter.kind == .saturation ? [0, Int((filter.amount * 100).rounded()), 0] : [0, 0, 0]
-            for value in master { out.int16(value) }
-            let bands = filter.hslBands?.count == 24 ? filter.hslBands! : LayerFilter.neutralHSL
-            // Photoshop's six ranges sit at Easel's red, yellow, green,
-            // aqua, blue and magenta bands.
-            let ranges: [(band: Int, limits: [Int])] = [
-                (0, [315, 345, 15, 45]), (2, [15, 45, 75, 105]), (3, [75, 105, 135, 165]),
-                (4, [135, 165, 195, 225]), (5, [195, 225, 255, 285]), (7, [255, 285, 315, 345]),
-            ]
-            for range in ranges {
-                for limit in range.limits { out.int16(limit) }
-                let isHSL = filter.kind == .hsl
-                out.int16(isHSL ? Int((bands[range.band * 3] * 60).rounded()) : 0)
-                out.int16(isHSL ? Int((bands[range.band * 3 + 1] * 100).rounded()) : 0)
-                out.int16(isHSL ? Int((bands[range.band * 3 + 2] * 100).rounded()) : 0)
-            }
             return ([("hue2", out.data)], 1)
         case .brightness, .contrast:
             var brightness = filter.kind == .brightness ? Int((filter.amount * 150).rounded()) : 0

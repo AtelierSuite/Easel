@@ -42,10 +42,17 @@ enum PSDSmartFilters {
         let allOn = style["enab"]?.bool ?? true
         var filters: [LayerFilter] = []
         for entry in list {
-            if let blend = entry["blendOptions"]?.descriptor {
-                guard (blend["Opct"]?.number ?? 100) >= 99.5, (blend["Md  "]?.enumValue ?? "Nrml") == "Nrml" else { return nil }
-            }
             guard let settings = entry["Fltr"]?.descriptor, var filter = filter(from: settings, placement: placement) else { return nil }
+            if let blend = entry["blendOptions"]?.descriptor {
+                let opacity = (blend["Opct"]?.number ?? 100) / 100
+                guard (blend["Md  "]?.enumValue ?? "Nrml") == "Nrml" else { return nil }
+                // A gradient map's strength is how much it shows.
+                if filter.kind == .gradientMap {
+                    filter.amount = min(max(opacity, 0), 1)
+                } else if opacity < 0.995 {
+                    return nil
+                }
+            }
             filter.isEnabled = allOn && (entry["enab"]?.bool ?? true)
             filters.append(filter)
         }
@@ -101,6 +108,16 @@ enum PSDSmartFilters {
         case "Msc ":
             guard let size = number("ClSz") else { return nil }
             return make(.mosaic) { $0.amount = size / (60 * unit) }
+        case "HStr":
+            return hueSaturation(settings)
+        case "ClrB":
+            // Easel balances the midtones alone.
+            func levels(_ key: String) -> [Double] { settings[key]?.list?.compactMap(\.number) ?? [0, 0, 0] }
+            let midtones = levels("MdtL")
+            guard midtones.count == 3, levels("ShdL").allSatisfy({ $0 == 0 }), levels("HghL").allSatisfy({ $0 == 0 }) else { return nil }
+            return make(.colorBalance) { $0.balance = midtones.map { min(max($0 / 100, -1), 1) } }
+        case "GrMp", "GdMp":
+            return gradientMap(settings)
         case "Crvs":
             return curves(settings)
         case "Lvls":
@@ -129,6 +146,40 @@ enum PSDSmartFilters {
     private static func channel(_ value: PSDDescriptor.Value?) -> Int? {
         guard case .enumReference(_, _, let name) = value ?? .enumReference(classID: "Chnl", type: "Chnl", value: "Cmps") else { return nil }
         return ["Cmps": 0, "Rd  ": 1, "Grn ": 2, "Bl  ": 3][name]
+    }
+
+    private static func hueSaturation(_ settings: PSDDescriptor) -> LayerFilter? {
+        guard settings["Clrz"]?.bool != true else { return nil }
+        let entries = settings["Adjs"]?.list?.compactMap(\.descriptor) ?? []
+        func values(_ entry: PSDDescriptor?) -> [Double] {
+            ["H   ", "Strt", "Lght"].map { entry?[$0]?.number ?? 0 }
+        }
+        // The master first, then the ranges, which say which they are.
+        let master = values(entries.first { $0["LclR"] == nil })
+        var ranges: [[Double]] = []
+        var raw: [Double] = []
+        for (index, limits) in PSDAdjustments.rangeLimits.enumerated() {
+            let entry = entries.first { $0["LclR"]?.number == Double(index + 1) }
+            let found = ["BgnR", "BgnS", "EndS", "EndR"].compactMap { entry?[$0]?.number }
+            ranges.append(values(entry))
+            raw += (found.count == 4 ? found : limits) + values(entry)
+        }
+        return PSDAdjustments.hueSaturation(master: master, ranges: ranges, raw: raw)
+    }
+
+    /// Easel's map runs between two colours.
+    private static func gradientMap(_ settings: PSDDescriptor) -> LayerFilter? {
+        guard let gradient = settings["Grad"]?.descriptor, gradient["GrdF"]?.enumValue != "ClNs" else { return nil }
+        let stops = (gradient["Clrs"]?.list?.compactMap(\.descriptor) ?? [])
+            .sorted { ($0["Lctn"]?.number ?? 0) < ($1["Lctn"]?.number ?? 0) }
+            .compactMap { $0["Clr "]?.color }
+        guard stops.count == 2 else { return nil }
+        let reversed = settings["Rvrs"]?.bool ?? false
+        return make(.gradientMap) {
+            $0.amount = 1
+            $0.shadowColor = reversed ? stops[1] : stops[0]
+            $0.highlightColor = reversed ? stops[0] : stops[1]
+        }
     }
 
     private static func curves(_ settings: PSDDescriptor) -> LayerFilter? {
@@ -172,10 +223,11 @@ enum PSDSmartFilters {
         var list: [PSDDescriptor.Value] = []
         for filter in filters {
             guard let (name, id, settings) = settings(for: filter, placement: placement) else { return nil }
+            let opacity = filter.kind == .gradientMap ? min(max(filter.amount, 0), 1) * 100 : 100
             list.append(.descriptor(PSDDescriptor(classID: "filterFX", items: [
                 ("Nm  ", .text(name)),
                 ("blendOptions", .descriptor(PSDDescriptor(classID: "blendOptions", items: [
-                    ("Opct", .unit("#Prc", 100)), ("Md  ", .enumerated(type: "BlnM", value: "Nrml")),
+                    ("Opct", .unit("#Prc", opacity)), ("Md  ", .enumerated(type: "BlnM", value: "Nrml")),
                 ]))),
                 ("enab", .bool(filter.isEnabled)), ("hasoptions", .bool(true)),
                 ("FrgC", .rgb(.black)), ("BckC", .rgb(.white)),
@@ -231,6 +283,53 @@ enum PSDSmartFilters {
             ])
         case .mosaic:
             return entry("Mosaic...", "Msc ", [("ClSz", .unit("#Pxl", max(2, filter.amount * 60 * unit)))])
+        case .hsl, .saturation:
+            guard let values = PSDAdjustments.hueSaturationSettings(for: filter) else { return nil }
+            func integer(_ value: Double) -> PSDDescriptor.Value { .integer(Int32(value.rounded())) }
+            var adjustments: [PSDDescriptor.Value] = [.descriptor(PSDDescriptor(classID: "Hst2", items: [
+                ("H   ", integer(values[0])), ("Strt", integer(values[1])), ("Lght", integer(values[2])),
+            ]))]
+            for range in 0..<6 {
+                let part = Array(values[(3 + range * 7)..<(10 + range * 7)])
+                adjustments.append(.descriptor(PSDDescriptor(classID: "Hst2", items: [
+                    ("LclR", .integer(Int32(range + 1))),
+                    ("BgnR", integer(part[0])), ("BgnS", integer(part[1])), ("EndS", integer(part[2])), ("EndR", integer(part[3])),
+                    ("H   ", integer(part[4])), ("Strt", integer(part[5])), ("Lght", integer(part[6])),
+                ])))
+            }
+            return entry("Hue/Saturation...", "HStr", [
+                ("presetKind", .enumerated(type: "presetKindType", value: "presetKindCustom")),
+                ("Clrz", .bool(false)), ("Adjs", .list(adjustments)),
+            ])
+        case .colorBalance:
+            let balance = filter.balance?.count == 3 ? filter.balance! : LayerFilter.neutralBalance
+            func levels(_ values: [Double]) -> PSDDescriptor.Value {
+                .list(values.map { .integer(Int32((min(max($0, -1), 1) * 100).rounded())) })
+            }
+            return entry("Color Balance...", "ClrB", [
+                ("ShdL", levels([0, 0, 0])), ("MdtL", levels(balance)), ("HghL", levels([0, 0, 0])), ("PrsL", .bool(false)),
+            ])
+        case .gradientMap:
+            func stop(_ color: RGBAColor, at location: Int32) -> PSDDescriptor.Value {
+                .descriptor(PSDDescriptor(classID: "Clrt", items: [
+                    ("Clr ", .rgb(color)), ("Type", .enumerated(type: "Clry", value: "UsrS")),
+                    ("Lctn", .integer(location)), ("Mdpn", .integer(50)),
+                ]))
+            }
+            func transparency(at location: Int32) -> PSDDescriptor.Value {
+                .descriptor(PSDDescriptor(classID: "TrnS", items: [
+                    ("Opct", .unit("#Prc", 100)), ("Lctn", .integer(location)), ("Mdpn", .integer(50)),
+                ]))
+            }
+            let gradient = PSDDescriptor(classID: "Grdn", name: "Gradient", items: [
+                ("Nm  ", .text("Easel")), ("GrdF", .enumerated(type: "GrdF", value: "CstS")), ("Intr", .double(4096)),
+                ("Clrs", .list([
+                    stop(filter.shadowColor ?? LayerFilter.defaultShadowColor, at: 0),
+                    stop(filter.highlightColor ?? LayerFilter.defaultHighlightColor, at: 4096),
+                ])),
+                ("Trns", .list([transparency(at: 0), transparency(at: 4096)])),
+            ])
+            return entry("Gradient Map...", "GrMp", [("Grad", .descriptor(gradient)), ("Dthr", .bool(false)), ("Rvrs", .bool(false))])
         case .curves:
             var adjustments: [PSDDescriptor.Value] = []
             for (index, name) in ["Cmps", "Rd  ", "Grn ", "Bl  "].enumerated() {
