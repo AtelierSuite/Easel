@@ -106,6 +106,16 @@ enum LayerEffectRenderer {
                 content = atop(colorize(blur(outside, size * 0.5).cropped(to: frame), effect), content)
             case .bevel:
                 content = bevel(content, shape: shape, effect: effect, size: max(size, 1), light: light, frame: frame)
+            case .satin:
+                let mask = satin(shape, effect: effect, offset: length(effect.distance), size: size, light: light, frame: frame)
+                content = atop(colorize(mask, color: effect.color, opacity: 1), content)
+            case .patternOverlay:
+                guard let tile = effect.patternTile else { continue }
+                let scale = length(effect.pattern.scale)
+                // From the layer's pixels, y down, to Core Image's.
+                let origin = CGPoint(x: effect.patternOrigin.x * sourceScale,
+                                     y: original.extent.maxY - effect.patternOrigin.y * sourceScale)
+                content = atop(fade(tiled(tile, scale: scale, origin: origin, frame: frame), effect.opacity), content)
             case .colorOverlay:
                 content = atop(colorize(whiteFill(frame), effect), content)
             case .gradientOverlay:
@@ -244,6 +254,48 @@ enum LayerEffectRenderer {
         filter.color0 = ciColor(effect.color)
         filter.color1 = ciColor(effect.secondColor)
         return fade((filter.outputImage ?? CIImage.empty()).cropped(to: frame), effect.opacity)
+    }
+
+    /// Two blurred copies of the shape slid apart along the light, white
+    /// where they differ, or where they agree when inverted, within the shape.
+    private static func satin(
+        _ shape: CIImage, effect: LayerEffect, offset: Double, size: Double, light: CGVector, frame: CGRect
+    ) -> CIImage {
+        let lengthOfLight = max(hypot(light.dx, light.dy), 0.0001)
+        let shift = CGVector(dx: light.dx / lengthOfLight * offset, dy: light.dy / lengthOfLight * offset)
+        // On black without end, so blurring brings in no transparency.
+        let height = grey(shape).cropped(to: frame).composited(over: CIImage(color: .black))
+        let ahead = blur(height.transformed(by: CGAffineTransform(translationX: shift.dx, y: shift.dy)), size * 0.5)
+        let behind = blur(height.transformed(by: CGAffineTransform(translationX: -shift.dx, y: -shift.dy)), size * 0.5)
+        var apart = ahead.applyingFilter("CIDifferenceBlendMode", parameters: [kCIInputBackgroundImageKey: behind])
+        if effect.isInverted { apart = apart.applyingFilter("CIColorInvert") }
+        // Photoshop lays it on in gamma-encoded colour, Easel in linear
+        // light: as much cover as darkens by the same amount there.
+        let faded = CIFilter.colorMatrix()
+        faded.inputImage = apart
+        let opacity = CGFloat(min(max(effect.opacity, 0), 1))
+        faded.rVector = CIVector(x: opacity, y: 0, z: 0, w: 0)
+        faded.gVector = CIVector(x: 0, y: opacity, z: 0, w: 0)
+        faded.bVector = CIVector(x: 0, y: 0, z: opacity, w: 0)
+        let gamma = CIFilter.gammaAdjust()
+        gamma.inputImage = faded.outputImage?.applyingFilter("CIColorInvert")
+        gamma.power = 2.2
+        let cover = gamma.outputImage?.applyingFilter("CIColorInvert") ?? apart
+        return alphaFromGrey(cover.cropped(to: frame), frame: frame)
+    }
+
+    /// `tile` repeated, each `scale` times its size, with one tile's top
+    /// left at `origin`.
+    private static func tiled(_ tile: CGImage, scale: Double, origin: CGPoint, frame: CGRect) -> CIImage {
+        let scale = max(scale, 0.01)
+        let image = CIImage(cgImage: tile)
+        let height = image.extent.height * scale
+        let transform = CGAffineTransform(scaleX: scale, y: scale)
+            .concatenating(CGAffineTransform(translationX: origin.x, y: origin.y - height))
+        let filter = CIFilter.affineTile()
+        filter.inputImage = image.transformed(by: transform)
+        filter.transform = .identity
+        return (filter.outputImage ?? CIImage.empty()).cropped(to: frame)
     }
 
     /// Light on the edges facing it and shade on those turned away, as if

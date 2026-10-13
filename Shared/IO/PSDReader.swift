@@ -56,8 +56,9 @@ enum PSDReader {
         let layerSectionEnd = reader.offset + layerSectionLength
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
+        var patterns: [PatternSwatch] = []
         if layerSectionLength > 0, let read = try? readLayers(&reader, isLarge: isLarge, format: format, canvas: canvas, sectionEnd: layerSectionEnd) {
-            (layers, groups) = read
+            (layers, groups, patterns) = read
         }
         guard reader.seek(to: layerSectionEnd) else { throw Failure.damaged }
 
@@ -72,6 +73,7 @@ enum PSDReader {
         // Layers that cannot be scaled down are bounded by the canvas cap.
         guard width <= Bitmap.maximumDimension, height <= Bitmap.maximumDimension else { throw Failure.unsupported }
         var composition = Composition(size: canvas, layers: layers, groups: groups)
+        composition.patterns = patterns
         composition.normalizeGroups()
         return composition
     }
@@ -138,9 +140,9 @@ enum PSDReader {
 
     private static func readLayers(
         _ reader: inout BigEndianReader, isLarge: Bool, format: PixelFormat, canvas: CGSize, sectionEnd: Int
-    ) throws -> (layers: [Layer], groups: [LayerGroup]) {
+    ) throws -> (layers: [Layer], groups: [LayerGroup], patterns: [PatternSwatch]) {
         let infoLength = isLarge ? Int(try reader.uint64()) : Int(try reader.uint32())
-        guard infoLength > 0 else { return ([], []) }
+        guard infoLength > 0 else { return ([], [], []) }
         let infoEnd = reader.offset + infoLength
         // Negative: the first alpha channel is the merged result's
         // transparency. The count is what matters.
@@ -149,10 +151,18 @@ enum PSDReader {
         for _ in 0..<count {
             records.append(try readRecord(&reader, isLarge: isLarge))
         }
-        // Smart objects' contents come after all the layers' pixels.
+        // Smart objects' contents and pattern tiles come after all the
+        // layers' pixels.
         let pixelsStart = reader.offset
-        let embedded = (try? embeddedFiles(&reader, from: infoEnd, to: sectionEnd, isLarge: isLarge)) ?? [:]
+        let shared = (try? globalBlocks(&reader, from: infoEnd, to: sectionEnd, isLarge: isLarge)) ?? GlobalBlocks()
+        let embedded = shared.files
         guard reader.seek(to: pixelsStart) else { throw Failure.damaged }
+        // Tiles become the picture's own patterns, those overlays use.
+        let swatches = shared.tiles.map { PatternSwatch(name: $0.name, image: LayerImage($0.image)) }
+        var patterns: [String: PatternChoice] = [:]
+        for (tile, swatch) in zip(shared.tiles, swatches) {
+            patterns[tile.id] = PatternChoice(preset: nil, swatchID: swatch.id).carryingTile(from: swatches)
+        }
 
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
@@ -231,7 +241,9 @@ enum PSDReader {
             // Photoshop keeps a layer's own pixels and its styles apart, as
             // Easel does. Files with several of one effect may keep them as
             // `lmfx` instead, laid out the same way.
-            if let effects = record.blocks["lfx2"] ?? record.blocks["lmfx"] { layer.effects = PSDEffects.effects(from: effects) }
+            if let effects = record.blocks["lfx2"] ?? record.blocks["lmfx"] {
+                layer.effects = PSDEffects.effects(from: effects, patterns: patterns)
+            }
             if let placed = record.blocks["SoLd"].flatMap(PSDSmartObjects.placement(from:)),
                let file = embedded[placed.id], let contents = PSDSmartObjects.contents(from: file),
                let transform = PSDSmartObjects.transform(corners: placed.corners, size: contents.size) {
@@ -249,9 +261,23 @@ enum PSDReader {
                               isEnabled: mask.isEnabled)
                 }
             }
+            // Patterns start from a point on the canvas that moves with the
+            // layer.
+            if let point = record.blocks["fxrp"].flatMap(referencePoint) {
+                let origin = point.applying(layer.affineTransform.inverted())
+                for index in layer.effects.indices { layer.effects[index].patternOrigin = origin }
+            }
             layers.append(layer)
         }
-        return (layers, groups)
+        let used = Set(layers.flatMap(\.effects).compactMap(\.pattern.swatchID))
+        return (layers, groups, swatches.filter { used.contains($0.id) })
+    }
+
+    /// The `fxrp` block: two doubles, a point on the canvas.
+    private static func referencePoint(_ data: [UInt8]) -> CGPoint? {
+        var reader = BigEndianReader(bytes: data)
+        guard let x = try? reader.uint64(), let y = try? reader.uint64() else { return nil }
+        return CGPoint(x: Double(bitPattern: x), y: Double(bitPattern: y))
     }
 
     /// A canvas-sized mask drawn where a moved layer's pixels are.
@@ -267,14 +293,19 @@ enum PSDReader {
         }
     }
 
-    /// The files embedded in the document for its smart objects, by id,
-    /// from the tagged blocks after the layers.
-    private static func embeddedFiles(
-        _ reader: inout BigEndianReader, from infoEnd: Int, to sectionEnd: Int, isLarge: Bool
-    ) throws -> [String: [UInt8]] {
-        guard reader.seek(to: infoEnd + (infoEnd & 1)) else { return [:] }
-        try reader.skip(Int(try reader.uint32())) // The global mask.
+    /// What the tagged blocks after the layers hold for the whole document.
+    private struct GlobalBlocks {
+        /// Smart objects' contents, by id.
         var files: [String: [UInt8]] = [:]
+        var tiles: [PSDPatterns.Tile] = []
+    }
+
+    private static func globalBlocks(
+        _ reader: inout BigEndianReader, from infoEnd: Int, to sectionEnd: Int, isLarge: Bool
+    ) throws -> GlobalBlocks {
+        var blocks = GlobalBlocks()
+        guard reader.seek(to: infoEnd + (infoEnd & 1)) else { return blocks }
+        try reader.skip(Int(try reader.uint32())) // The global mask.
         while reader.offset + 12 <= sectionEnd {
             let signature = try reader.ascii(4)
             guard signature == "8BIM" || signature == "8B64" else { break }
@@ -282,17 +313,19 @@ enum PSDReader {
             let length = isLarge && longKeys.contains(key) ? Int(try reader.uint64()) : Int(try reader.uint32())
             let start = reader.offset
             if ["lnk2", "lnk3", "lnkD"].contains(key) {
-                files.merge(PSDSmartObjects.embeddedFiles(from: try reader.bytes(length))) { first, _ in first }
+                blocks.files.merge(PSDSmartObjects.embeddedFiles(from: try reader.bytes(length))) { first, _ in first }
+            } else if ["Patt", "Pat2", "Pat3"].contains(key) {
+                blocks.tiles += PSDPatterns.tiles(from: try reader.bytes(length))
             }
             guard reader.seek(to: start + length + (4 - length % 4) % 4) else { break }
         }
-        return files
+        return blocks
     }
 
     /// Blocks whose length takes eight bytes in a large document.
     private static let longKeys: Set<String> = ["LMsk", "Lr16", "Lr32", "Layr", "Mt16", "Mt32", "Mtrn", "Alph", "FMsk", "lnk2", "FEid", "FXid", "PxSD"]
 
-    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd"])
+    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "fxrp"])
 
     private static func readRecord(_ reader: inout BigEndianReader, isLarge: Bool) throws -> LayerRecord {
         var record = LayerRecord()

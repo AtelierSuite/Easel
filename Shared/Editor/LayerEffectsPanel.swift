@@ -126,13 +126,23 @@ private struct EffectRow: View {
                 .accessibilityIdentifier("effectEnabled.\(kind.rawValue)")
             }
             Group {
-                if kind.hasColor {
+                if kind.hasColor || (kind.hasPattern && effect.pattern.preset != nil) {
                     HStack(spacing: 16) {
                         ColorPicker("LayerEffects.Color", selection: colorBinding(\.color), supportsOpacity: false)
                         if kind.hasSecondColor {
                             ColorPicker("LayerEffects.EndColor", selection: colorBinding(\.secondColor), supportsOpacity: false)
                         }
                     }
+                    .font(.subheadline)
+                }
+                if kind.hasPattern {
+                    patternRow
+                }
+                if kind.canInvert {
+                    Toggle("LayerEffects.Invert", isOn: Binding(
+                        get: { effect.isInverted },
+                        set: { value in state.updateEffect(effect.id) { $0.isInverted = value } }
+                    ))
                     .font(.subheadline)
                 }
                 if kind.hasPosition {
@@ -174,6 +184,66 @@ private struct EffectRow: View {
             .opacity(effect.isEnabled ? 1 : 0.5)
         }
         .padding(.vertical, 4)
+    }
+
+    /// Which tile the overlay repeats, and how large.
+    private var patternRow: some View {
+        HStack(spacing: 12) {
+            Menu {
+                Section("Pattern.BuiltIn") {
+                    ForEach(PatternChoice.Preset.allCases) { preset in
+                        Button {
+                            state.updateEffect(effect.id) { $0.pattern = PatternChoice(preset: preset, scale: $0.pattern.scale) }
+                        } label: {
+                            Label(LocalizedStringKey(preset.labelKey), systemImage: preset.symbolName)
+                        }
+                    }
+                }
+                if !state.composition.patterns.isEmpty {
+                    Section("Pattern.Document") {
+                        ForEach(state.composition.patterns) { swatch in
+                            Button(swatch.name, systemImage: "photo") {
+                                let swatches = state.composition.patterns
+                                state.updateEffect(effect.id) {
+                                    $0.pattern = PatternChoice(preset: nil, swatchID: swatch.id, scale: $0.pattern.scale)
+                                        .carryingTile(from: swatches)
+                                }
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label {
+                    patternName
+                } icon: {
+                    Image(systemName: effect.pattern.preset?.symbolName ?? "photo")
+                }
+                .font(.subheadline)
+            }
+            .accessibilityIdentifier("effectPattern")
+            Spacer()
+            Picker("Pattern.Scale", selection: Binding(
+                get: { effect.pattern.scale },
+                set: { value in state.updateEffect(effect.id) { $0.pattern.scale = value } }
+            )) {
+                ForEach(Self.patternScales(including: effect.pattern.scale), id: \.self) { scale in
+                    Text(verbatim: "\(Int((scale * 100).rounded()))%").tag(scale)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+    }
+
+    private var patternName: Text {
+        if let preset = effect.pattern.preset { return Text(LocalizedStringKey(preset.labelKey)) }
+        let name = state.composition.patterns.first { $0.id == effect.pattern.swatchID }?.name
+        return name.map { Text(verbatim: $0) } ?? Text("Pattern.Document")
+    }
+
+    /// The usual sizes, and a file's own if it is none of them.
+    private static func patternScales(including scale: Double) -> [Double] {
+        let scales = [0.25, 0.5, 1, 2, 4]
+        return scales.contains(scale) ? scales : (scales + [scale]).sorted()
     }
 
     /// Lengths reach a tenth of the picture's longer side.

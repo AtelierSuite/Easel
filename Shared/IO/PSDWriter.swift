@@ -50,6 +50,12 @@ enum PSDWriter {
         section.uint32(info.data.count)
         section.bytes(info.data)
         section.uint32(0) // No global mask.
+        // The tiles pattern overlays name, once each.
+        var tiles: [PSDPatterns.Tile] = []
+        for tile in records.flatMap(\.tiles) where !tiles.contains(where: { $0.id == tile.id }) { tiles.append(tile) }
+        if !tiles.isEmpty {
+            section.taggedBlock("Patt", PSDPatterns.block(for: tiles), padding: 4)
+        }
         // The contents of smart objects, embedded once for the document.
         let embedded = records.compactMap(\.embeddedFile)
         if !embedded.isEmpty {
@@ -76,6 +82,8 @@ enum PSDWriter {
         var channels: [UInt8]
         /// A smart object's contents, as an entry of the `lnk2` block.
         var embeddedFile: [UInt8]?
+        /// The tiles its pattern overlays show.
+        var tiles: [PSDPatterns.Tile] = []
     }
 
     /// Records bottom first, with group folders around their layers: a
@@ -98,20 +106,30 @@ enum PSDWriter {
                 records.append(folderRecord(name: "</Layer group>", opacity: 1, isVisible: true, type: 3))
                 open.append(id)
             }
-            records.append(layerRecord(layer, canvasSize: composition.size))
+            records.append(layerRecord(layer, canvasSize: composition.size, swatches: composition.patterns))
         }
         close(down: 0)
         return records
     }
 
-    private static func layerRecord(_ layer: Layer, canvasSize: CGSize) -> Record {
+    private static func layerRecord(_ layer: Layer, canvasSize: CGSize, swatches: [PatternSwatch]) -> Record {
         // An adjustment Photoshop has a record for is written as one, with
         // no pixels; it may take some of its strength from the opacity.
         let adjustment = layer.adjustment.flatMap(PSDAdjustments.blocks(for:))
         var blocks = adjustment?.blocks ?? []
         // Styles go as Photoshop's own effects, so the pixels go without them.
-        let effects = adjustment == nil ? PSDEffects.block(for: layer.effects) : nil
+        // Photoshop keeps one of a kind, as Easel does when it draws.
+        let tile = layer.effects.first { $0.kind == .patternOverlay }.flatMap { PSDPatterns.tile(for: $0, swatches: swatches) }
+        let effects = adjustment == nil ? PSDEffects.block(for: layer.effects) { _ in tile } : nil
         if let effects { blocks.append(("lfx2", effects)) }
+        if effects != nil, let overlay = layer.effects.first(where: { $0.kind == .patternOverlay }) {
+            // Where the pattern starts, on the canvas.
+            let point = overlay.patternOrigin.applying(layer.affineTransform)
+            var reference = PSDBinaryWriter()
+            reference.float64(point.x)
+            reference.float64(point.y)
+            blocks.append(("fxrp", reference.data))
+        }
         // A smart object keeps its contents as a document of their own.
         var embeddedFile: [UInt8]?
         if adjustment == nil, let smart = layer.smartObject, let contents = try? data(for: smart.contents) {
@@ -197,7 +215,8 @@ enum PSDWriter {
         for block in blocks { extra.taggedBlock(block.key, block.data) }
         header.uint32(extra.data.count)
         header.bytes(extra.data)
-        return Record(header: header.data, channels: channels.flatMap(\.data), embeddedFile: embeddedFile)
+        return Record(header: header.data, channels: channels.flatMap(\.data), embeddedFile: embeddedFile,
+                      tiles: effects == nil ? [] : tile.map { [$0] } ?? [])
     }
 
     private static func folderRecord(name: String, opacity: Double, isVisible: Bool, type: Int) -> Record {

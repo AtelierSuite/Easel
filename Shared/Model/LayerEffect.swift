@@ -6,7 +6,10 @@ import Foundation
 /// painted on the layer and can be changed or taken off later.
 struct LayerEffect: Identifiable, Codable, Hashable, Sendable {
     enum Kind: String, Codable, CaseIterable, Identifiable, Sendable {
-        case dropShadow, outerGlow, stroke, innerShadow, innerGlow, bevel, colorOverlay, gradientOverlay
+        case dropShadow, outerGlow, stroke, innerShadow, innerGlow, bevel
+        /// Silky shading inside the shape, from copies of it slid apart.
+        case satin
+        case patternOverlay, colorOverlay, gradientOverlay
 
         var id: String { rawValue }
 
@@ -18,6 +21,8 @@ struct LayerEffect: Identifiable, Codable, Hashable, Sendable {
             case .innerShadow: return String(localized: "LayerEffect.InnerShadow")
             case .innerGlow: return String(localized: "LayerEffect.InnerGlow")
             case .bevel: return String(localized: "LayerEffect.Bevel")
+            case .satin: return String(localized: "LayerEffect.Satin")
+            case .patternOverlay: return String(localized: "LayerEffect.PatternOverlay")
             case .colorOverlay: return String(localized: "LayerEffect.ColorOverlay")
             case .gradientOverlay: return String(localized: "LayerEffect.GradientOverlay")
             }
@@ -31,23 +36,29 @@ struct LayerEffect: Identifiable, Codable, Hashable, Sendable {
             case .innerShadow: return "circle.inset.filled"
             case .innerGlow: return "light.max"
             case .bevel: return "cube"
+            case .satin: return "drop.halffull"
+            case .patternOverlay: return "square.grid.3x3.fill"
             case .colorOverlay: return "paintbrush"
             case .gradientOverlay: return "circle.lefthalf.striped.horizontal"
             }
         }
 
-        var hasDistance: Bool { self == .dropShadow || self == .innerShadow }
+        var hasDistance: Bool { [.dropShadow, .innerShadow, .satin].contains(self) }
         /// Shadows fall away from the light; bevels and gradients run along it.
-        var hasAngle: Bool { [.dropShadow, .innerShadow, .bevel, .gradientOverlay].contains(self) }
-        var hasSize: Bool { ![.colorOverlay, .gradientOverlay].contains(self) }
-        var hasColor: Bool { self != .bevel }
+        var hasAngle: Bool { [.dropShadow, .innerShadow, .bevel, .satin, .gradientOverlay].contains(self) }
+        var hasSize: Bool { ![.colorOverlay, .gradientOverlay, .patternOverlay].contains(self) }
+        /// A pattern overlay's colour is for built-in tiles only.
+        var hasColor: Bool { self != .bevel && self != .patternOverlay }
         var hasSecondColor: Bool { self == .gradientOverlay }
         var hasPosition: Bool { self == .stroke }
+        var hasPattern: Bool { self == .patternOverlay }
+        var canInvert: Bool { self == .satin }
 
         /// Where a new effect starts.
         var defaultColor: RGBAColor {
             switch self {
-            case .dropShadow, .innerShadow: return .black
+            case .dropShadow, .innerShadow, .satin: return .black
+            case .patternOverlay: return RGBAColor(red: 0.3, green: 0.3, blue: 0.35)
             case .outerGlow, .innerGlow: return RGBAColor(red: 1, green: 0.95, blue: 0.6)
             case .stroke: return .black
             case .bevel, .colorOverlay: return RGBAColor(red: 1, green: 0.3, blue: 0.3)
@@ -58,6 +69,8 @@ struct LayerEffect: Identifiable, Codable, Hashable, Sendable {
         var defaultOpacity: Double {
             switch self {
             case .dropShadow, .innerShadow: return 0.6
+            case .satin: return 0.5
+            case .patternOverlay: return 1
             case .outerGlow, .innerGlow: return 0.8
             case .stroke, .colorOverlay, .gradientOverlay: return 1
             case .bevel: return 0.75
@@ -97,6 +110,13 @@ struct LayerEffect: Identifiable, Codable, Hashable, Sendable {
     /// canvas pixels.
     var size = 16.0
     var position = Position.outside
+    /// The tile a pattern overlay repeats; built-in tiles take `color`.
+    var pattern = PatternChoice()
+    /// Where a tile's top left sits, in the layer's own pixels, so the
+    /// pattern moves with the layer.
+    var patternOrigin = CGPoint.zero
+    /// Whether satin is dark where the copies overlap rather than apart.
+    var isInverted = true
 
     init(kind: Kind) {
         self.kind = kind
@@ -105,6 +125,14 @@ struct LayerEffect: Identifiable, Codable, Hashable, Sendable {
         if kind == .stroke { size = 6 }
         if kind == .bevel { size = 12 }
         if kind == .gradientOverlay { angle = 90 }
+        if kind == .satin { (angle, distance, size) = (19, 11, 14) }
+    }
+
+    /// The tile to repeat, built-in ones in the effect's colour.
+    var patternTile: CGImage? {
+        var pattern = pattern
+        pattern.color = color
+        return pattern.tile(in: [])
     }
 
     /// The unit vector the light shines along, on a canvas whose y runs
@@ -112,6 +140,30 @@ struct LayerEffect: Identifiable, Codable, Hashable, Sendable {
     var lightDirection: CGVector {
         let radians = angle * .pi / 180
         return CGVector(dx: -cos(radians), dy: sin(radians))
+    }
+}
+
+extension LayerEffect {
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, isEnabled, color, secondColor, opacity, distance, angle, size, position, pattern, patternOrigin, isInverted
+    }
+
+    // Effects saved before patterns and satin came in lack their settings.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(kind: try container.decode(Kind.self, forKey: .kind))
+        id = try container.decode(UUID.self, forKey: .id)
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        color = try container.decode(RGBAColor.self, forKey: .color)
+        secondColor = try container.decode(RGBAColor.self, forKey: .secondColor)
+        opacity = try container.decode(Double.self, forKey: .opacity)
+        distance = try container.decode(Double.self, forKey: .distance)
+        angle = try container.decode(Double.self, forKey: .angle)
+        size = try container.decode(Double.self, forKey: .size)
+        position = try container.decode(Position.self, forKey: .position)
+        pattern = try container.decodeIfPresent(PatternChoice.self, forKey: .pattern) ?? pattern
+        patternOrigin = try container.decodeIfPresent(CGPoint.self, forKey: .patternOrigin) ?? patternOrigin
+        isInverted = try container.decodeIfPresent(Bool.self, forKey: .isInverted) ?? isInverted
     }
 }
 

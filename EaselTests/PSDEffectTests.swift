@@ -58,6 +58,69 @@ struct PSDEffectTests {
         #expect(TestImages.pixel(image, x: 30, y: 33).alpha > 100)
     }
 
+    @Test func satinKeepsWhetherItIsInverted() throws {
+        var satin = LayerEffect(kind: .satin)
+        satin.isInverted = false
+        let read = try styled([satin])
+        #expect(read.effects.first?.kind == .satin)
+        #expect(read.effects.first?.isInverted == false)
+        #expect(read.effects.first?.distance == 11)
+    }
+
+    @Test func aPatternOverlayBringsItsTile() throws {
+        let tile = TestImages.solid(RGBAColor(red: 0, green: 0, blue: 1), width: 4, height: 4)
+        let swatch = PatternSwatch(name: "Blue", image: LayerImage(tile))
+        var overlay = LayerEffect(kind: .patternOverlay)
+        overlay.pattern = PatternChoice(preset: nil, swatchID: swatch.id, scale: 2).carryingTile(from: [swatch])
+        var square = Layer(name: "Square", image: LayerImage(TestImages.solid(RGBAColor(red: 1, green: 0, blue: 0), width: 20, height: 20)),
+                           transform: LayerTransform(position: CGPoint(x: 30, y: 20)))
+        square.effects = [overlay]
+        var composition = Composition(size: size, layers: [square])
+        composition.patterns = [swatch]
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: composition))
+        let effect = try #require(read.layers.first?.effects.first)
+        #expect(effect.kind == .patternOverlay)
+        #expect(effect.pattern.scale == 2)
+        // The tile comes in as the picture's own pattern, by its name.
+        #expect(read.patterns.map(\.name) == ["Blue"])
+        #expect(effect.pattern.swatchID == read.patterns.first?.id)
+        let image = CompositionRenderer.render(read)
+        let pixel = TestImages.pixel(image, x: 30, y: 20)
+        #expect(pixel.blue > 240 && pixel.red < 15)
+    }
+
+    @Test func builtInPatternsGoAsTiles() throws {
+        var overlay = LayerEffect(kind: .patternOverlay)
+        overlay.pattern = PatternChoice(preset: .checker)
+        overlay.color = RGBAColor(red: 0, green: 1, blue: 0)
+        let read = try styled([overlay])
+        let effect = try #require(read.effects.first)
+        #expect(effect.pattern.preset == nil)
+        let tile = try #require(effect.patternTile)
+        #expect(tile.width == Int(PatternChoice.presetSize))
+        // The checker's green square is in the tile's top left.
+        #expect(TestImages.pixel(tile, x: 2, y: 2).green > 240)
+    }
+
+    @Test func thePatternStartsWhereItDid() throws {
+        var overlay = LayerEffect(kind: .patternOverlay)
+        overlay.patternOrigin = CGPoint(x: 5, y: 7)
+        let read = try styled([overlay])
+        let origin = try #require(read.effects.first?.patternOrigin)
+        #expect(abs(origin.x - 5) < 0.001 && abs(origin.y - 7) < 0.001)
+    }
+
+    @Test func effectsSavedBeforePatternsStillOpen() throws {
+        var shadow = LayerEffect(kind: .dropShadow)
+        shadow.distance = 5
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(shadow)) as! [String: Any]
+        json["pattern"] = nil
+        json["isInverted"] = nil
+        let decoded = try JSONDecoder().decode(LayerEffect.self, from: JSONSerialization.data(withJSONObject: json))
+        #expect(decoded.distance == 5)
+        #expect(decoded.pattern.preset == .dots)
+    }
+
     @Test func turnedOffStylesStayOff() throws {
         var glow = LayerEffect(kind: .outerGlow)
         glow.isEnabled = false

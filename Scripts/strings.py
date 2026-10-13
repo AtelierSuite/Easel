@@ -716,6 +716,9 @@ S = {
 "Error.SmartObject": ("A smart object can’t be painted on. Edit its contents, or rasterize it first.", "スマートオブジェクトには直接描けません。内容を編集するか、先にラスタライズしてください。", "고급 개체에는 직접 그릴 수 없습니다. 내용을 편집하거나 먼저 래스터화하십시오.", "无法直接在智能对象上绘画。请编辑其内容，或先将其栅格化。", "無法直接在智慧型物件上繪畫。請編輯其內容，或先將其點陣化。"),
 "Adjust.PickedBalance": ("Picked White Balance", "指定したホワイトバランス", "선택한 화이트 밸런스", "选取的白平衡", "選取的白平衡"),
 "Adjust.RemoveBalance": ("Remove Picked White Balance", "指定したホワイトバランスを削除", "선택한 화이트 밸런스 제거", "移除选取的白平衡", "移除選取的白平衡"),
+"LayerEffect.Satin": ("Satin", "サテン", "새틴", "光泽", "緞面"),
+"LayerEffect.PatternOverlay": ("Pattern Overlay", "パターンオーバーレイ", "패턴 오버레이", "图案叠加", "圖樣覆蓋"),
+"LayerEffects.Invert": ("Invert", "反転", "반전", "反相", "反轉"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

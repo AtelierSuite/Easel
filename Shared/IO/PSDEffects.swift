@@ -6,14 +6,17 @@ enum PSDEffects {
     /// Photoshop's key for each kind of effect, in its older single form.
     private static let keys: [(kind: LayerEffect.Kind, key: String, multi: String?)] = [
         (.dropShadow, "DrSh", "dropShadowMulti"), (.innerShadow, "IrSh", "innerShadowMulti"),
-        (.outerGlow, "OrGl", nil), (.innerGlow, "IrGl", nil), (.bevel, "ebbl", nil),
+        (.outerGlow, "OrGl", nil), (.innerGlow, "IrGl", nil), (.bevel, "ebbl", nil), (.satin, "ChFX", nil),
+        (.patternOverlay, "patternFill", nil),
         (.colorOverlay, "SoFi", "solidFillMulti"), (.gradientOverlay, "GrFl", "gradientFillMulti"),
         (.stroke, "FrFX", "frameFXMulti"),
     ]
 
     // MARK: - Reading
 
-    static func effects(from data: [UInt8]) -> [LayerEffect] {
+    /// `patterns` are the document's tiles by id, as pattern overlays name
+    /// them; one not among them, kept by Photoshop alone, becomes a plain one.
+    static func effects(from data: [UInt8], patterns: [String: PatternChoice] = [:]) -> [LayerEffect] {
         var reader = BigEndianReader(bytes: data)
         guard (try? reader.uint32()) != nil, (try? reader.uint32()) == 16,
               let root = try? PSDDescriptor.read(&reader) else { return [] }
@@ -25,12 +28,14 @@ enum PSDEffects {
                 + (entry.multi.flatMap { root[$0]?.list?.compactMap(\.descriptor) } ?? [])
             guard let settings = candidates.first(where: { $0["enab"]?.bool == true }) ?? candidates.first,
                   settings["present"]?.bool ?? true else { continue }
-            effects.append(effect(entry.kind, from: settings, allOn: allOn))
+            effects.append(effect(entry.kind, from: settings, allOn: allOn, patterns: patterns))
         }
         return effects
     }
 
-    private static func effect(_ kind: LayerEffect.Kind, from settings: PSDDescriptor, allOn: Bool) -> LayerEffect {
+    private static func effect(
+        _ kind: LayerEffect.Kind, from settings: PSDDescriptor, allOn: Bool, patterns: [String: PatternChoice]
+    ) -> LayerEffect {
         var effect = LayerEffect(kind: kind)
         effect.isEnabled = allOn && (settings["enab"]?.bool ?? true)
         if let color = settings["Clr "]?.color { effect.color = color }
@@ -55,6 +60,12 @@ enum PSDEffects {
                 effect.color = reversed ? last : first
                 effect.secondColor = reversed ? first : last
             }
+        case .satin:
+            if let size = settings["blur"]?.number { effect.size = size }
+            effect.isInverted = settings["Invr"]?.bool ?? true
+        case .patternOverlay:
+            if let id = settings["Ptrn"]?.descriptor?["Idnt"]?.text, let pattern = patterns[id] { effect.pattern = pattern }
+            if let scale = settings["Scl "]?.number { effect.pattern.scale = scale / 100 }
         default:
             if let size = settings["blur"]?.number { effect.size = size }
         }
@@ -63,15 +74,17 @@ enum PSDEffects {
 
     // MARK: - Writing
 
-    /// The effects as an `lfx2` block, or nil for none.
-    static func block(for effects: [LayerEffect]) -> [UInt8]? {
+    /// The effects as an `lfx2` block, or nil for none. `tile` gives the
+    /// pattern a pattern overlay names, written to the document apart.
+    static func block(for effects: [LayerEffect], tile: (LayerEffect) -> PSDPatterns.Tile? = { _ in nil }) -> [UInt8]? {
         guard !effects.isEmpty else { return nil }
         var items: [(key: String, value: PSDDescriptor.Value)] = [
             ("Scl ", .unit("#Prc", 100)), ("masterFXSwitch", .bool(true)),
         ]
         for entry in keys {
             guard let effect = effects.first(where: { $0.kind == entry.kind }) else { continue }
-            items.append((entry.key, .descriptor(descriptor(for: effect, key: entry.key))))
+            if effect.kind == .patternOverlay, tile(effect) == nil { continue }
+            items.append((entry.key, .descriptor(descriptor(for: effect, key: entry.key, tile: tile(effect)))))
         }
         var writer = PSDBinaryWriter()
         writer.uint32(0)
@@ -91,7 +104,7 @@ enum PSDEffects {
         ])),
     ]))
 
-    private static func descriptor(for effect: LayerEffect, key: String) -> PSDDescriptor {
+    private static func descriptor(for effect: LayerEffect, key: String, tile: PSDPatterns.Tile?) -> PSDDescriptor {
         let opacity: PSDDescriptor.Value = .unit("#Prc", min(max(effect.opacity, 0), 1) * 100)
         var items: [(key: String, value: PSDDescriptor.Value)] = [("enab", .bool(effect.isEnabled)), ("present", .bool(true)), ("showInDialog", .bool(true))]
         switch effect.kind {
@@ -118,6 +131,21 @@ enum PSDEffects {
                 ("uglg", .bool(false)), ("lagl", .unit("#Ang", effect.angle)), ("Lald", .unit("#Ang", 30)),
                 ("srgR", .unit("#Prc", 100)), ("blur", .unit("#Pxl", effect.size)),
                 ("bvlD", .enumerated(type: "BESs", value: "In  ")), ("TrnS", linearContour),
+            ]
+        case .satin:
+            items += [
+                ("Md  ", blend("Nrml")), ("Clr ", .rgb(effect.color)), ("AntA", .bool(true)), ("Invr", .bool(effect.isInverted)),
+                ("Opct", opacity), ("lagl", .unit("#Ang", effect.angle)), ("Dstn", .unit("#Pxl", effect.distance)),
+                ("blur", .unit("#Pxl", effect.size)), ("MpgS", linearContour),
+            ]
+        case .patternOverlay:
+            items += [
+                ("Md  ", blend("Nrml")), ("Opct", opacity),
+                ("Ptrn", .descriptor(PSDDescriptor(classID: "Ptrn", items: [
+                    ("Nm  ", .text(tile?.name ?? "")), ("Idnt", .text(tile?.id ?? "")),
+                ]))),
+                ("Scl ", .unit("#Prc", effect.pattern.scale * 100)), ("Algn", .bool(true)),
+                ("phase", .descriptor(PSDDescriptor(classID: "Pnt ", items: [("Hrzn", .double(0)), ("Vrtc", .double(0))]))),
             ]
         case .colorOverlay:
             items += [("Md  ", blend("Nrml")), ("Clr ", .rgb(effect.color)), ("Opct", opacity)]
