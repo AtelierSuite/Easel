@@ -213,6 +213,7 @@ struct FilterRow: View {
                     .frame(height: 200)
                     .accessibilityIdentifier("curveEditor")
                 }
+                if !filter.kind.parameters.isEmpty { parameterControls }
                 if filter.kind.hasAmount {
                 LabeledSlider(
                     label: "LayerFilters.Amount",
@@ -278,6 +279,63 @@ struct FilterRow: View {
         guard let index = state.activeLayer?.filters.firstIndex(where: { $0.id == filter.id }) else { return }
         // `move(fromOffsets:toOffset:)` counts the destination before removal.
         state.moveFilters(from: [index], to: offset > 0 ? index + 2 : index - 1)
+    }
+
+    /// Controls for each of a filter's own settings.
+    @ViewBuilder
+    private var parameterControls: some View {
+        let parameters = filter.kind.parameters
+        ForEach(parameters.indices, id: \.self) { index in
+            let parameter = parameters[index]
+            let value = Binding(
+                get: { filter.value(index) },
+                set: { newValue in state.updateFilter(filter.id) { $0.setValue(newValue, at: index) } }
+            )
+            switch parameter.style {
+            case .toggle:
+                Toggle(LocalizedStringKey(parameter.labelKey), isOn: Binding(
+                    get: { value.wrappedValue >= 0.5 }, set: { value.wrappedValue = $0 ? 1 : 0 }
+                ))
+                .font(.subheadline)
+            case .choice(let keys):
+                Picker(LocalizedStringKey(parameter.labelKey), selection: Binding(
+                    get: { Int(value.wrappedValue.rounded()) }, set: { value.wrappedValue = Double($0) }
+                )) {
+                    ForEach(keys.indices, id: \.self) { choice in
+                        Text(LocalizedStringKey(keys[choice])).tag(choice)
+                    }
+                }
+                .pickerStyle(.menu)
+                .font(.subheadline)
+            default:
+                LabeledSlider(
+                    label: LocalizedStringKey(parameter.labelKey), value: value, range: parameter.range,
+                    valueText: valueText(value.wrappedValue, style: parameter.style)
+                )
+            }
+        }
+        if filter.kind.hasColor, filter.kind != .blackAndWhite || filter.value(6) >= 0.5 {
+            ColorPicker("LayerFilters.Color", selection: Binding(
+                get: { (filter.color ?? filter.kind.defaultColor ?? .white).color },
+                set: { color in state.updateFilter(filter.id) { $0.color = RGBAColor(color) } }
+            ), supportsOpacity: false)
+            .font(.subheadline)
+        }
+    }
+
+    private func valueText(_ value: Double, style: FilterParameter.Style) -> String {
+        switch style {
+        case .integer: return "\(Int(value.rounded()))"
+        case .decimal: return String(format: "%.2f", value)
+        case .percent: return "\(Int((value * 100).rounded()))%"
+        case .signedPercent: return "\(Int(value.rounded()))%"
+        case .degrees: return "\(Int(value.rounded()))°"
+        case .length:
+            // In the layer's own pixels.
+            let size = state.activeLayer?.image.size ?? .zero
+            return String(format: "%.1f px", value * max(size.width, size.height) / 1000)
+        case .choice, .toggle: return ""
+        }
     }
 
     @ViewBuilder

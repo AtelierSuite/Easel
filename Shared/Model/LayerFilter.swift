@@ -27,6 +27,21 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case emboss
         /// Printed in dots of cyan, magenta, yellow and black.
         case halftone
+        /// Each colour turned to its opposite.
+        case invert
+        /// Each channel cut down to a few shades.
+        case posterize
+        /// Black or white, by whether each pixel is lighter than a level.
+        case threshold
+        /// Light added or taken away as a camera's exposure would, with an
+        /// offset for the shadows and a gamma for the midtones.
+        case exposure
+        /// Dull colours made more vivid, vivid ones left nearly alone.
+        case vibrance
+        /// Coloured as if through a lens filter.
+        case photoFilter
+        /// Light shades turned dark, as film exposed to light while developing.
+        case solarize
 
         var id: String { rawValue }
 
@@ -35,6 +50,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         static let groups: [[Kind]] = [
             [.blackAndWhite, .sepia, .saturation, .brightness, .contrast],
             [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor],
+            [.exposure, .vibrance, .photoFilter, .invert, .posterize, .threshold, .solarize],
             [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic],
             [.unsharpMask, .highPass, .lensCorrection],
             [.twirl, .pinch, .emboss, .halftone],
@@ -42,6 +58,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
 
         var label: String {
             switch self {
+            case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize:
+                return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
             case .saturation: return String(localized: "LayerFilter.Saturation")
@@ -71,6 +89,13 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
 
         var symbolName: String {
             switch self {
+            case .invert: return "circle.righthalf.filled.inverse"
+            case .posterize: return "square.stack.3d.up"
+            case .threshold: return "circle.lefthalf.striped.horizontal"
+            case .exposure: return "plusminus.circle"
+            case .vibrance: return "rainbow"
+            case .photoFilter: return "camera.filters"
+            case .solarize: return "sun.horizon"
             case .blackAndWhite: return "circle.righthalf.filled"
             case .sepia: return "sun.dust"
             case .saturation: return "drop.halffull"
@@ -123,12 +148,13 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .pinch: return 0.4
             case .emboss: return 0.6
             case .halftone: return 0.3
+            case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize: return 1
             }
         }
 
         /// Filters that change each pixel by its colour alone, which can
         /// also be adjustment layers changing everything beneath them.
-        var isPerPixel: Bool { Self.groups[0].contains(self) || Self.groups[1].contains(self) }
+        var isPerPixel: Bool { Self.groups.prefix(3).contains { $0.contains(self) } }
 
         /// Filters Core Image works out by mixing neighbouring pixels, which
         /// it is given shades as they look to mix.
@@ -139,7 +165,10 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
 
         var hasAngle: Bool { [.motionBlur, .emboss, .halftone].contains(self) }
         /// Filters set with their own controls rather than one amount.
-        var hasAmount: Bool { ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor].contains(self) }
+        var hasAmount: Bool {
+            ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor].contains(self)
+                && (parameters.isEmpty || self == .blackAndWhite)
+        }
         var hasCenter: Bool { [.zoomBlur, .twirl, .pinch].contains(self) }
         /// How far round each pixel a filter looks, set apart from its amount.
         var hasRadius: Bool { self == .unsharpMask }
@@ -209,6 +238,11 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     /// colour must be to count.
     var replaceSource: RGBAColor?
     var replaceShift: [Double]?
+    /// Settings for filters set by `kind.parameters`, in that order; any
+    /// missing are at their defaults.
+    var values: [Double]?
+    /// The colour a photo filter tints with, or black and white's tint.
+    var color: RGBAColor?
 
     /// The middle of each HSL band, as fractions of a turn: red, orange,
     /// yellow, green, aqua, blue, purple and magenta.
@@ -226,6 +260,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     init(kind: Kind) {
         self.kind = kind
         amount = kind.defaultAmount
+        if !kind.parameters.isEmpty { values = kind.parameters.map(\.defaultValue) }
+        color = kind.defaultColor
     }
 }
 

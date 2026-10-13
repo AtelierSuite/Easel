@@ -222,6 +222,17 @@ struct PSDSmartObjectTests {
         #expect(read.layers.first?.filterMask?.image.size == CGSize(width: 20, height: 20))
     }
 
+    @Test(arguments: ["invert", "solarize", "posterize", "threshold", "blackAndWhite"])
+    func newerAdjustmentsComeBackAsSmartFilters(_ kind: String) throws {
+        let filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        layer.filters = [filter]
+        let read = try #require(try roundTrip([layer]).layers.first)
+        #expect(read.isSmartObject)
+        #expect(read.filters.map(\.kind) == [filter.kind])
+        #expect(read.filters.first?.values == filter.values)
+    }
+
     @Test(arguments: ["hsl", "colorBalance", "gradientMap"])
     func adjustmentsComeBackAsSmartFilters(_ kind: String) throws {
         var filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)

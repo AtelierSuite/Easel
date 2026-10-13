@@ -18,6 +18,22 @@ struct PSDAdjustmentTests {
         return try #require(read.layers.last { $0.isAdjustment })
     }
 
+    @Test(arguments: [
+        ("invert", [Double]()), ("posterize", [6]), ("threshold", [90]), ("exposure", [1.25, 0.05, 1.4]),
+        ("vibrance", [40, -15]), ("photoFilter", [60, 0]), ("blackAndWhite", [10, 70, 30, 50, 120, -20, 1]),
+    ])
+    func newerAdjustmentsComeBack(_ kind: String, _ values: [Double]) throws {
+        var filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)
+        if !values.isEmpty { filter.values = values }
+        if filter.kind.hasColor { filter.color = RGBAColor(red: 0.2, green: 0.6, blue: 0.9) }
+        let read = try #require(try roundTrip(filter).adjustment)
+        #expect(read.kind == filter.kind)
+        for index in values.indices { #expect(abs(read.value(index) - values[index]) < 0.01) }
+        if filter.kind.hasColor, let color = read.color {
+            #expect(abs(color.red - 0.2) < 0.01 && abs(color.blue - 0.9) < 0.01)
+        }
+    }
+
     @Test func levelsComeBack() throws {
         var filter = LayerFilter(kind: .levels)
         filter.black = 0.2

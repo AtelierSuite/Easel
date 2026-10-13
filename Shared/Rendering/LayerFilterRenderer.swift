@@ -25,6 +25,9 @@ extension LayerFilter {
             output = applyPhotoshopSettings(to: input)
         case .levels where hasChannelTones, .curves where hasChannelTones:
             output = applyChannelTones(to: input)
+        case .blackAndWhite where values != nil,
+             .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize:
+            output = applyAdjustment(to: input)
         case .blackAndWhite:
             let filter = CIFilter.colorControls()
             filter.inputImage = input

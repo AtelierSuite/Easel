@@ -42,7 +42,10 @@ enum PSDSmartFilters {
         let allOn = style["enab"]?.bool ?? true
         var filters: [LayerFilter] = []
         for entry in list {
-            guard let settings = entry["Fltr"]?.descriptor, var filter = filter(from: settings, placement: placement) else { return nil }
+            // Filters with no settings, such as Invert, have only their id.
+            var settings = PSDDescriptor(classID: fourCC(UInt32(truncatingIfNeeded: Int64(entry["filterID"]?.number ?? 0))))
+            if let found = entry["Fltr"]?.descriptor { settings = found }
+            guard var filter = filter(from: settings, placement: placement) else { return nil }
             if let blend = entry["blendOptions"]?.descriptor {
                 let opacity = (blend["Opct"]?.number ?? 100) / 100
                 guard (blend["Md  "]?.enumValue ?? "Nrml") == "Nrml" else { return nil }
@@ -118,6 +121,22 @@ enum PSDSmartFilters {
             return make(.colorBalance) { $0.balance = midtones.map { min(max($0 / 100, -1), 1) } }
         case "GrMp", "GdMp":
             return gradientMap(settings)
+        case "Invr":
+            return LayerFilter(kind: .invert)
+        case "Slrz":
+            return LayerFilter(kind: .solarize)
+        case "Pstr":
+            return make(.posterize) { $0.setValue(number("Lvls") ?? 4, at: 0) }
+        case "Thrs":
+            return make(.threshold) { $0.setValue(number("Lvl ") ?? 128, at: 0) }
+        case "BanW":
+            return make(.blackAndWhite) { filter in
+                for (index, key) in ["Rd  ", "Yllw", "Grn ", "Cyn ", "Bl  ", "Mgnt"].enumerated() {
+                    filter.setValue(number(key) ?? filter.value(index), at: index)
+                }
+                filter.setValue(settings["useTint"]?.bool == true ? 1 : 0, at: 6)
+                if let tint = settings["tintColor"]?.color { filter.color = tint }
+            }
         case "Crvs":
             return curves(settings)
         case "Lvls":
@@ -133,6 +152,11 @@ enum PSDSmartFilters {
         default:
             return nil
         }
+    }
+
+    /// The four letters a filter's id is made of.
+    private static func fourCC(_ id: UInt32) -> String {
+        String(decoding: [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: id >> $0) }, as: UTF8.self)
     }
 
     private static func make(_ kind: LayerFilter.Kind, _ set: (inout LayerFilter) -> Void) -> LayerFilter {
@@ -222,23 +246,39 @@ enum PSDSmartFilters {
         guard !filters.isEmpty else { return nil }
         var list: [PSDDescriptor.Value] = []
         for filter in filters {
-            guard let (name, id, settings) = settings(for: filter, placement: placement) else { return nil }
+            guard let (name, id, descriptor) = settings(for: filter, placement: placement) else { return nil }
             let opacity = filter.kind == .gradientMap ? min(max(filter.amount, 0), 1) * 100 : 100
-            list.append(.descriptor(PSDDescriptor(classID: "filterFX", items: [
-                ("Nm  ", .text(name)),
-                ("blendOptions", .descriptor(PSDDescriptor(classID: "blendOptions", items: [
-                    ("Opct", .unit("#Prc", opacity)), ("Md  ", .enumerated(type: "BlnM", value: "Nrml")),
-                ]))),
-                ("enab", .bool(filter.isEnabled)), ("hasoptions", .bool(true)),
-                ("FrgC", .rgb(.black)), ("BckC", .rgb(.white)),
-                ("Fltr", .descriptor(settings)), ("filterID", .integer(id)),
-            ])))
+            let items = filterItems(name: name, opacity: opacity, filter: filter, settings: descriptor, id: id)
+            list.append(.descriptor(PSDDescriptor(classID: "filterFX", items: items)))
         }
         return PSDDescriptor(classID: "filterFXStyle", items: [
             ("enab", .bool(true)), ("validAtPosition", .bool(true)),
             ("filterMaskEnable", .bool(maskEnabled)), ("filterMaskLinked", .bool(false)), ("filterMaskExtendWithWhite", .bool(true)),
             ("filterFXList", .list(list)),
         ])
+    }
+
+    private static var noSettings: [(key: String, value: PSDDescriptor.Value)] { .init() }
+
+    /// One entry of the filter list.
+    private static func filterItems(
+        name: String, opacity: Double, filter: LayerFilter, settings: PSDDescriptor, id: Int32
+    ) -> [(key: String, value: PSDDescriptor.Value)] {
+        // Filters with no settings, such as Invert, have only their id.
+        let settings: PSDDescriptor? = settings.isEmpty ? nil : settings
+        var items: [(key: String, value: PSDDescriptor.Value)] = []
+        items.append(("Nm  ", .text(name)))
+        let blend = PSDDescriptor(classID: "blendOptions", items: [
+            ("Opct", .unit("#Prc", opacity)), ("Md  ", .enumerated(type: "BlnM", value: "Nrml")),
+        ])
+        items.append(("blendOptions", .descriptor(blend)))
+        items.append(("enab", .bool(filter.isEnabled)))
+        items.append(("hasoptions", .bool(settings != nil)))
+        items.append(("FrgC", .rgb(.black)))
+        items.append(("BckC", .rgb(.white)))
+        if let settings { items.append(("Fltr", .descriptor(settings))) }
+        items.append(("filterID", .integer(id)))
+        return items
     }
 
     /// Photoshop's name, id and settings for one filter.
@@ -283,6 +323,21 @@ enum PSDSmartFilters {
             ])
         case .mosaic:
             return entry("Mosaic...", "Msc ", [("ClSz", .unit("#Pxl", max(2, filter.amount * 60 * unit)))])
+        case .invert:
+            return entry("Invert", "Invr", noSettings)
+        case .solarize:
+            return entry("Solarize", "Slrz", noSettings)
+        case .posterize:
+            return entry("Posterize...", "Pstr", [("Lvls", .integer(Int32(filter.value(0).rounded())))])
+        case .threshold:
+            return entry("Threshold...", "Thrs", [("Lvl ", .integer(Int32(filter.value(0).rounded())))])
+        case .blackAndWhite where filter.values != nil && filter.amount >= 0.995:
+            func weight(_ index: Int) -> PSDDescriptor.Value { .integer(Int32(filter.value(index).rounded())) }
+            return entry("Black & White...", "BanW", [
+                ("presetKind", .enumerated(type: "presetKindType", value: "presetKindCustom")),
+                ("Rd  ", weight(0)), ("Yllw", weight(1)), ("Grn ", weight(2)), ("Cyn ", weight(3)), ("Bl  ", weight(4)), ("Mgnt", weight(5)),
+                ("useTint", .bool(filter.value(6) >= 0.5)), ("tintColor", .rgb(filter.color ?? LayerFilter.Kind.blackAndWhite.defaultColor!)),
+            ])
         case .hsl, .saturation:
             guard let values = PSDAdjustments.hueSaturationSettings(for: filter) else { return nil }
             func integer(_ value: Double) -> PSDDescriptor.Value { .integer(Int32(value.rounded())) }

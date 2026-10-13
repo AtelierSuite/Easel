@@ -53,6 +53,9 @@ struct PSDDescriptor: Equatable {
         self.items = items
     }
 
+    /// Whether it holds no settings at all.
+    var isEmpty: Bool { items.isEmpty }
+
     subscript(key: String) -> Value? {
         items.first { $0.key == key }?.value
     }

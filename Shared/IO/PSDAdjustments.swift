@@ -6,7 +6,9 @@ import Foundation
 enum PSDAdjustments {
     /// The tagged blocks that make a layer an adjustment layer Easel can
     /// read, or that carry its settings.
-    static let keys: Set<String> = ["levl", "curv", "hue2", "brit", "CgEd", "blnc", "blwh", "grdm"]
+    static let keys: Set<String> = [
+        "levl", "curv", "hue2", "brit", "CgEd", "blnc", "blwh", "grdm", "nvrt", "post", "thrs", "expA", "vibA", "phfl",
+    ]
 
     /// Every tagged block that marks an adjustment or fill layer, read or
     /// not: layers holding any of these have no pixels of their own.
@@ -25,9 +27,91 @@ enum PSDAdjustments {
         if let data = blocks["hue2"], let filter = hueSaturation(data) { return [filter] }
         if let data = blocks["brit"] { return brightnessContrast(data, descriptor: blocks["CgEd"]) }
         if let data = blocks["blnc"], let filter = colorBalance(data) { return [filter] }
-        if blocks["blwh"] != nil { return [LayerFilter(kind: .blackAndWhite)] }
+        if let data = blocks["blwh"] { return [blackAndWhite(data)] }
+        if blocks["nvrt"] != nil { return [LayerFilter(kind: .invert)] }
+        if let data = blocks["post"], let filter = level(data, kind: .posterize) { return [filter] }
+        if let data = blocks["thrs"], let filter = level(data, kind: .threshold) { return [filter] }
+        if let data = blocks["expA"], let filter = exposure(data) { return [filter] }
+        if let data = blocks["vibA"], let filter = vibrance(data) { return [filter] }
+        if let data = blocks["phfl"], let filter = photoFilter(data) { return [filter] }
         if let data = blocks["grdm"], let filter = gradientMap(data) { return [filter] }
         return []
+    }
+
+    /// Black & White's six colour weights and its tint, as a descriptor.
+    private static func blackAndWhite(_ data: [UInt8]) -> LayerFilter {
+        var filter = LayerFilter(kind: .blackAndWhite)
+        var reader = BigEndianReader(bytes: data)
+        guard (try? reader.uint32()) != nil, let settings = try? PSDDescriptor.read(&reader) else { return filter }
+        for (index, key) in ["Rd  ", "Yllw", "Grn ", "Cyn ", "Bl  ", "Mgnt"].enumerated() {
+            if let weight = settings[key]?.number { filter.setValue(weight, at: index) }
+        }
+        filter.setValue(settings["useTint"]?.bool == true ? 1 : 0, at: 6)
+        if let tint = settings["tintColor"]?.color { filter.color = tint }
+        return filter
+    }
+
+    /// Posterize's levels or Threshold's level: one number.
+    private static func level(_ data: [UInt8], kind: LayerFilter.Kind) -> LayerFilter? {
+        var reader = BigEndianReader(bytes: data)
+        guard let level = try? reader.uint16() else { return nil }
+        var filter = LayerFilter(kind: kind)
+        filter.setValue(Double(level), at: 0)
+        return filter
+    }
+
+    private static func exposure(_ data: [UInt8]) -> LayerFilter? {
+        var reader = BigEndianReader(bytes: data)
+        guard (try? reader.uint16()) == 1, let exposure = try? reader.uint32(), let offset = try? reader.uint32(),
+              let gamma = try? reader.uint32() else { return nil }
+        var filter = LayerFilter(kind: .exposure)
+        filter.values = [exposure, offset, gamma].map { Double(Float(bitPattern: $0)) }
+        return filter
+    }
+
+    private static func vibrance(_ data: [UInt8]) -> LayerFilter? {
+        var reader = BigEndianReader(bytes: data)
+        guard (try? reader.uint32()) != nil, let settings = try? PSDDescriptor.read(&reader) else { return nil }
+        var filter = LayerFilter(kind: .vibrance)
+        filter.values = [settings["vibrance"]?.number ?? 0, settings["Strt"]?.number ?? 0]
+        return filter
+    }
+
+    private static func photoFilter(_ data: [UInt8]) -> LayerFilter? {
+        var reader = BigEndianReader(bytes: data)
+        guard let version = try? reader.uint16(), version == 2 || version == 3 else { return nil }
+        let color: RGBAColor?
+        if version == 2 {
+            guard let space = try? reader.uint16(), let values = try? (0..<4).map({ _ in try reader.uint16() }) else { return nil }
+            color = Self.color(space: space, values: values)
+        } else {
+            // Lab, in hundredths.
+            guard let values = try? (0..<3).map({ _ in Double(try reader.int32()) / 100 }) else { return nil }
+            color = ColorConversions.srgb(lab: values)
+        }
+        guard let color, let density = try? reader.uint32(), let preserves = try? reader.uint8() else { return nil }
+        var filter = LayerFilter(kind: .photoFilter)
+        filter.color = color
+        filter.values = [Double(density), preserves != 0 ? 1 : 0]
+        return filter
+    }
+
+    /// A colour as Photoshop's colour records keep it: RGB in sixteen bits,
+    /// or Lab with lightness in hundredths and the others signed.
+    static func color(space: UInt16, values: [UInt16]) -> RGBAColor? {
+        switch space {
+        case 0:
+            return RGBAColor(red: Double(values[0]) / 65535, green: Double(values[1]) / 65535, blue: Double(values[2]) / 65535)
+        case 7:
+            let lightness = Double(values[0]) / 100
+            let a = Double(Int16(bitPattern: values[1])) / 100, b = Double(Int16(bitPattern: values[2])) / 100
+            return ColorConversions.srgb(lab: [lightness, a, b])
+        case 8:
+            let grey = 1 - Double(values[0]) / 10000
+            return RGBAColor(red: grey, green: grey, blue: grey)
+        default:
+            return nil
+        }
     }
 
     private static func levels(_ data: [UInt8]) -> LayerFilter? {
@@ -295,13 +379,40 @@ enum PSDAdjustments {
             out.uint8(1)
             return ([("blnc", out.data)], 1)
         case .blackAndWhite:
+            func weight(_ index: Int) -> PSDDescriptor.Value { .integer(Int32(filter.value(index).rounded())) }
             let settings = PSDDescriptor(classID: "null", items: [
-                ("Rd  ", .integer(40)), ("Yllw", .integer(60)), ("Grn ", .integer(40)), ("Cyn ", .integer(60)),
-                ("Bl  ", .integer(20)), ("Mgnt", .integer(80)), ("useTint", .bool(false)),
-                ("tintColor", .rgb(RGBAColor(red: 225 / 255, green: 211 / 255, blue: 179 / 255))),
+                ("Rd  ", weight(0)), ("Yllw", weight(1)), ("Grn ", weight(2)), ("Cyn ", weight(3)),
+                ("Bl  ", weight(4)), ("Mgnt", weight(5)), ("useTint", .bool(filter.values != nil && filter.value(6) >= 0.5)),
+                ("tintColor", .rgb(filter.color ?? LayerFilter.Kind.blackAndWhite.defaultColor!)),
                 ("bwPresetKind", .integer(1)), ("blackAndWhitePresetFileName", .text("")),
             ])
             return ([("blwh", settings.versionedBytes)], min(max(filter.amount, 0), 1))
+        case .invert:
+            return ([("nvrt", [])], 1)
+        case .posterize, .threshold:
+            out.uint16(Int(filter.value(0).rounded()))
+            out.uint16(0)
+            return ([(filter.kind == .posterize ? "post" : "thrs", out.data)], 1)
+        case .exposure:
+            out.uint16(1)
+            for index in 0..<3 { out.uint32(Int(Float(filter.value(index)).bitPattern)) }
+            out.uint16(0)
+            return ([("expA", out.data)], 1)
+        case .vibrance:
+            let settings = PSDDescriptor(classID: "null", items: [
+                ("vibrance", .integer(Int32(filter.value(0).rounded()))), ("Strt", .integer(Int32(filter.value(1).rounded()))),
+            ])
+            return ([("vibA", settings.versionedBytes)], 1)
+        case .photoFilter:
+            let color = filter.color ?? LayerFilter.Kind.photoFilter.defaultColor!
+            out.uint16(2)
+            out.uint16(0) // RGB.
+            for channel in [color.red, color.green, color.blue] { out.uint16(Int((min(max(channel, 0), 1) * 65535).rounded())) }
+            out.uint16(0)
+            out.uint32(Int(filter.value(0).rounded()))
+            out.uint8(filter.value(1) >= 0.5 ? 1 : 0)
+            out.zeros(3)
+            return ([("phfl", out.data)], 1)
         case .gradientMap:
             out.uint16(1)
             out.uint8(0)
