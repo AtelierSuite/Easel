@@ -53,6 +53,9 @@ enum VectorBoolean: String, CaseIterable, Identifiable, Sendable {
         combined.nodes = first
         combined.isClosed = true
         combined.extraContours = contours.count > 1 ? Array(contours.dropFirst()) : nil
+        // No longer the bottom shape, nor the line its words were set on.
+        combined.liveShape = nil
+        combined.text = nil
         if combined.fill == nil { combined.fill = base.stroke }
         return combined
     }

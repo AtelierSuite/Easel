@@ -350,6 +350,25 @@ struct VectorBooleanTests {
         #expect(path.nodes.contains { $0.controlIn != nil || $0.controlOut != nil })
     }
 
+    @Test func combiningLetsGoOfTheBottomShapesSettings() throws {
+        var rounded = VectorPath.shape(ShapeSpec(kind: .roundedRectangle, start: CGPoint(x: 10, y: 10), end: CGPoint(x: 70, y: 70),
+                                                 isFilled: true, lineWidth: 1, color: .black))[0]
+        rounded.text = PathText(string: "Words", fontSize: 12, color: .black)
+        #expect(rounded.liveShape != nil)
+        let path = try #require(VectorBoolean.subtract.apply(to: [rounded, square(30, 30, 20)]))
+        #expect(path.liveShape == nil)
+        #expect(path.text == nil)
+        #expect(path.extraContours?.count == 1)
+    }
+
+    @Test func redrawingALiveShapeDropsOtherOutlines() {
+        var path = VectorPath.shape(ShapeSpec(kind: .roundedRectangle, start: CGPoint(x: 10, y: 10), end: CGPoint(x: 70, y: 70),
+                                              isFilled: true, lineWidth: 1, color: .black))[0]
+        path.extraContours = [square(30, 30, 20).nodes]
+        path.rebuildLiveShape()
+        #expect(path.extraContours == nil)
+    }
+
     @Test func oneShapeIsNothingToCombine() {
         #expect(VectorBoolean.unite.apply(to: [square(0, 0, 10)]) == nil)
     }

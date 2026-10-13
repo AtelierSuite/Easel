@@ -109,6 +109,7 @@ struct VectorPath: Codable, Equatable, Sendable, Identifiable {
     mutating func rebuildLiveShape() {
         guard let liveShape else { return }
         nodes = liveShape.nodes
+        extraContours = nil
         isClosed = true
     }
 
