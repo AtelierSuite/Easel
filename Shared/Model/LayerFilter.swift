@@ -248,8 +248,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Filters Core Image works out by mixing neighbouring pixels, which
         /// it is given shades as they look to mix.
         var mixesShades: Bool {
-            [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .unsharpMask,
-             .twirl, .pinch, .lensCorrection, .blur, .blurMore, .sharpen, .sharpenMore].contains(self)
+            [.gaussianBlur, .zoomBlur, .lensBlur, .noiseReduction, .unsharpMask,
+             .lensCorrection, .blur, .blurMore, .sharpen, .sharpenMore].contains(self)
         }
 
         /// Filters that are simply on or off.

@@ -27,11 +27,6 @@ enum PSDSmartFilters {
         var unit: Double { max(size.width, size.height) / 1000 * scale }
     }
 
-    /// Easel's strength for a Photoshop motion blur's distance, and twirl's
-    /// angle, fitted to Photoshop's sample renders.
-    private static let motionScale = 0.344
-    private static let twirlScale = 0.49
-
     // MARK: - Reading
 
     /// The filters in a smart object's `filterFX`, first run first, or nil
@@ -84,8 +79,7 @@ enum PSDSmartFilters {
         case "MtnB":
             guard let distance = number("Dstn") else { return nil }
             return make(.motionBlur) {
-                // Fitted to Photoshop's own: its distance runs further.
-                $0.amount = distance * motionScale / (80 * unit)
+                $0.amount = distance / (160 * unit)
                 // Easel's turns clockwise on screen.
                 $0.angle = -((number("Angl") ?? 0) + placement.turn)
             }
@@ -109,8 +103,8 @@ enum PSDSmartFilters {
             return make(.highPass) { $0.amount = radius / (20 * unit) }
         case "Twrl":
             guard let angle = number("Angl") else { return nil }
-            // Photoshop's turns the other way, and eases off sooner.
-            return make(.twirl) { $0.amount = -angle * twirlScale / 360 }
+            // Photoshop's turns the other way.
+            return make(.twirl) { $0.amount = -angle / 360 }
         case "Pnch":
             guard let amount = number("Amnt") else { return nil }
             return make(.pinch) { $0.amount = amount / 100 }
@@ -407,7 +401,7 @@ enum PSDSmartFilters {
         case .motionBlur:
             return entry("Motion Blur...", "MtnB", [
                 ("Angl", .integer(Int32((-filter.angle - placement.turn).rounded()))),
-                ("Dstn", .unit("#Pxl", filter.amount * 80 * unit / motionScale)),
+                ("Dstn", .unit("#Pxl", filter.amount * 160 * unit)),
             ])
         case .zoomBlur:
             return entry("Radial Blur...", "RdlB", [
@@ -425,7 +419,7 @@ enum PSDSmartFilters {
         case .highPass:
             return entry("High Pass...", "HghP", [("Rds ", .unit("#Pxl", max(0.5, filter.amount * 20 * unit)))])
         case .twirl where abs(filter.centerX - 0.5) < 0.01 && abs(filter.centerY - 0.5) < 0.01:
-            return entry("Twirl...", "Twrl", [("Angl", .integer(Int32((-filter.amount * 360 / twirlScale).rounded())))])
+            return entry("Twirl...", "Twrl", [("Angl", .integer(Int32((-filter.amount * 360).rounded())))])
         case .pinch where abs(filter.centerX - 0.5) < 0.01 && abs(filter.centerY - 0.5) < 0.01:
             return entry("Pinch...", "Pnch", [("Amnt", .integer(Int32(min(max(filter.amount * 100, -100), 100).rounded())))])
         case .emboss:

@@ -126,15 +126,8 @@ extension LayerFilter {
             filter.inputImage = input.clampedToExtent()
             filter.radius = Float(amount * 50 * unit)
             output = filter.outputImage ?? input
-        case .motionBlur:
-            let filter = CIFilter.motionBlur()
-            filter.inputImage = input.clampedToExtent()
-            filter.radius = Float(amount * 80 * unit)
-            // Core Image turns anticlockwise with y up; on screen, with y
-            // down, the same number turns clockwise, which is what the
-            // slider says.
-            filter.angle = Float(-angle * .pi / 180)
-            output = filter.outputImage ?? input
+        case .motionBlur, .twirl, .pinch:
+            output = applyDistort(to: input)
         case .zoomBlur:
             let filter = CIFilter.zoomBlur()
             filter.inputImage = input.clampedToExtent()
@@ -168,20 +161,6 @@ extension LayerFilter {
             output = filter.outputImage ?? input
         case .highPass:
             output = highPass(input, radius: max(0.5, amount * 20 * unit))
-        case .twirl:
-            let filter = CIFilter.twirlDistortion()
-            filter.inputImage = input.clampedToExtent()
-            filter.center = point(in: extent)
-            filter.radius = Float(min(extent.width, extent.height) / 2)
-            filter.angle = Float(amount * .pi * 2)
-            output = filter.outputImage ?? input
-        case .pinch:
-            let filter = CIFilter.bumpDistortion()
-            filter.inputImage = input.clampedToExtent()
-            filter.center = point(in: extent)
-            filter.radius = Float(min(extent.width, extent.height) / 2)
-            filter.scale = Float(-amount)
-            output = filter.outputImage ?? input
         case .emboss, .halftone, .mosaic, .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse,
              .tiles, .extrude, .crystallize, .pointillize, .mezzotint:
             output = applyStylize(to: input)
