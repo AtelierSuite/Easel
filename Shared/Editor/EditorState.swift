@@ -175,6 +175,9 @@ final class EditorState {
     /// Whether the person is being asked about the held edit.
     var isAskingToCopy = false
     @ObservationIgnored var vectorDrag: VectorDrag?
+    /// The vector layer as it was when the drag began, to go back to if
+    /// the drag is called off.
+    @ObservationIgnored var vectorDragOrigin: Layer?
     var draftSelection: Selection?
     var draftShape: ShapeSpec?
     var draftGradient: (start: CGPoint, end: CGPoint)?
@@ -961,6 +964,7 @@ final class EditorState {
             }
         case .pen:
             vectorDrag = nil
+            vectorDragOrigin = nil
         case .nodes:
             guard shapeBuilder == nil else { return }
             nodesEnded(isTap: isTap, at: point)
@@ -1028,6 +1032,11 @@ final class EditorState {
             }
             groupMoveOrigin = nil
         }
+        if vectorDrag != nil, let origin = vectorDragOrigin {
+            update { $0[origin.id] = origin }
+        }
+        vectorDrag = nil
+        vectorDragOrigin = nil
     }
 
     private func shape(for kind: SelectionKind, from start: CGPoint, to end: CGPoint) -> Selection.Shape {

@@ -72,6 +72,7 @@ extension EditorState {
             let node = VectorNodeRef(layerID: target.layerID, path: target.path, node: nodes.count)
             selectedNode = node
             vectorDrag = .penHandle(node, start: point)
+            vectorDragOrigin = composition[node.layerID]
             return
         }
         let path = VectorPath(
@@ -88,6 +89,7 @@ extension EditorState {
             let node = VectorNodeRef(layerID: layer.id, path: count, node: 0)
             selectedNode = node
             vectorDrag = .penHandle(node, start: point)
+            vectorDragOrigin = composition[node.layerID]
             return
         }
         // Otherwise on a layer of its own.
@@ -98,6 +100,7 @@ extension EditorState {
         let node = VectorNodeRef(layerID: layer.id, path: 0, node: 0)
         selectedNode = node
         vectorDrag = .penHandle(node, start: point)
+        vectorDragOrigin = composition[node.layerID]
     }
 
     /// Dragging after placing a point pulls out its handles, making a curve.
@@ -156,6 +159,7 @@ extension EditorState {
 
     func nodesBegan(at point: CGPoint) {
         vectorDrag = vectorHit(at: point)
+        vectorDragOrigin = vectorDrag != nil ? activeLayer : nil
         guard case .anchor(let ref, _, let start) = vectorDrag else { return }
         let alreadyPicked = selectedNodes.contains(ref)
         if isSelectingMultiplePoints, !alreadyPicked, let main = selectedNode, main.layerID == ref.layerID {
@@ -229,7 +233,10 @@ extension EditorState {
     }
 
     func nodesEnded(isTap: Bool, at point: CGPoint) {
-        defer { vectorDrag = nil }
+        defer {
+            vectorDrag = nil
+            vectorDragOrigin = nil
+        }
         guard isTap, vectorDrag == nil else { return }
         // A tap on nothing: another vector layer is picked, or the point let go.
         if let hit = composition.layers.last(where: { $0.isVector && $0.isVisible && $0.contains(point) }),

@@ -183,6 +183,16 @@ struct NodeToolTests {
         #expect(abs(still.x - 50) < 0.01 && abs(still.y - 50) < 0.01)
     }
 
+    @Test func aCancelledDragPutsThePointBack() {
+        let state = editor()
+        let before = state.activeLayer
+        state.toolBegan(at: CGPoint(x: 150, y: 150), pressure: 1)
+        state.toolMoved(to: [StrokePoint(location: CGPoint(x: 180, y: 190))])
+        state.toolCancelled()
+        #expect(state.activeLayer == before)
+        #expect(state.vectorDrag == nil)
+    }
+
     @Test func smoothingAddsHandlesAndHandlesMirror() throws {
         let state = editor()
         state.toolBegan(at: CGPoint(x: 150, y: 50), pressure: 1)
