@@ -44,7 +44,7 @@ enum PSDFilterEffects {
         let length = try reader.length()
         let compression = try reader.uint16()
         let width = right - left, height = bottom - top
-        guard width > 0, height > 0,
+        guard PSDReader.fitsBitmap(width: width, height: height),
               let plane = plane(try reader.bytes(length - 2), compression: compression, width: width, height: height),
               let image = maskImage(plane, width: width, height: height) else { return nil }
         return (id, Mask(rect: CGRect(x: left, y: top, width: width, height: height), image: image))

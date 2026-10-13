@@ -63,8 +63,14 @@ enum PSDReader {
         var patterns: [PatternSwatch] = []
         var recordCount = 0
         var extras = LayerExtras()
-        if layerSectionLength > 0, let read = try? readLayers(&reader, isLarge: isLarge, format: format, canvas: canvas, sectionEnd: layerSectionEnd) {
-            (layers, groups, patterns, recordCount, extras) = read
+        if layerSectionLength > 0 {
+            do {
+                (layers, groups, patterns, recordCount, extras) = try readLayers(
+                    &reader, isLarge: isLarge, format: format, canvas: canvas, sectionEnd: layerSectionEnd
+                )
+            } catch Failure.unsupported {
+                throw Failure.unsupported
+            } catch {}
         }
         guard reader.seek(to: layerSectionEnd) else { throw Failure.damaged }
 
@@ -80,8 +86,6 @@ enum PSDReader {
             composition.guides = resources.guides
             return composition
         }
-        // Layers that cannot be scaled down are bounded by the canvas cap.
-        guard width <= Bitmap.maximumDimension, height <= Bitmap.maximumDimension else { throw Failure.unsupported }
         var composition = Composition(size: canvas, layers: layers, groups: groups)
         composition.patterns = patterns
         composition.resolution = resources.resolution
@@ -186,6 +190,9 @@ enum PSDReader {
         // Negative: the first alpha channel is the merged result's
         // transparency. The count is what matters.
         let count = abs(Int(try reader.int16()))
+        // Layers that cannot be scaled down are bounded by the canvas cap,
+        // before any is decoded.
+        guard count == 0 || fitsBitmap(width: Int(canvas.width), height: Int(canvas.height)) else { throw Failure.unsupported }
         var records: [LayerRecord] = []
         for _ in 0..<count {
             records.append(try readRecord(&reader, isLarge: isLarge))
@@ -210,7 +217,7 @@ enum PSDReader {
                 let isMask = channel.id == -2
                 let w = isMask ? (record.mask?.width ?? 0) : record.width
                 let h = isMask ? (record.mask?.height ?? 0) : record.height
-                if channel.length >= 2, w > 0, h > 0 {
+                if channel.length >= 2, fitsBitmap(width: w, height: h) {
                     planes[channel.id] = try? readChannel(
                         &reader, length: channel.length, width: w, height: h, format: format, isLarge: isLarge
                     )
@@ -261,7 +268,7 @@ enum PSDReader {
                 }
                 continue
             }
-            guard !record.isGroupBoundary, record.width > 0, record.height > 0,
+            guard !record.isGroupBoundary, fitsBitmap(width: record.width, height: record.height),
                   let image = makeImage(planes, width: record.width, height: record.height, format: format)
             else { continue }
 
@@ -731,7 +738,7 @@ enum PSDReader {
                 context.setFillColor(outside.cgColor)
                 context.fill(CGRect(origin: .zero, size: size))
             }
-            guard let plane, mask.width > 0, mask.height > 0, plane.count >= mask.width * mask.height else { return }
+            guard let plane, fitsBitmap(width: mask.width, height: mask.height), plane.count >= mask.width * mask.height else { return }
             // The mask's values as the alpha of white.
             var bytes = [UInt8](repeating: 0, count: plane.count * 4)
             for (index, value) in plane.enumerated() {
@@ -748,6 +755,13 @@ enum PSDReader {
             Bitmap.draw(maskImage, in: rect, context: context)
         }
         return LayerMask(image: LayerImage(image), isEnabled: !mask.isDisabled)
+    }
+
+    /// Whether pixels this size can be decoded: a side past the canvas cap
+    /// would ask for more memory than a damaged file deserves, and their
+    /// product could overflow.
+    static func fitsBitmap(width: Int, height: Int) -> Bool {
+        (1...Bitmap.maximumDimension).contains(width) && (1...Bitmap.maximumDimension).contains(height)
     }
 
     static func blendMode(_ key: String) -> LayerBlendMode {

@@ -244,6 +244,26 @@ struct PSDReaderTests {
         #expect(PSDSmartObjects.embeddedFiles(from: embedded).files.isEmpty)
     }
 
+    /// Layers claiming more pixels than any canvas holds are left out
+    /// rather than allocated; canvases past the cap are refused before
+    /// their layers are read.
+    @Test func oversizedLayersAreLeftOut() throws {
+        var data = [UInt8](PSDBuilder(width: 4, height: 4, layers: [
+            .init(name: "Huge", rect: (0, 0, 4, 4), color: (255, 0, 0, 255), rle: true),
+        ]).build())
+        // The record's bottom and right, past a billion pixels.
+        for offset in [52, 56] { data.replaceSubrange(offset..<(offset + 4), with: [0x40, 0, 0, 0]) }
+        let composition = try PSDReader.composition(from: Data(data))
+        #expect(composition.layers.allSatisfy { $0.image.size.width <= 4 })
+        #expect(!PSDReader.fitsBitmap(width: Bitmap.maximumDimension + 1, height: 1))
+        #expect(!PSDReader.fitsBitmap(width: 0, height: 1))
+
+        let wide = PSDBuilder(width: Bitmap.maximumDimension + 1, height: 1, layers: [
+            .init(name: "Dot", rect: (0, 0, 1, 1), color: (255, 0, 0, 255)),
+        ]).build()
+        #expect(throws: PSDReader.Failure.unsupported) { try PSDReader.composition(from: wide) }
+    }
+
     /// Settings nested past any depth Photoshop uses are damage, not a
     /// stack overflow.
     @Test func deeplyNestedDescriptorsAreRefused() throws {

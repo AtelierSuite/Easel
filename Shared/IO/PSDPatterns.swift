@@ -33,7 +33,7 @@ enum PSDPatterns {
         let height = Int(try reader.int16()), width = Int(try reader.int16())
         let name = try unicode(&reader)
         let id = try reader.ascii(Int(try reader.uint8()))
-        guard width > 0, height > 0, try reader.uint32() == 3 else { return nil }
+        guard PSDReader.fitsBitmap(width: width, height: height), try reader.uint32() == 3 else { return nil }
         _ = try reader.uint32() // Length of what follows.
         try reader.skip(16) // Bounds.
         // Room for this many channels, and two masks, most of them empty.
@@ -74,7 +74,7 @@ enum PSDPatterns {
         let compression = try reader.uint8()
         let width = right - left, height = bottom - top
         defer { _ = reader.seek(to: end) }
-        guard depth == 8, width > 0, height > 0 else { return nil }
+        guard depth == 8, PSDReader.fitsBitmap(width: width, height: height) else { return nil }
         let data = try reader.bytes(end - reader.offset)
         switch compression {
         case 0:

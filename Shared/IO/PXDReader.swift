@@ -193,8 +193,9 @@ enum PXDReader {
         let stride = uint32(0x24)
         let formatLength = uint32(0x2C)
         let pixelStart = 0x30 + formatLength + 8
-        guard width > 0, height > 0, stride >= width * 4, pixelStart < bytes.count,
-              width <= Bitmap.maximumDimension, height <= Bitmap.maximumDimension else { return nil }
+        // Rows are padded for alignment, never by more than a little.
+        guard PSDReader.fitsBitmap(width: width, height: height), stride >= width * 4, stride <= width * 4 + 1024,
+              pixelStart < bytes.count else { return nil }
         guard let pixels = rawInflate(Array(bytes[pixelStart...]), expected: stride * height) else { return nil }
 
         let profile = iccProfile(in: bytes[0x30..<(0x30 + formatLength)])
