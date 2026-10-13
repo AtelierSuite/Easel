@@ -108,15 +108,31 @@ struct Liquifier: PixelPusher {
         let minRow = max(0, Int((center.y - radius) / Double(cell)))
         let maxRow = min(fieldHeight - 1, Int((center.y + radius) / Double(cell)) + 1)
         guard minColumn <= maxColumn, minRow <= maxRow else { return }
-        // Read from the field as it was before this dab.
-        let oldX = offsetX, oldY = offsetY
+        // Read from the field as it was before this dab: only the part of
+        // it the dab can reach, as far again as the step and one more point
+        // to blend with.
+        let margin = Int((max(abs(step.dx), abs(step.dy)) / Double(cell)).rounded(.up)) + 1
+        let window = Window(
+            minColumn: max(0, minColumn - margin), maxColumn: min(fieldWidth - 1, maxColumn + margin),
+            minRow: max(0, minRow - margin), maxRow: min(fieldHeight - 1, maxRow + margin)
+        )
+        var oldX = [Float](), oldY = [Float]()
+        oldX.reserveCapacity(window.columns * window.rows)
+        oldY.reserveCapacity(window.columns * window.rows)
+        for row in window.minRow...window.maxRow {
+            let start = row * fieldWidth
+            oldX.append(contentsOf: offsetX[(start + window.minColumn)...(start + window.maxColumn)])
+            oldY.append(contentsOf: offsetY[(start + window.minColumn)...(start + window.maxColumn)])
+        }
         for row in minRow...maxRow {
             for column in minColumn...maxColumn {
                 let x = Double(column * cell), y = Double(row * cell)
                 let amount = weight(hypot(x - center.x, y - center.y) / radius)
                 guard amount > 0 else { continue }
                 let sx = x - step.dx * Double(amount), sy = y - step.dy * Double(amount)
-                let (fx, fy) = Self.sample(oldX, oldY, width: fieldWidth, height: fieldHeight, x: sx / Double(cell), y: sy / Double(cell))
+                let (fx, fy) = Self.sample(
+                    oldX, oldY, width: fieldWidth, height: fieldHeight, x: sx / Double(cell), y: sy / Double(cell), window: window
+                )
                 let index = row * fieldWidth + column
                 offsetX[index] = fx - Float(step.dx) * amount
                 offsetY[index] = fy - Float(step.dy) * amount
@@ -124,12 +140,25 @@ struct Liquifier: PixelPusher {
         }
     }
 
-    /// The field's two values at a point between its grid points.
-    private static func sample(_ a: [Float], _ b: [Float], width: Int, height: Int, x: Double, y: Double) -> (Float, Float) {
+    /// Some of the field's grid points, from `minColumn` to `maxColumn`
+    /// across and `minRow` to `maxRow` down.
+    private struct Window {
+        var minColumn: Int, maxColumn: Int, minRow: Int, maxRow: Int
+        var columns: Int { maxColumn - minColumn + 1 }
+        var rows: Int { maxRow - minRow + 1 }
+    }
+
+    /// The field's two values at a point between its grid points. With a
+    /// window, `a` and `b` hold only the points in it.
+    private static func sample(
+        _ a: [Float], _ b: [Float], width: Int, height: Int, x: Double, y: Double, window: Window? = nil
+    ) -> (Float, Float) {
         let x = min(max(x, 0), Double(width - 1)), y = min(max(y, 0), Double(height - 1))
         let x0 = min(Int(x), width - 2), y0 = min(Int(y), height - 2)
         let tx = Float(x - Double(x0)), ty = Float(y - Double(y0))
-        let i00 = y0 * width + x0, i10 = i00 + 1, i01 = i00 + width, i11 = i01 + 1
+        let rowLength = window?.columns ?? width
+        let i00 = (y0 - (window?.minRow ?? 0)) * rowLength + x0 - (window?.minColumn ?? 0)
+        let i10 = i00 + 1, i01 = i00 + rowLength, i11 = i01 + 1
         func mix(_ v: [Float]) -> Float {
             let top = v[i00] + (v[i10] - v[i00]) * tx
             let bottom = v[i01] + (v[i11] - v[i01]) * tx
