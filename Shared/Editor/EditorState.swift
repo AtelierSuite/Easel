@@ -478,7 +478,7 @@ final class EditorState {
     /// worked out, asking for a fresher one if needed. Nil for a layer
     /// without effects, or before the first copy is ready.
     func styledDisplay(for layer: Layer) -> StyledLayer? {
-        guard layer.hasActiveEffects else { return nil }
+        guard layer.isStyled else { return nil }
         let key = StyleCache.Key(layer: layer, maxPixelSize: Self.filterDisplaySize)
         let shown = styledDisplay[layer.id]
         if let shown, shown.key == key { return shown.styled }

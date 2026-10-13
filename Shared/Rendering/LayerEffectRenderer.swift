@@ -43,12 +43,12 @@ enum LayerEffectRenderer {
     /// effects are measured through: distances and directions are given on
     /// the canvas, so a shadow falls the same way on a turned layer.
     /// `sourceScale` is how many of `source`'s pixels make one of the
-    /// layer's.
+    /// layer's. `fill` fades the layer's own pixels, and not its effects.
     static func render(
-        _ effects: [LayerEffect], source: CGImage, placement: CGAffineTransform, sourceScale: Double = 1
+        _ effects: [LayerEffect], source: CGImage, fill: Double = 1, placement: CGAffineTransform, sourceScale: Double = 1
     ) -> StyledLayer {
         let effects = effects.filter(\.isEnabled)
-        guard !effects.isEmpty else { return StyledLayer(plain: source) }
+        guard !effects.isEmpty else { return StyledLayer(plain: fill < 1 ? faded(source, by: fill) : source) }
 
         // From canvas pixels to `source`'s.
         let toLocal = CGAffineTransform(a: placement.a, b: placement.b, c: placement.c, d: placement.d, tx: 0, ty: 0)
@@ -69,7 +69,8 @@ enum LayerEffectRenderer {
         let shape = whiteShape(of: image)
 
         var behind: [CIImage] = []
-        var content = image
+        // What is painted inside the shape, each over what came before.
+        var inside: [(CIImage) -> CIImage] = []
         var front: [CIImage] = []
 
         // Bottom to top, as Photoshop stacks them.
@@ -100,28 +101,35 @@ enum LayerEffectRenderer {
                 // Past the frame there is no shape either, so the shadow
                 // falls from beyond it too.
                 let falling = edgeFilled(moved, frame: frame, offset: shift).clampedToExtent()
-                content = atop(colorize(blur(falling, size * 0.5).cropped(to: frame), effect), content)
+                let shadow = colorize(blur(falling, size * 0.5).cropped(to: frame), effect)
+                inside.append { atop(shadow, $0) }
             case .innerGlow:
                 let outside = inverse(of: shape, in: frame).clampedToExtent()
-                content = atop(colorize(blur(outside, size * 0.5).cropped(to: frame), effect), content)
+                let glow = colorize(blur(outside, size * 0.5).cropped(to: frame), effect)
+                inside.append { atop(glow, $0) }
             case .bevel:
-                content = bevel(content, shape: shape, effect: effect, size: max(size, 1), light: light, frame: frame)
+                inside.append { bevel($0, shape: shape, effect: effect, size: max(size, 1), light: light, frame: frame) }
             case .satin:
                 let mask = satin(shape, effect: effect, offset: length(effect.distance), size: size, light: light, frame: frame)
-                content = atop(colorize(mask, color: effect.color, opacity: 1), content)
+                let sheen = colorize(mask, color: effect.color, opacity: 1)
+                inside.append { atop(sheen, $0) }
             case .patternOverlay:
                 guard let tile = effect.patternTile else { continue }
                 let scale = length(effect.pattern.scale)
                 // From the layer's pixels, y down, to Core Image's.
                 let origin = CGPoint(x: effect.patternOrigin.x * sourceScale,
                                      y: original.extent.maxY - effect.patternOrigin.y * sourceScale)
-                content = atop(fade(tiled(tile, scale: scale, origin: origin, frame: frame), effect.opacity), content)
+                let pattern = fade(tiled(tile, scale: scale, origin: origin, frame: frame), effect.opacity)
+                inside.append { atop(pattern, $0) }
             case .colorOverlay:
-                content = atop(colorize(whiteFill(frame), effect), content)
+                let overlay = colorize(whiteFill(frame), effect)
+                inside.append { atop(overlay, $0) }
             case .gradientOverlay:
-                content = atop(gradient(effect, light: light, extent: original.extent, frame: frame), content)
+                let overlay = gradient(effect, light: light, extent: original.extent, frame: frame)
+                inside.append { atop(overlay, $0) }
             }
         }
+        let content = inside.reduce(image) { $1($0) }
 
         let behindImage = behind.isEmpty ? nil : behind.reduce(clear) { $1.composited(over: $0) }
         let frontImage = front.isEmpty ? nil : front.reduce(clear) { $1.composited(over: $0) }
@@ -133,10 +141,71 @@ enum LayerEffectRenderer {
             ImageProcessing.context.createCGImage(image.cropped(to: frame), from: frame, format: .RGBA8, colorSpace: Bitmap.colorSpace)
                 ?? Bitmap.empty
         }
-        return StyledLayer(
-            behind: behindImage.map(make), content: make(content), front: frontImage.map(make),
-            composite: make(composite), padding: padding
-        )
+        guard fill < 1 else {
+            return StyledLayer(
+                behind: behindImage.map(make), content: make(content), front: frontImage.map(make),
+                composite: make(composite), padding: padding
+            )
+        }
+        // The same painted over the shape in black and in white tells how
+        // much of the layer's own pixels each of those leaves showing,
+        // which is what the fill fades.
+        let black = make(inside.reduce(recolored(image, white: false)) { $1($0) })
+        let white = make(inside.reduce(recolored(image, white: true)) { $1($0) })
+        let filled = fillFaded(make(content), black: black, white: white, fill: fill)
+        let behindPart = behindImage.map(make), frontPart = frontImage.map(make)
+        let together = Bitmap.render(size: CGSize(width: filled.width, height: filled.height)) { context in
+            let rect = CGRect(x: 0, y: 0, width: filled.width, height: filled.height)
+            for part in [behindPart, filled, frontPart].compactMap({ $0 }) { Bitmap.draw(part, in: rect, context: context) }
+        }
+        return StyledLayer(behind: behindPart, content: filled, front: frontPart, composite: together, padding: padding)
+    }
+
+    /// The layer's pixels faded, for a fill with no effects to keep whole.
+    private static func faded(_ image: CGImage, by fill: Double) -> CGImage {
+        Bitmap.render(size: CGSize(width: image.width, height: image.height)) { context in
+            context.setAlpha(max(fill, 0))
+            Bitmap.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height), context: context)
+        }
+    }
+
+    /// The image's shape, as it is, in black or white.
+    private static func recolored(_ image: CIImage, white: Bool) -> CIImage {
+        let filter = CIFilter.colorMatrix()
+        filter.inputImage = image
+        filter.rVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        filter.gVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        filter.bVector = CIVector(x: 0, y: 0, z: 0, w: 0)
+        filter.aVector = CIVector(x: 0, y: 0, z: 0, w: 1)
+        let value: CGFloat = white ? 1 : 0
+        filter.biasVector = CIVector(x: value, y: value, z: value, w: 0)
+        return filter.outputImage ?? image
+    }
+
+    /// `content`, the layer with what is painted inside it, with only the
+    /// layer's own part faded to `fill`. Over black, the layer's part adds
+    /// nothing; the difference to the same over white is how much of it
+    /// shows through what is painted over it.
+    private static func fillFaded(_ content: CGImage, black: CGImage, white: CGImage, fill: Double) -> CGImage {
+        guard var out = Bitmap.pixels(of: content), let dark = Bitmap.pixels(of: black), let light = Bitmap.pixels(of: white),
+              dark.bytes.count == out.bytes.count, light.bytes.count == out.bytes.count else { return content }
+        let fill = Float(min(max(fill, 0), 1))
+        out.bytes.withUnsafeMutableBufferPointer { out in
+            dark.bytes.withUnsafeBufferPointer { dark in
+                light.bytes.withUnsafeBufferPointer { light in
+                    for index in stride(from: 0, to: out.count, by: 4) {
+                        for channel in 0..<3 {
+                            let shown = Float(out[index + channel]), painted = Float(dark[index + channel])
+                            out[index + channel] = UInt8(min(max(painted + fill * (shown - painted), 0), 255).rounded())
+                        }
+                        // The share of the alpha that is the layer's own.
+                        let own = max(Float(light[index]) - Float(dark[index]), 0)
+                        out[index + 3] = UInt8(min(max(Float(out[index + 3]) - (1 - fill) * own, 0), 255).rounded())
+                    }
+                }
+            }
+        }
+        return out.makeImage() ?? content
     }
 
     // MARK: - Pieces
@@ -366,12 +435,14 @@ final class StyleCache: Sendable {
     struct Key: Hashable, Sendable {
         var filterKey: FilterCache.Key
         var effects: [LayerEffect]
+        var fill: Double
         /// The layer's transform without its position.
         var a, b, c, d: Double
 
         init(layer: Layer, maxPixelSize: Int?) {
             filterKey = FilterCache.Key(layer: layer, maxPixelSize: maxPixelSize, includesMask: true)
             effects = layer.activeEffects
+            fill = layer.fillOpacity
             let placement = layer.affineTransform
             (a, b, c, d) = (placement.a, placement.b, placement.c, placement.d)
         }
@@ -400,7 +471,7 @@ final class StyleCache: Sendable {
             )
         }
         let styled = LayerEffectRenderer.render(
-            key.effects, source: source,
+            key.effects, source: source, fill: key.fill,
             placement: CGAffineTransform(a: key.a, b: key.b, c: key.c, d: key.d, tx: 0, ty: 0),
             sourceScale: Double(source.width) / Double(layer.image.width)
         )
@@ -415,7 +486,7 @@ final class StyleCache: Sendable {
 extension Layer {
     /// The layer as it shows at full size, effects and all.
     var styledImage: StyledLayer {
-        guard hasActiveEffects else { return StyledLayer(plain: renderedImage) }
+        guard isStyled else { return StyledLayer(plain: renderedImage) }
         return StyleCache.shared.styled(for: StyleCache.Key(layer: self, maxPixelSize: nil), layer: self)
     }
 }

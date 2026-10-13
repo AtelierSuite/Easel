@@ -118,6 +118,9 @@ enum PSDReader {
         var channels: [ChannelInfo] = []
         var blendKey = "norm"
         var opacity = 255
+        /// `iOpa`: how much of the layer's own pixels show, apart from its
+        /// effects.
+        var fillOpacity = 255
         var isHidden = false
         var isClipped = false
         var name = ""
@@ -250,6 +253,7 @@ enum PSDReader {
             }
             layer.groupID = open.last
             layer.isClipped = record.isClipped
+            layer.fillOpacity = Double(record.fillOpacity) / 255
             // Photoshop keeps a layer's own pixels and its styles apart, as
             // Easel does. Files with several of one effect may keep them as
             // `lmfx` instead, laid out the same way.
@@ -418,6 +422,8 @@ enum PSDReader {
                 let utf16 = try reader.bytes(characters * 2)
                 let units = stride(from: 0, to: utf16.count - 1, by: 2).map { UInt16(utf16[$0]) << 8 | UInt16(utf16[$0 + 1]) }
                 record.name = String(decoding: units, as: UTF16.self)
+            case "iOpa":
+                record.fillOpacity = Int(try reader.uint8())
             case "lsct", "lsdk":
                 // 1 and 2 open a group folder, 3 closes it: neither has pixels.
                 let type = try reader.uint32()

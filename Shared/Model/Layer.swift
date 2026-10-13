@@ -37,6 +37,9 @@ struct Layer: Identifiable, Equatable, Sendable {
     var mask: LayerMask?
     var transform: LayerTransform
     var opacity: Double = 1
+    /// Photoshop's fill: fades the layer's own pixels but not its effects,
+    /// so a shadow or stroke can show round a shape that is not there.
+    var fillOpacity: Double = 1
     var blendMode: LayerBlendMode = .normal
     /// Shows only where the layer beneath has pixels; see `ClippingUnit`.
     var isClipped = false

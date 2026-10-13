@@ -161,6 +161,12 @@ enum PSDWriter {
         plain.blendMode = .normal
         plain.isVisible = true
         if effects != nil { plain.effects = [] }
+        // The fill goes as a setting too, unless effects Photoshop cannot
+        // take are drawn into the pixels, which then show it already.
+        if layer.fillOpacity < 1, effects != nil || !layer.hasActiveEffects {
+            plain.fillOpacity = 1
+            blocks.append(("iOpa", [UInt8((min(max(layer.fillOpacity, 0), 1) * 255).rounded()), 0, 0, 0]))
+        }
         // What is drawn out: the canvas, and a layer only moved also
         // whatever of it lies past the canvas's edges, so nothing is lost.
         let frame = drawnFrame(for: layer, canvasSize: canvasSize)

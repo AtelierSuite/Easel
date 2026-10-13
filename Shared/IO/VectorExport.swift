@@ -34,7 +34,7 @@ enum VectorExportItem {
                 items.append(canvasImage(CompositionRenderer.render(layers: [base] + unit.clipped, size: size)))
                 continue
             }
-            let isPlain = !base.hasActiveFilters && base.activeMask == nil && !base.hasActiveEffects
+            let isPlain = !base.hasActiveFilters && base.activeMask == nil && !base.isStyled
             if isPlain, let vector = base.vector, vector.paths.allSatisfy(\.isExpressibleAsVector) {
                 items.append(.vector(base))
             } else if isPlain, base.text != nil {

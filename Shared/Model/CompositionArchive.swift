@@ -70,6 +70,8 @@ enum CompositionArchive {
         var filterMaskEnabled: Bool?
         var transform: LayerTransform
         var opacity: Double
+        /// Absent when full.
+        var fillOpacity: Double?
         var blendMode: LayerBlendMode
         var isClipped: Bool?
         var isVisible: Bool
@@ -184,7 +186,8 @@ enum CompositionArchive {
                 smartFile: smartFile, smartWarp: layer.smartObject?.warp, missingLink: layer.missingLink,
                 maskFile: maskFile, maskEnabled: layer.mask.map(\.isEnabled),
                 filterMaskFile: filterMaskFile, filterMaskEnabled: layer.filterMask.map(\.isEnabled), transform: layer.transform,
-                opacity: layer.opacity, blendMode: layer.blendMode, isClipped: layer.isClipped ? true : nil,
+                opacity: layer.opacity, fillOpacity: layer.fillOpacity < 1 ? layer.fillOpacity : nil,
+                blendMode: layer.blendMode, isClipped: layer.isClipped ? true : nil,
                 isVisible: layer.isVisible, isLocked: layer.isLocked,
                 groupID: layer.groupID,
                 isBlank: layer.image.isBlank ? true : nil
@@ -238,6 +241,7 @@ enum CompositionArchive {
             )
             layer.groupID = record.groupID
             layer.isClipped = record.isClipped ?? false
+            layer.fillOpacity = record.fillOpacity ?? 1
             layer.effects = record.effects ?? []
             layer.adjustment = record.adjustment
             layer.missingLink = record.missingLink

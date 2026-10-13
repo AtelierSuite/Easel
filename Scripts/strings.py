@@ -974,6 +974,7 @@ S = {
 "BlendMode.Subtract": ("Subtract", "減算", "빼기", "减去", "減去"),
 "BlendMode.Divide": ("Divide", "除算", "나누기", "划分", "分割"),
 "BlendMode.PassThrough": ("Pass Through", "通過", "통과", "穿透", "穿透"),
+"Layers.Fill": ("Fill", "塗り", "칠", "填充", "填滿"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

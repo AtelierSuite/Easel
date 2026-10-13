@@ -487,7 +487,7 @@ extension Layer {
     /// The layer as it shows, filters and all, drawn into plain pixels that
     /// line up with the canvas.
     func rasterized(in canvasSize: CGSize) -> Layer {
-        guard !isAligned(to: canvasSize) || hasActiveFilters || activeMask != nil || hasActiveEffects else {
+        guard !isAligned(to: canvasSize) || hasActiveFilters || activeMask != nil || isStyled else {
             var result = self
             result.smartObject = nil
             result.filters = []
@@ -509,6 +509,7 @@ extension Layer {
         result.filters = []
         result.filterMask = nil
         result.effects = []
+        result.fillOpacity = 1
         result.mask = nil
         result.transform = LayerTransform(position: CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2))
         return result

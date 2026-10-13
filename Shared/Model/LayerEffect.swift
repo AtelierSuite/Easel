@@ -172,6 +172,10 @@ extension Layer {
 
     var hasActiveEffects: Bool { effects.contains { $0.isEnabled } }
 
+    /// Whether the layer is drawn through `styledImage`: it has effects, or
+    /// a fill that fades its pixels apart from them.
+    var isStyled: Bool { hasActiveEffects || fillOpacity < 1 }
+
     /// Where an image of the layer with `padding` round it goes, in the
     /// layer's own pixels; `padding` is in pixels of an image `imageWidth`
     /// across, perhaps a smaller copy.

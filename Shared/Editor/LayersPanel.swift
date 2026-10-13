@@ -104,6 +104,17 @@ struct LayersPanel: View {
                     valueText: "\(Int((layer.opacity * 100).rounded()))%"
                 )
                 .accessibilityIdentifier("layerOpacity")
+                if !layer.isAdjustment {
+                    LabeledSlider(
+                        label: "Layers.Fill",
+                        value: Binding(
+                            get: { layer.fillOpacity },
+                            set: { value in state.updateActiveLayer { $0.fillOpacity = value } }
+                        ),
+                        valueText: "\(Int((layer.fillOpacity * 100).rounded()))%"
+                    )
+                    .accessibilityIdentifier("layerFill")
+                }
                 Picker("Layers.BlendMode", selection: Binding(
                     get: { layer.blendMode },
                     set: { value in state.updateActiveLayer { $0.blendMode = value } }

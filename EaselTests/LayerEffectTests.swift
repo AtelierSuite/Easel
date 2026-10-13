@@ -148,4 +148,39 @@ struct LayerEffectTests {
         #expect(abs(styled.padding * 2 - full.padding) <= 2)
         #expect(layer.paddedRect(imageWidth: styled.composite.width, padding: styled.padding).width > 20)
     }
+
+    @Test func fillFadesThePixelsButNotTheEffects() {
+        let stroke = effect(.stroke) { $0.size = 3; $0.position = .inside; $0.color = RGBAColor(red: 1, green: 0, blue: 0) }
+        var layer = square([stroke])
+        layer.fillOpacity = 0
+        let image = render([layer])
+        #expect(TestImages.isRed(image, x: 11, y: 20))
+        #expect(TestImages.isClear(image, x: 20, y: 20))
+        // An overlay is an effect too: it shows whole over a shape with no fill.
+        var covered = square([effect(.colorOverlay) { $0.color = RGBAColor(red: 0, green: 0, blue: 1) }])
+        covered.fillOpacity = 0
+        #expect(TestImages.isBlue(render([covered]), x: 20, y: 20))
+    }
+
+    @Test func fillWithoutEffectsFadesTheLayer() {
+        var layer = square([])
+        layer.fillOpacity = 0.5
+        let pixel = TestImages.pixel(render([layer]), x: 20, y: 20)
+        #expect(abs(pixel.alpha - 128) < 3)
+        #expect(abs(pixel.red - 128) < 6)
+    }
+
+    @Test func fillIsSavedAndGoesToPhotoshop() throws {
+        var layer = square([effect(.stroke) { $0.size = 3; $0.color = RGBAColor(red: 1, green: 0, blue: 0) }])
+        layer.fillOpacity = 0.4
+        let composition = Composition(size: size, layers: [layer])
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: composition))
+        #expect(abs(read.layers[0].fillOpacity - 0.4) < 0.01)
+        // The pixels go whole, for Photoshop to fade.
+        #expect(TestImages.pixel(read.layers[0].image.cgImage, x: 10, y: 10).alpha > 250)
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).easel")
+        try CompositionArchive.fileWrapper(for: composition).write(to: url, originalContentsURL: nil)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(abs(try CompositionArchive.composition(from: FileWrapper(url: url)).layers[0].fillOpacity - 0.4) < 0.0001)
+    }
 }
