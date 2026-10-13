@@ -26,6 +26,24 @@ struct HistoryTests {
         #expect(published.layers[0].transform.position == start.layers[0].transform.position)
     }
 
+    @Test func undoingATurnPutsTheSelectionBackWithIt() {
+        let state = EditorState()
+        let history = CompositionHistory()
+        state.attach(to: Composition.blank(size: CGSize(width: 40, height: 20))) { _ in }
+        state.edited = { history.record(from: $0, to: $1) }
+        history.attach(to: nil, read: { state.read() }, write: { state.write($0) }, restored: { state.showRestored($0) })
+        let selected = Selection(shape: .rectangle(CGRect(x: 0, y: 0, width: 10, height: 5)))
+        state.selection = selected
+        state.rotateCanvas(clockwise: true)
+        let turned = state.selection
+        #expect(turned != selected)
+        history.undo()
+        #expect(state.composition.size == CGSize(width: 40, height: 20))
+        #expect(state.selection == selected)
+        history.redo()
+        #expect(state.selection == turned)
+    }
+
     @Test func aGroupDragCoalescesLikeALayerDrag() {
         var before = Composition.blank(size: CGSize(width: 10, height: 10))
         before.layers.append(before.emptyLayer())

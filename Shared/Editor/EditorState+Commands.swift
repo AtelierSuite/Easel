@@ -95,10 +95,12 @@ extension EditorState {
         if read().isUntouchedBlank, let first = remaining.popFirst() {
             let replaced = Composition(image: first.image, name: first.name)
             let old = read().size
+            let before = (read(), selection)
             write(replaced)
             resizeBrushes(by: max(replaced.size.width, replaced.size.height) / max(old.width, old.height))
             lastID = replaced.layers.first?.id
             selection = nil
+            noteCanvasChange(from: before.0, selection: before.1)
             fitCanvas()
         }
         update { composition in
@@ -331,8 +333,10 @@ extension EditorState {
         guard let selection else { return }
         let bounds = selection.bounds(in: read().size)
         guard bounds.width >= 1, bounds.height >= 1 else { return }
+        let before = read()
         update { $0.crop(to: bounds) }
         self.selection = nil
+        noteCanvasChange(from: before, selection: selection)
         fitCanvas()
     }
 
@@ -353,25 +357,31 @@ extension EditorState {
 extension EditorState {
     func rotateCanvas(clockwise: Bool) {
         let transform = read().rotationTransform(clockwise: clockwise)
+        let before = (read(), selection)
         update { $0.rotate(clockwise: clockwise) }
         selection = selection.map { $0.applying(transform, canvasSize: read().size) }
+        noteCanvasChange(from: before.0, selection: before.1)
         afterCanvasChange()
     }
 
     func flipCanvas(horizontal: Bool) {
         let transform = read().flipTransform(horizontal: horizontal)
+        let before = (read(), selection)
         update { $0.flip(horizontal: horizontal) }
         selection = selection.map { $0.applying(transform, canvasSize: read().size) }
+        noteCanvasChange(from: before.0, selection: before.1)
         afterCanvasChange()
     }
 
     func resizeCanvas(to size: CGSize, mode: Composition.CanvasResize, anchor: CGPoint) {
         let old = read().size
+        let before = (read(), selection)
         update { $0.resize(to: size, mode: mode, anchor: anchor) }
         // The selection follows the picture.
         selection = selection.map {
             $0.applying(Self.canvasMapping(from: old, to: size, mode: mode, anchor: anchor), canvasSize: size)
         }
+        noteCanvasChange(from: before.0, selection: before.1)
         afterCanvasChange()
     }
 

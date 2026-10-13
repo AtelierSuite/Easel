@@ -251,6 +251,12 @@ final class EditorState {
     /// one the undo took away. Those are echoes, not changes.
     @ObservationIgnored private var recentlyPublished: [Composition] = []
     @ObservationIgnored private var hasSizedBrushes = false
+    /// The picture the latest write replaced.
+    @ObservationIgnored private var replaced: Composition?
+    /// The selection on each side of the latest changes to the canvas —
+    /// turning, flipping, resizing, cropping — which an undo or redo across
+    /// one puts back with the picture.
+    @ObservationIgnored private var canvasSelections: [(composition: Composition, selection: Selection?)] = []
     /// Set by a host whose file is never edited in place: until a copy is
     /// saved, each edit is held back and the person asked first.
     @ObservationIgnored var copyBeforeEditing: CopyBeforeEditing?
@@ -324,6 +330,7 @@ final class EditorState {
             return
         }
         let previous = self.composition
+        replaced = previous
         self.composition = composition
         recentlyPublished.append(composition)
         if recentlyPublished.count > 64 { recentlyPublished.removeFirst(recentlyPublished.count - 64) }
@@ -383,6 +390,15 @@ final class EditorState {
         }
     }
 
+    /// Notes the selection before and after a change to the canvas, made
+    /// from `before` while `selection` was selected.
+    func noteCanvasChange(from before: Composition, selection previous: Selection?) {
+        canvasSelections.append((before, previous))
+        canvasSelections.append((composition, selection))
+        let limit = 2 * (CompositionHistory.levels + 1)
+        if canvasSelections.count > limit { canvasSelections.removeFirst(canvasSelections.count - limit) }
+    }
+
     /// Whether an edit has to wait for the file to be saved as a copy.
     var holdsEdits: Bool { copyBeforeEditing?.isRequired() == true }
 
@@ -439,7 +455,11 @@ final class EditorState {
         if let preview = layerPreview, composition.index(of: preview.layerID) == nil { layerPreview = nil }
         if tool == .crop { cropRect = composition.canvasRect }
         if tool == .transform { cancelTransform() }
-        if let selection, !composition.canvasRect.intersects(selection.bounds(in: composition.size)) {
+        if let replaced, canvasSelections.contains(where: { $0.composition == replaced }),
+           let kept = canvasSelections.last(where: { $0.composition == composition }) {
+            // Across a change to the canvas, the selection goes back with it.
+            selection = kept.selection
+        } else if let selection, !composition.canvasRect.intersects(selection.bounds(in: composition.size)) {
             self.selection = nil
         }
         if let groupID = activeGroupID, composition.group(groupID) == nil { activeGroupID = nil }
@@ -1202,10 +1222,12 @@ final class EditorState {
         guard let rect = cropRect?.integral else { return }
         let canvas = read().canvasRect
         guard rect != canvas else { return }
+        let before = (read(), selection)
         update { $0.crop(to: rect) }
         selection = selection.map {
             $0.applying(CGAffineTransform(translationX: -rect.minX, y: -rect.minY), canvasSize: rect.size)
         }
+        noteCanvasChange(from: before.0, selection: before.1)
         cropRect = read().canvasRect
         cropAspect = .free
         fitCanvas()
@@ -1214,8 +1236,10 @@ final class EditorState {
     /// Turns the picture and crops off the corners the turn leaves empty.
     func straighten(by angle: Double) {
         guard abs(angle) > 0.0001 else { return }
+        let before = (read(), selection)
         update { $0.straighten(by: angle) }
         selection = nil
+        noteCanvasChange(from: before.0, selection: before.1)
         cropRect = read().canvasRect
         cropAspect = .free
         cropMode = .frame
@@ -1231,8 +1255,10 @@ final class EditorState {
             return cropped.size == composition.size && cropped.layers == composition.layers ? nil : cropped
         }, apply: { [weak self] cropped in
             guard let self else { return }
+            let before = (read(), selection)
             self.write(cropped)
             self.selection = nil
+            noteCanvasChange(from: before.0, selection: before.1)
             self.cropMode = .frame
             self.cropRect = cropped.canvasRect
             self.fitCanvas()
