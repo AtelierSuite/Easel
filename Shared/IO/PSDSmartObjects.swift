@@ -173,7 +173,11 @@ enum PSDSmartObjects {
     /// layers, a picture as one.
     static func contents(from data: [UInt8]) -> Composition? {
         let data = Data(data)
-        if data.starts(with: Array("8BPS".utf8)) { return try? PSDReader.composition(from: data) }
+        if data.starts(with: Array("8BPS".utf8)) {
+            // Documents of shapes or text alone keep no pixels Easel can
+            // draw; the layer is better as the pixels Photoshop saved.
+            return try? PSDReader.composition(from: data, trustsMergedPicture: false)
+        }
         guard let image = try? ImageCodec.decode(data) else { return nil }
         return Composition(image: image, name: String(localized: "Layer.DefaultName.Layer"))
     }

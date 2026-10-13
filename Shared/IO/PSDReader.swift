@@ -25,7 +25,10 @@ enum PSDReader {
         }
     }
 
-    static func composition(from data: Data) throws -> Composition {
+    /// `trustsMergedPicture` false turns down a document whose layers are
+    /// all of kinds Easel cannot read, whose flattened picture may be blank
+    /// when Photoshop saved it without one.
+    static func composition(from data: Data, trustsMergedPicture: Bool = true) throws -> Composition {
         var reader = BigEndianReader(data)
         guard try reader.ascii(4) == "8BPS" else { throw Failure.notPhotoshop }
         let version = try reader.uint16()
@@ -57,12 +60,14 @@ enum PSDReader {
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
         var patterns: [PatternSwatch] = []
+        var recordCount = 0
         if layerSectionLength > 0, let read = try? readLayers(&reader, isLarge: isLarge, format: format, canvas: canvas, sectionEnd: layerSectionEnd) {
-            (layers, groups, patterns) = read
+            (layers, groups, patterns, recordCount) = read
         }
         guard reader.seek(to: layerSectionEnd) else { throw Failure.damaged }
 
         if layers.isEmpty {
+            guard trustsMergedPicture || recordCount == 0 else { throw Failure.unsupported }
             // No layers: the merged picture after the layer section.
             let merged = try readMerged(&reader, width: width, height: height, channels: channelCount,
                                         format: format, isLarge: isLarge)
@@ -140,9 +145,9 @@ enum PSDReader {
 
     private static func readLayers(
         _ reader: inout BigEndianReader, isLarge: Bool, format: PixelFormat, canvas: CGSize, sectionEnd: Int
-    ) throws -> (layers: [Layer], groups: [LayerGroup], patterns: [PatternSwatch]) {
+    ) throws -> (layers: [Layer], groups: [LayerGroup], patterns: [PatternSwatch], recordCount: Int) {
         let infoLength = isLarge ? Int(try reader.uint64()) : Int(try reader.uint32())
-        guard infoLength > 0 else { return ([], [], []) }
+        guard infoLength > 0 else { return ([], [], [], 0) }
         let infoEnd = reader.offset + infoLength
         // Negative: the first alpha channel is the merged result's
         // transparency. The count is what matters.
@@ -270,7 +275,7 @@ enum PSDReader {
             layers.append(layer)
         }
         let used = Set(layers.flatMap(\.effects).compactMap(\.pattern.swatchID))
-        return (layers, groups, swatches.filter { used.contains($0.id) })
+        return (layers, groups, swatches.filter { used.contains($0.id) }, records.count)
     }
 
     /// The `fxrp` block: two doubles, a point on the canvas.
