@@ -15,11 +15,14 @@ enum PSDSmartFilters {
         var turn: Double
         /// The contents' size, which Easel's filter lengths are fractions of.
         var size: CGSize
+        /// From the contents' pixels to the canvas.
+        var toCanvas: CGAffineTransform
 
         init(_ transform: LayerTransform, size: CGSize) {
             scale = max(sqrt(abs(transform.scaleX * transform.scaleY)), 0.0001)
             turn = -transform.rotation * 180 / .pi
             self.size = size
+            toCanvas = transform.affineTransform(for: size)
         }
 
         /// A thousandth of the contents' longer side, in canvas pixels:
@@ -301,6 +304,9 @@ enum PSDSmartFilters {
             return curves(settings)
         case "Lvls":
             return levels(settings)
+        case "LqFy":
+            guard case .rawData(let bytes) = settings["LqMe"], let mesh = PSDLiquifyMesh.mesh(from: bytes, placement: placement) else { return nil }
+            return make(.liquify) { $0.mesh = mesh }
         case "adaptCorrect":
             // Shadows/Highlights. Photoshop's id for it is not known, so one
             // changed here goes back to Photoshop as pixels.
@@ -478,6 +484,9 @@ enum PSDSmartFilters {
             (name, id, PSDDescriptor(classID: classID, items: items))
         }
         switch filter.kind {
+        case .liquify:
+            guard let mesh = filter.mesh else { return nil }
+            return entry("Liquify...", "LqFy", [("LqMe", .rawData(PSDLiquifyMesh.bytes(for: mesh, amount: filter.amount, placement: placement)))])
         case .gaussianBlur:
             return entry("Gaussian Blur...", "GsnB", [("Rds ", .unit("#Pxl", filter.amount * 50 * unit))])
         case .motionBlur:

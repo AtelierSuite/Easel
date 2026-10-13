@@ -316,6 +316,32 @@ struct RetouchToolTests {
         #expect(TestImages.isRed(published.layers[0].image.cgImage, x: 22, y: 10))
     }
 
+    @Test func liquifyingASmartObjectGoesIntoItsLiquifyFilter() throws {
+        let state = EditorState()
+        var composition = Composition.blank(size: CGSize(width: 40, height: 20))
+        composition.layers[0].image = LayerImage(TestImages.halves(width: 40, height: 20))
+        let converted = composition.convertToSmartObject([composition.layers[0].id])
+        let id = try #require(converted)
+        var published = composition
+        state.attach(to: published) { published = $0 }
+        state.activeLayerID = id
+        state.tool = .liquify
+        state.liquifyBrush.size = 16
+        state.toolBegan(at: CGPoint(x: 16, y: 10), pressure: 1)
+        state.toolMoved(to: [StrokePoint(location: CGPoint(x: 26, y: 10))])
+        state.toolEnded(isTap: false, at: CGPoint(x: 26, y: 10))
+        let layer = try #require(published[id])
+        #expect(layer.isSmartObject)
+        #expect(layer.filters.map(\.kind) == [.liquify])
+        // Red pushed into the right half, as the brush on pixels would.
+        #expect(TestImages.isRed(layer.renderedImage, x: 22, y: 10))
+        // Another drag adds to the same filter.
+        state.toolBegan(at: CGPoint(x: 30, y: 10), pressure: 1)
+        state.toolMoved(to: [StrokePoint(location: CGPoint(x: 34, y: 10))])
+        state.toolEnded(isTap: false, at: CGPoint(x: 34, y: 10))
+        #expect(published[id]?.filters.count == 1)
+    }
+
     @Test func retouchToolsKeepTheirOwnSettings() {
         let state = EditorState()
         state.tool = .censor

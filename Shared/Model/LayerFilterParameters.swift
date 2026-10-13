@@ -278,6 +278,47 @@ struct PhotoshopFilterRecord: Codable, Hashable, Sendable {
     var settings: Data?
 }
 
+/// Where each pixel of a liquified layer is taken from: a grid of offsets
+/// over the layer, smoothly blended between its points.
+struct FilterMesh: Codable, Hashable, Sendable {
+    var columns: Int
+    var rows: Int
+    /// For each point, row by row from the top left, how far across and
+    /// down its pixel comes from, as parts of the layer's width and
+    /// height. The points sit in the middle of equal cells.
+    var offsets: [Float]
+
+    /// The offset at a point given as parts of the layer's width and
+    /// height, blended from the four grid points round it.
+    func offset(x: Double, y: Double) -> SIMD2<Double> {
+        guard columns > 0, rows > 0, offsets.count >= columns * rows * 2 else { return .zero }
+        let gx = min(max(x * Double(columns) - 0.5, 0), Double(columns - 1))
+        let gy = min(max(y * Double(rows) - 0.5, 0), Double(rows - 1))
+        let x0 = min(Int(gx), max(columns - 2, 0)), y0 = min(Int(gy), max(rows - 2, 0))
+        let x1 = min(x0 + 1, columns - 1), y1 = min(y0 + 1, rows - 1)
+        let fx = gx - Double(x0), fy = gy - Double(y0)
+        func at(_ column: Int, _ row: Int) -> SIMD2<Double> {
+            let index = (row * columns + column) * 2
+            return SIMD2(Double(offsets[index]), Double(offsets[index + 1]))
+        }
+        return (at(x0, y0) * (1 - fx) + at(x1, y0) * fx) * (1 - fy) + (at(x0, y1) * (1 - fx) + at(x1, y1) * fx) * fy
+    }
+
+    /// A mesh `columns` by `rows` whose offsets, in parts of the layer's
+    /// width and height, are `offset` at each point's place.
+    static func sampling(columns: Int, rows: Int, _ offset: (_ x: Double, _ y: Double) -> SIMD2<Double>) -> FilterMesh {
+        var offsets: [Float] = []
+        offsets.reserveCapacity(columns * rows * 2)
+        for row in 0..<rows {
+            for column in 0..<columns {
+                let moved = offset((Double(column) + 0.5) / Double(columns), (Double(row) + 0.5) / Double(rows))
+                offsets += [Float(moved.x), Float(moved.y)]
+            }
+        }
+        return FilterMesh(columns: columns, rows: rows, offsets: offsets)
+    }
+}
+
 extension LayerFilter {
     /// Setting `index` of `kind.parameters`, or its default.
     func value(_ index: Int) -> Double {

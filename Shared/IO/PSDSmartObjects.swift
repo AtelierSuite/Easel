@@ -302,7 +302,9 @@ enum PSDSmartObjects {
         var filters: [LayerFilter] = []
         if let style = placed.filters {
             // Filters run on the layer's pixels, bent ones on the canvas.
-            let placement: PSDSmartFilters.Placement = shape.map { .init(LayerTransform(position: .zero), size: $0.bounds.size) }
+            let placement: PSDSmartFilters.Placement = shape.map {
+                .init(LayerTransform(position: CGPoint(x: $0.bounds.midX, y: $0.bounds.midY)), size: $0.bounds.size)
+            }
                 ?? .init(transform, size: contents.size)
             guard let found = PSDSmartFilters.filters(from: style, placement: placement) else { return false }
             filters = found

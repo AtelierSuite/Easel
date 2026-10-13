@@ -129,6 +129,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Dark areas opened up and bright ones brought down, each by the
         /// shades round it, so detail shows in both.
         case shadowsHighlights
+        /// Pushed and pulled like something soft, by a mesh of offsets.
+        case liquify
 
         var id: String { rawValue }
 
@@ -147,7 +149,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                                      .blur, .blurMore, .average]),
             ("FilterCategory.Noise", [.noiseReduction, .reduceNoise, .despeckle, .addNoise, .median, .dustAndScratches]),
             ("FilterCategory.Sharpen", [.unsharpMask, .sharpen, .sharpenMore, .sharpenEdges]),
-            ("FilterCategory.Distort", [.twirl, .pinch, .spherize, .zigzag, .ripple, .wave, .shear, .polarCoordinates, .lensCorrection]),
+            ("FilterCategory.Distort", [.twirl, .pinch, .spherize, .zigzag, .ripple, .wave, .shear, .polarCoordinates, .liquify, .lensCorrection]),
             ("FilterCategory.Stylize", [.emboss, .findEdges, .traceContour, .wind, .diffuse, .tiles, .extrude]),
             ("FilterCategory.Pixelate", [.mosaic, .halftone, .crystallize, .pointillize, .mezzotint, .facet, .fragment]),
             ("FilterCategory.Render", [.clouds, .differenceClouds, .fibers, .lensFlare]),
@@ -162,7 +164,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .shadowsHighlights, .selectiveColor:
+                 .channelMixer, .desaturate, .equalize, .liquify, .shadowsHighlights, .selectiveColor:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -245,6 +247,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .channelMixer: return "slider.horizontal.3"
             case .desaturate: return "drop.degreesign.slash"
             case .equalize: return "chart.bar.xaxis"
+            case .liquify: return "hand.draw"
             case .shadowsHighlights: return "circle.lefthalf.filled.righthalf.striped.horizontal"
             case .selectiveColor: return "eyedropper.halffull"
             case .blackAndWhite: return "circle.righthalf.filled"
@@ -304,7 +307,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .shadowsHighlights, .selectiveColor: return 1
+                 .channelMixer, .desaturate, .equalize, .liquify, .shadowsHighlights, .selectiveColor: return 1
             }
         }
 
@@ -415,6 +418,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     /// The Photoshop smart filter this came from, kept so a file saved
     /// again gets it back exactly, until the filter is changed here.
     var photoshopFilter: PhotoshopFilterRecord?
+    /// Liquify's offsets.
+    var mesh: FilterMesh?
 
     /// The middle of each HSL band, as fractions of a turn: red, orange,
     /// yellow, green, aqua, blue, purple and magenta.

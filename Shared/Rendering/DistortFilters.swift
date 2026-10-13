@@ -26,6 +26,16 @@ extension LayerFilter {
                     return centre + SIMD2(offset.x * cos(angle) - offset.y * sin(angle), offset.x * sin(angle) + offset.y * cos(angle))
                 }
             }
+        case .liquify:
+            // Each pixel taken from as far off as the mesh says there, as
+            // Photoshop's Liquify does.
+            guard let mesh, amount != 0 else { return input }
+            let size = SIMD2(Double(extent.width), Double(extent.height))
+            return PixelFilters.process(input) { pixels in
+                Self.remap(&pixels) { point in
+                    point + mesh.offset(x: point.x / size.x, y: point.y / size.y) * size * amount
+                }
+            }
         case .pinch:
             // Fitted to Photoshop's: each point drawn from further out, most
             // at the middle.

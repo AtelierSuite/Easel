@@ -81,6 +81,13 @@ struct Liquifier: PixelPusher {
         return area
     }
 
+    /// How far the pixel shown at `point` now comes from, in canvas pixels.
+    func offset(at point: CGPoint) -> CGVector {
+        let (dx, dy) = Self.sample(offsetX, offsetY, width: fieldWidth, height: fieldHeight,
+                                   x: point.x / Double(cell), y: point.y / Double(cell))
+        return CGVector(dx: Double(dx), dy: Double(dy))
+    }
+
     /// How strongly a point `reach` of the radius from the middle moves.
     private func weight(_ reach: Double) -> Float {
         guard reach < 1 else { return 0 }

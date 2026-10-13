@@ -272,6 +272,21 @@ struct PSDSmartObjectTests {
         }
     }
 
+    @Test func liquifyComesBackWithItsMesh() throws {
+        var filter = LayerFilter(kind: .liquify)
+        let mesh = FilterMesh.sampling(columns: 64, rows: 64) { x, y in SIMD2(0.1 * sin(y * 3), -0.05 * x) }
+        filter.mesh = mesh
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30), scaleX: 2, scaleY: 1.5))
+        layer.filters = [filter]
+        let read = try #require(try roundTrip([layer]).layers.first?.filters.first)
+        #expect(read.kind == .liquify)
+        let back = try #require(read.mesh)
+        for (x, y) in [(0.2, 0.3), (0.5, 0.5), (0.8, 0.6)] {
+            let a = mesh.offset(x: x, y: y), b = back.offset(x: x, y: y)
+            #expect(abs(a.x - b.x) < 0.005 && abs(a.y - b.y) < 0.005)
+        }
+    }
+
     @Test func shadowsHighlightsComeFromPhotoshop() throws {
         func tone(_ amount: Double, _ width: Double, _ radius: Int32) -> PSDDescriptor.Value {
             .descriptor(PSDDescriptor(classID: "adaptCorrectTones", items: [

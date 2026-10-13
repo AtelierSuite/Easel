@@ -941,6 +941,7 @@ S = {
 "LayerFilters.MidtoneContrast": ("Midtone Contrast", "中間調", "중간 영역 대비", "中间调", "中間調"),
 "LayerFilters.BlackClip": ("Black Clip", "シャドウのクリップ", "검정 클립", "修剪黑色", "黑色剪裁"),
 "LayerFilters.WhiteClip": ("White Clip", "ハイライトのクリップ", "흰색 클립", "修剪白色", "白色剪裁"),
+"LayerFilter.Liquify": ("Liquify", "ゆがみ", "픽셀 유동화", "液化", "液化"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]
