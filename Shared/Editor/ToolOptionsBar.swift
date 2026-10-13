@@ -1193,12 +1193,17 @@ private struct StrokeStyleMenu: View {
 
     var body: some View {
         GlassMenuButton(symbol: "line.3.horizontal.decrease", label: "Stroke.Style") {
-            picker("Stroke.Dash", \.dash)
+            // A line whose width varies is filled as an outline, so it has
+            // no dashes, ends, corners or alignment to choose.
+            let isUniform = style.profile == .uniform
+            if isUniform { picker("Stroke.Dash", \.dash) }
             picker("Stroke.Profile", \.profile)
-            picker("Stroke.Cap", \.cap)
-            picker("Stroke.Join", \.join)
+            if isUniform {
+                picker("Stroke.Cap", \.cap)
+                picker("Stroke.Join", \.join)
+            }
             if isClosed {
-                picker("Stroke.Align", \.alignment)
+                if isUniform { picker("Stroke.Align", \.alignment) }
             } else {
                 picker("Stroke.StartArrow", \.startArrow)
                 picker("Stroke.EndArrow", \.endArrow)
