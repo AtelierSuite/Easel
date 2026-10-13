@@ -48,23 +48,46 @@ struct HistogramView: View {
     }
 }
 
-extension EditorState {
-    /// The histogram a filter on the active layer works on: the layer's own
-    /// pixels, or for an adjustment layer, the picture beneath it.
-    func histogramForActiveLayer() -> [Double] {
-        guard let layer = activeLayer else { return [] }
-        if layer.isAdjustment {
-            let composition = read()
-            guard let index = composition.index(of: layer.id) else { return [] }
-            let below = Array(composition.displayLayers[..<index])
-            let size = composition.size
+/// What a histogram is worked out from, equal for as long as the histogram
+/// would come out the same.
+struct HistogramSource: Equatable, Sendable {
+    enum Pixels: Equatable, Sendable {
+        /// A layer's own pixels.
+        case image(LayerImage)
+        /// The picture an adjustment layer works on: the layers beneath it.
+        case below([Layer], canvasSize: CGSize)
+    }
+
+    var pixels: Pixels
+
+    /// The histogram, slow enough to want working out away from the
+    /// interface.
+    nonisolated func values() -> [Double] {
+        switch pixels {
+        case .image(let image):
+            return Histogram.values(of: image.thumbnail(maxPixelSize: 256))
+        case let .below(layers, size):
             let factor = min(1, 256 / max(size.width, size.height))
             let small = Bitmap.render(size: CGSize(width: max(1, size.width * factor), height: max(1, size.height * factor))) { context in
                 context.scaleBy(x: factor, y: factor)
-                CompositionRenderer.draw(below, in: context)
+                CompositionRenderer.draw(layers, in: context)
             }
             return Histogram.values(of: small)
         }
-        return Histogram.values(of: layer.image.thumbnail(maxPixelSize: 256))
+    }
+}
+
+extension EditorState {
+    /// What the histogram a filter on the active layer works on comes
+    /// from: the layer's own pixels, or for an adjustment layer, the
+    /// picture beneath it.
+    func histogramSourceForActiveLayer() -> HistogramSource? {
+        guard let layer = activeLayer else { return nil }
+        if layer.isAdjustment {
+            let composition = read()
+            guard let index = composition.index(of: layer.id) else { return nil }
+            return HistogramSource(pixels: .below(Array(composition.displayLayers[..<index]), canvasSize: composition.size))
+        }
+        return HistogramSource(pixels: .image(layer.image))
     }
 }

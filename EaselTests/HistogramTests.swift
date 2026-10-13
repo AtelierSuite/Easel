@@ -17,6 +17,18 @@ struct HistogramTests {
         let values = Histogram.values(of: TestImages.solid(.clear))
         #expect(values.allSatisfy { $0 == 0 })
     }
+
+    @Test func anAdjustmentLayersHistogramFollowsTheLayersBeneath() {
+        let size = CGSize(width: 20, height: 20)
+        func layer(_ color: RGBAColor) -> Layer {
+            Layer(name: "Fill", image: LayerImage(TestImages.solid(color, width: 20, height: 20)), canvasSize: size)
+        }
+        let black = HistogramSource(pixels: .below([layer(.black)], canvasSize: size))
+        let white = HistogramSource(pixels: .below([layer(.white)], canvasSize: size))
+        #expect(black != white)
+        #expect(black.values().first == 1)
+        #expect(white.values().last == 1)
+    }
 }
 
 private extension CGImage {

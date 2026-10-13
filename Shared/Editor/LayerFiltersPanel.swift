@@ -258,9 +258,14 @@ struct FilterRow: View {
         }
         .padding(.vertical, 4)
         .contextMenu { menuItems }
-        .task(id: state.activeLayer?.image.id) {
-            guard filter.kind == .levels || filter.kind == .curves else { return }
-            histogram = state.histogramForActiveLayer()
+        // Keyed on what lies beneath an adjustment layer too, so the
+        // histogram follows changes there.
+        .task(id: filter.kind == .levels || filter.kind == .curves ? state.histogramSourceForActiveLayer() : nil) {
+            guard filter.kind == .levels || filter.kind == .curves,
+                  let source = state.histogramSourceForActiveLayer() else { return }
+            let values = await Task.detached(priority: .userInitiated) { source.values() }.value
+            guard !Task.isCancelled else { return }
+            histogram = values
         }
     }
 
