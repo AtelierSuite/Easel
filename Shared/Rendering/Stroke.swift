@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Synchronization
 
 /// How a brush or eraser lays down paint.
 struct BrushSettings: Codable, Equatable, Sendable {
@@ -73,18 +74,27 @@ struct StrokePoint: Equatable, Sendable {
 }
 
 /// The layer's pixels as they were when a stroke began, for a brush that
-/// picks up colour from them.
-final class PaintSource: Equatable, @unchecked Sendable {
-    // Unchecked: the pixels are never changed once made.
-    private let pixels: PixelBuffer
+/// picks up colour from them. They may come a moment after the stroke
+/// starts, once the edits before it are in; until then nothing is picked up.
+final class PaintSource: Equatable, Sendable {
+    private let source: Mutex<PixelBuffer?>
 
-    init(pixels: PixelBuffer) {
-        self.pixels = pixels
+    init(pixels: PixelBuffer? = nil) {
+        source = Mutex(pixels)
     }
+
+    /// Hands over the pixels, once.
+    func fill(with pixels: PixelBuffer?) {
+        source.withLock { if $0 == nil { $0 = pixels } }
+    }
+
+    /// Whether the pixels have come.
+    var isReady: Bool { source.withLock { $0 != nil } }
 
     /// The average colour of a few spots around `point`, Display P3, 0...1,
     /// with how much paint is there; nil where there is none.
     func color(around point: CGPoint, reach: Double) -> (red: Double, green: Double, blue: Double, alpha: Double)? {
+        guard let pixels = source.withLock({ $0 }) else { return nil }
         var total = (0.0, 0.0, 0.0, 0.0), weight = 0.0
         for (dx, dy) in [(0.0, 0.0), (1, 0), (-1, 0), (0, 1), (0, -1)] {
             let x = Int((point.x + dx * reach).rounded(.down)), y = Int((point.y + dy * reach).rounded(.down))

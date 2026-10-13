@@ -21,6 +21,20 @@ struct BrushTipTests {
         #expect(dabs.allSatisfy { $0.diameter == 10 })
     }
 
+    @Test func oilPicksUpNothingUntilThePixelsCome() throws {
+        let source = PaintSource()
+        #expect(!source.isReady)
+        #expect(source.color(around: CGPoint(x: 2, y: 2), reach: 1) == nil)
+        let blue = try #require(Bitmap.pixels(of: TestImages.solid(RGBAColor(red: 0, green: 0, blue: 1))))
+        source.fill(with: blue)
+        #expect(source.isReady)
+        let found = try #require(source.color(around: CGPoint(x: 2, y: 2), reach: 1))
+        #expect(found.blue > 0.9 && found.red < 0.1)
+        // Handed over once: later pixels are not taken.
+        source.fill(with: Bitmap.pixels(of: TestImages.solid(RGBAColor(red: 1, green: 0, blue: 0))))
+        #expect((source.color(around: CGPoint(x: 2, y: 2), reach: 1)?.blue ?? 0) > 0.9)
+    }
+
     @Test func aTiltedPencilShadesBroadAndLight() {
         var tilted = stroke(.pencil)
         tilted.points = tilted.points.map { var point = $0; point.altitude = 0.2; point.azimuth = 0; return point }

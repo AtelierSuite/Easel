@@ -823,10 +823,12 @@ final class EditorState {
                 points: [StrokePoint(location: point, pressure: pressure, azimuth: azimuth, altitude: altitude, time: time)],
                 settings: currentBrush, kind: strokeKind, clip: selection
             )
-            if tool == .brush, currentBrush.tip == .oil, let layer = activeLayer,
-               let pixels = Bitmap.pixels(of: layer.aligned(in: composition.size).image.cgImage) {
-                // Oil paint mixes with the layer as it is now.
-                activeStroke?.pickup = PaintSource(pixels: pixels)
+            if tool == .brush, currentBrush.tip == .oil, let layerID = activeLayerID {
+                // Oil paint mixes with the layer as it is once the strokes
+                // before it are painted in, read off the main thread.
+                let source = PaintSource()
+                activeStroke?.pickup = source
+                readPaintSource(source, from: layerID)
             }
         case .liquify:
             guard paintingBlocker() == nil else { return }
@@ -1362,6 +1364,23 @@ final class EditorState {
             if let result { apply(result) }
             finally()
             runningJobs -= 1
+        }
+    }
+
+    /// Fills `source` with a layer's pixels lined up with the canvas, once
+    /// every edit queued before has landed, so paint not yet painted in is
+    /// picked up too. Read off the main thread; edits queued after wait.
+    private func readPaintSource(_ source: PaintSource, from layerID: Layer.ID) {
+        let previous = queue
+        queue = Task { @MainActor in
+            await previous?.value
+            let composition = read()
+            guard let layer = composition[layerID] else { return }
+            let size = composition.size
+            let pixels = await Task.detached(priority: .userInitiated) {
+                Bitmap.pixels(of: layer.aligned(in: size).image.cgImage)
+            }.value
+            source.fill(with: pixels)
         }
     }
 
