@@ -27,7 +27,7 @@ extension LayerFilter {
             output = applyChannelTones(to: input)
         case .blackAndWhite where values != nil,
              .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize,
-             .channelMixer, .desaturate, .equalize:
+             .channelMixer, .desaturate, .equalize, .selectiveColor:
             output = applyAdjustment(to: input)
         case .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
              .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle:

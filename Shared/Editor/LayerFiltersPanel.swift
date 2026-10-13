@@ -158,6 +158,8 @@ struct FilterRow: View {
     @State private var band = 0
     /// The channel the Channel Mixer sliders make.
     @State private var mixerOutput = 0
+    /// Which colour or tone a filter set range by range is showing.
+    @State private var rangeShown = 0
     @State private var histogram: [Double] = []
 
     var body: some View {
@@ -290,6 +292,13 @@ struct FilterRow: View {
             customControls
         } else if filter.kind == .channelMixer {
             mixerControls
+        } else if filter.kind == .selectiveColor {
+            rangedControls(
+                ranges: ["LayerFilters.Reds", "LayerFilters.Yellows", "LayerFilters.Greens", "LayerFilters.Cyans", "LayerFilters.Blues",
+                         "LayerFilters.Magentas", "LayerFilters.Whites", "LayerFilters.Neutrals", "LayerFilters.Blacks"],
+                labels: ["LayerFilters.Cyan", "LayerFilters.Magenta", "LayerFilters.Yellow", "LayerFilters.BlackInk"],
+                range: -100...100, extra: 36
+            )
         } else {
             settingControls
         }
@@ -341,6 +350,32 @@ struct FilterRow: View {
                 range: -200...200, valueText: "\(Int(filter.value(index).rounded()))%"
             )
         }
+    }
+
+    /// Settings kept range by range, `labels.count` to each: a menu of the
+    /// ranges, sliders for the one shown, then any settings from `extra` on
+    /// as they usually are.
+    @ViewBuilder
+    private func rangedControls(
+        ranges: [LocalizedStringKey], labels: [LocalizedStringKey], range: ClosedRange<Double>, extra: Int
+    ) -> some View {
+        Picker("LayerFilters.Range", selection: $rangeShown) {
+            ForEach(ranges.indices, id: \.self) { Text(ranges[$0]).tag($0) }
+        }
+        .font(.subheadline)
+        let shown = min(rangeShown, ranges.count - 1)
+        ForEach(labels.indices, id: \.self) { column in
+            let index = shown * labels.count + column
+            LabeledSlider(
+                label: labels[column],
+                value: Binding(
+                    get: { filter.value(index) },
+                    set: { value in state.updateFilter(filter.id) { $0.setValue(value, at: index) } }
+                ),
+                range: range, valueText: "\(Int(filter.value(index).rounded()))%"
+            )
+        }
+        settingControls(from: extra)
     }
 
     /// How far each of Shear's points pushes its row across, top first.
@@ -398,10 +433,13 @@ struct FilterRow: View {
         .accessibilityIdentifier("customWeight.\(index)")
     }
 
+    private var settingControls: some View { settingControls(from: 0) }
+
+    /// Controls for the settings from `first` on.
     @ViewBuilder
-    private var settingControls: some View {
+    private func settingControls(from first: Int) -> some View {
         let parameters = filter.kind.parameters
-        ForEach(parameters.indices, id: \.self) { index in
+        ForEach(Array(parameters.indices.dropFirst(first)), id: \.self) { index in
             let parameter = parameters[index]
             let value = Binding(
                 get: { filter.value(index) },

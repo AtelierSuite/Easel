@@ -918,6 +918,18 @@ S = {
 "FilterCategory.Video": ("Video", "ビデオ", "비디오", "视频", "視訊"),
 "FilterCategory.Other": ("Other", "その他", "기타", "其它", "其他"),
 "Transform.Cylinder": ("Cylinder", "円柱", "원통", "圆柱", "圓柱"),
+"LayerFilter.SelectiveColor": ("Selective Color", "特定色域の選択", "선택 색상", "可选颜色", "可選顏色"),
+"LayerFilters.Ink": ("Ink", "インキ", "잉크", "油墨", "油墨"),
+"LayerFilters.Relative": ("Relative", "相対値", "상대값", "相对", "相對"),
+"LayerFilters.Absolute": ("Absolute", "絶対値", "절대값", "绝对", "絕對"),
+"LayerFilters.Range": ("Colors", "カラー", "색상", "颜色", "顏色"),
+"LayerFilters.Whites": ("Whites", "ホワイト系", "흰색 계열", "白色", "白色"),
+"LayerFilters.Neutrals": ("Neutrals", "中間色系", "중간색 계열", "中性色", "中性色"),
+"LayerFilters.Blacks": ("Blacks", "ブラック系", "검정 계열", "黑色", "黑色"),
+"LayerFilters.Cyan": ("Cyan", "シアン", "녹청", "青色", "青色"),
+"LayerFilters.Magenta": ("Magenta", "マゼンタ", "마젠타", "洋红", "洋紅"),
+"LayerFilters.Yellow": ("Yellow", "イエロー", "노랑", "黄色", "黃色"),
+"LayerFilters.BlackInk": ("Black", "ブラック", "검정", "黑色", "黑色"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

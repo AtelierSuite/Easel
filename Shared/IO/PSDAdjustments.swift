@@ -7,7 +7,7 @@ enum PSDAdjustments {
     /// The tagged blocks that make a layer an adjustment layer Easel can
     /// read, or that carry its settings.
     static let keys: Set<String> = [
-        "levl", "curv", "hue2", "brit", "CgEd", "blnc", "blwh", "grdm", "nvrt", "post", "thrs", "expA", "vibA", "phfl", "mixr",
+        "levl", "curv", "hue2", "brit", "CgEd", "blnc", "blwh", "grdm", "nvrt", "post", "thrs", "expA", "vibA", "phfl", "mixr", "selc",
     ]
 
     /// Every tagged block that marks an adjustment or fill layer, read or
@@ -35,6 +35,7 @@ enum PSDAdjustments {
         if let data = blocks["vibA"], let filter = vibrance(data) { return [filter] }
         if let data = blocks["phfl"], let filter = photoFilter(data) { return [filter] }
         if let data = blocks["mixr"], let filter = channelMixer(data) { return [filter] }
+        if let data = blocks["selc"], let filter = selectiveColor(data) { return [filter] }
         if let data = blocks["grdm"], let filter = gradientMap(data) { return [filter] }
         return []
     }
@@ -101,6 +102,22 @@ enum PSDAdjustments {
         }
         values[16] = mono != 0 ? 1 : 0
         filter.values = values
+        return filter
+    }
+
+    /// Selective Color: relative or absolute, then a record Photoshop leaves
+    /// empty and one for each of the nine ranges, cyan, magenta, yellow and
+    /// black in percent.
+    private static func selectiveColor(_ data: [UInt8]) -> LayerFilter? {
+        var reader = BigEndianReader(bytes: data)
+        guard (try? reader.uint16()) == 1, let method = try? reader.uint16(), (try? reader.skip(8)) != nil else { return nil }
+        var values: [Double] = []
+        for _ in 0..<36 {
+            guard let ink = try? reader.int16() else { return nil }
+            values.append(Double(ink))
+        }
+        var filter = LayerFilter(kind: .selectiveColor)
+        filter.values = values + [method == 1 ? 1 : 0]
         return filter
     }
 
@@ -448,6 +465,12 @@ enum PSDAdjustments {
                 for index in 0..<4 { row(index) }
             }
             return ([("mixr", out.data)], 1)
+        case .selectiveColor:
+            out.uint16(1)
+            out.uint16(filter.value(36) >= 0.5 ? 1 : 0)
+            out.zeros(8)
+            for index in 0..<36 { out.int16(Int(min(max(filter.value(index), -100), 100).rounded())) }
+            return ([("selc", out.data)], 1)
         case .photoFilter:
             let color = filter.color ?? LayerFilter.Kind.photoFilter.defaultColor!
             out.uint16(2)

@@ -123,6 +123,9 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case desaturate
         /// Shades spread so each is as common as any other.
         case equalize
+        /// Ink added or taken away colour by colour: in the reds, yellows
+        /// and so on, the whites, the neutrals and the blacks.
+        case selectiveColor
 
         var id: String { rawValue }
 
@@ -135,7 +138,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         static let categories: [(titleKey: String?, kinds: [Kind])] = [
             (nil, [.blackAndWhite, .sepia, .saturation, .brightness, .contrast]),
             (nil, [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor]),
-            ("FilterCategory.Adjustments", [.exposure, .vibrance, .photoFilter, .channelMixer, .desaturate, .invert, .posterize,
+            ("FilterCategory.Adjustments", [.exposure, .vibrance, .photoFilter, .channelMixer, .selectiveColor, .desaturate, .invert, .posterize,
                                             .threshold, .solarize, .equalize]),
             ("FilterCategory.Blur", [.gaussianBlur, .motionBlur, .zoomBlur, .spinBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur,
                                      .blur, .blurMore, .average]),
@@ -156,7 +159,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize:
+                 .channelMixer, .desaturate, .equalize, .selectiveColor:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -239,6 +242,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .channelMixer: return "slider.horizontal.3"
             case .desaturate: return "drop.degreesign.slash"
             case .equalize: return "chart.bar.xaxis"
+            case .selectiveColor: return "eyedropper.halffull"
             case .blackAndWhite: return "circle.righthalf.filled"
             case .sepia: return "sun.dust"
             case .saturation: return "drop.halffull"
@@ -296,7 +300,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize: return 1
+                 .channelMixer, .desaturate, .equalize, .selectiveColor: return 1
             }
         }
 

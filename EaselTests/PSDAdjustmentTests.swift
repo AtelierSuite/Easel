@@ -18,10 +18,13 @@ struct PSDAdjustmentTests {
         return try #require(read.layers.last { $0.isAdjustment })
     }
 
+    private static let inks: [Double] = (0..<36).map { Double($0 * 5 % 201 - 100) } + [1]
+
     @Test(arguments: [
         ("invert", [Double]()), ("posterize", [6]), ("threshold", [90]), ("exposure", [1.25, 0.05, 1.4]),
         ("vibrance", [40, -15]), ("photoFilter", [60, 0]), ("blackAndWhite", [10, 70, 30, 50, 120, -20, 1]),
         ("channelMixer", [80, 20, 0, 0, 0, 90, 10, 5, -10, 0, 110, 0, 40, 40, 20, 0, 0]),
+        ("selectiveColor", Self.inks),
     ])
     func newerAdjustmentsComeBack(_ kind: String, _ values: [Double]) throws {
         var filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)

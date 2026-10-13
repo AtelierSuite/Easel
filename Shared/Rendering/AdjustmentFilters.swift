@@ -69,6 +69,13 @@ extension LayerFilter {
                 func mix(_ row: [Double]) -> Double { color.x * row[0] + color.y * row[1] + color.z * row[2] + 255 * row[3] }
                 color = mono ? SIMD3(repeating: mix(rows[3])) : SIMD3(mix(rows[0]), mix(rows[1]), mix(rows[2]))
             }
+        case .selectiveColor:
+            let relative = value(36) < 0.5
+            let inks = (0..<9).map { range in (0..<4).map { value(range * 4 + $0) / 100 } }
+            guard inks.contains(where: { $0.contains { $0 != 0 } }) else { return input }
+            return PixelFilters.map(input) { color in
+                color = Self.selectiveColor(color / 255, inks: inks, relative: relative) * 255
+            }
         case .desaturate:
             return PixelFilters.map(input) { color in color = SIMD3(repeating: (color.max() + color.min()) / 2) }
         case .equalize:
@@ -114,6 +121,37 @@ extension LayerFilter {
             secondary = r >= g ? 5 : 3
         }
         return low + (middle - low) * weights[secondary] + (high - middle) * weights[primary]
+    }
+
+    /// Selective Color: each colour range's cyan, magenta, yellow and black
+    /// worked on the ink each channel stands for, as much as the colour
+    /// belongs to the range. Relative changes add to the ink there is in
+    /// proportion; absolute ones add outright. `color` is 0...1.
+    static func selectiveColor(_ color: SIMD3<Double>, inks: [[Double]], relative: Bool) -> SIMD3<Double> {
+        let (r, g, b) = (color.x, color.y, color.z)
+        let high = color.max(), low = color.min()
+        // How much the colour is of each range: reds, yellows, greens,
+        // cyans, blues, magentas, then whites, neutrals and blacks.
+        let weights = [
+            max(r - max(g, b), 0), max(min(r, g) - b, 0), max(g - max(r, b), 0),
+            max(min(g, b) - r, 0), max(b - max(r, g), 0), max(min(r, b) - g, 0),
+            max((low - 0.5) * 2, 0), max(1 - (abs(high - 0.5) + abs(low - 0.5)), 0), max((0.5 - high) * 2, 0),
+        ]
+        var result = color
+        for (weight, ink) in zip(weights, inks) where weight > 0 && ink.contains(where: { $0 != 0 }) {
+            for channel in 0..<3 {
+                let value = color[channel]
+                var changed: Double
+                if relative {
+                    changed = min(max(value - (1 - value) * ink[channel], 0), 1)
+                    changed = min(max(changed - (1 - changed) * ink[3], 0), 1)
+                } else {
+                    changed = min(max(value - ink[channel] - ink[3], 0), 1)
+                }
+                result[channel] += (changed - value) * weight
+            }
+        }
+        return result
     }
 
     /// Photoshop's Vibrance, as near as one sample of it shows: saturation

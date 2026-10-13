@@ -297,4 +297,20 @@ struct ColorFilterTests {
         let data = try JSONEncoder().encode(filter)
         #expect(try JSONDecoder().decode(LayerFilter.self, from: data) == filter)
     }
+
+    @Test func selectiveColorChangesOnlyItsRange() {
+        var inks = [[Double]](repeating: [0, 0, 0, 0], count: 9)
+        inks[0] = [1, 0, 0, 0]
+        // Cyan in the reds takes red out of red, and leaves blue alone.
+        let red = LayerFilter.selectiveColor(SIMD3(1, 0, 0), inks: inks, relative: false)
+        #expect(red.x < 0.01)
+        #expect(LayerFilter.selectiveColor(SIMD3(0, 0, 1), inks: inks, relative: false) == SIMD3(0, 0, 1))
+        // Relative cyan has no ink to add to where there is no cyan.
+        #expect(LayerFilter.selectiveColor(SIMD3(1, 0, 0), inks: inks, relative: true).x == 1)
+        // Black in the blacks darkens dark greys, not white.
+        var blacks = [[Double]](repeating: [0, 0, 0, 0], count: 9)
+        blacks[8] = [0, 0, 0, 0.5]
+        #expect(LayerFilter.selectiveColor(SIMD3(repeating: 0.2), inks: blacks, relative: false).x < 0.2)
+        #expect(LayerFilter.selectiveColor(SIMD3(repeating: 1), inks: blacks, relative: false).x == 1)
+    }
 }

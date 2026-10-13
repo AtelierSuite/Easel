@@ -216,6 +216,13 @@ extension LayerFilter.Kind {
             let identity: [Double] = [100, 0, 0, 0, 0, 100, 0, 0, 0, 0, 100, 0, 40, 40, 20, 0]
             return identity.map { FilterParameter(labelKey: "LayerFilters.Weight", range: -200...200, defaultValue: $0, style: .signedPercent) }
                 + [FilterParameter(labelKey: "LayerFilters.Monochrome", range: 0...1, defaultValue: 0, style: .toggle)]
+        case .selectiveColor:
+            // For reds, yellows, greens, cyans, blues, magentas, whites,
+            // neutrals and blacks: cyan, magenta, yellow and black, then
+            // whether they change ink by how much there is or outright.
+            return (0..<36).map { _ in FilterParameter(labelKey: "LayerFilters.Ink", range: -100...100, defaultValue: 0, style: .signedPercent) }
+                + [FilterParameter(labelKey: "LayerFilters.Method", range: 0...1, defaultValue: 0,
+                                   style: .choice(["LayerFilters.Relative", "LayerFilters.Absolute"]))]
         case .custom:
             // Five rows of five weights, then the divisor and the offset.
             let weights = [Double](repeating: 0, count: 12) + [1] + [Double](repeating: 0, count: 12)
