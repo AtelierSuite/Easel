@@ -67,9 +67,14 @@ struct ExportPreset: Codable, Hashable, Identifiable, Sendable {
 extension ExportPreset {
     /// The picture flattened, sized and written as this preset says.
     func data(for composition: Composition) throws -> Data {
-        let image = CompositionRenderer.render(composition)
-        let size = outputSize(for: composition.size)
-        let sized = size == composition.size ? image : Bitmap.render(size: size) { context in
+        try data(forFlattened: CompositionRenderer.render(composition), size: composition.size)
+    }
+
+    /// The picture, already flattened at `size`, sized and written as this
+    /// preset says, so several presets can share one flattening.
+    func data(forFlattened image: CGImage, size original: CGSize) throws -> Data {
+        let size = outputSize(for: original)
+        let sized = size == original ? image : Bitmap.render(size: size) { context in
             Bitmap.draw(image, in: CGRect(origin: .zero, size: size), context: context)
         }
         return try ImageCodec.encode(sized, as: format.export.contentType, quality: quality)
@@ -94,6 +99,8 @@ extension ExportPreset {
             .appending(path: "Export-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var urls: [URL] = []
+        // Flattened once for all of them: the slow part.
+        let image = CompositionRenderer.render(composition)
         for preset in presets {
             var url = folder.appending(path: preset.filename(for: name))
             // Two presets with the same name still make two files.
@@ -102,7 +109,7 @@ extension ExportPreset {
                 url = folder.appending(path: preset.filename(for: "\(name) \(number)"))
                 number += 1
             }
-            try preset.data(for: composition).write(to: url, options: .atomic)
+            try preset.data(forFlattened: image, size: composition.size).write(to: url, options: .atomic)
             urls.append(url)
         }
         return urls
