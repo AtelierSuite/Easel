@@ -161,9 +161,14 @@ struct Composition: Equatable, Sendable {
         normalizeGroups()
     }
 
+    /// Whether a layer can be painted into the one beneath it: both show,
+    /// neither is locked, they are in the same group, and the one beneath
+    /// has pixels of its own rather than being an adjustment.
     func canMergeDown(_ id: Layer.ID) -> Bool {
-        guard let index = index(of: id) else { return false }
-        return index > 0 && !layers[index - 1].isLocked
+        guard let index = index(of: id), index > 0 else { return false }
+        let lower = layers[index - 1], upper = layers[index]
+        return lower.groupID == upper.groupID && lower.isVisible && upper.isVisible
+            && !lower.isAdjustment && !isLocked(lower) && !isLocked(upper)
     }
 
     /// Paints a layer into the one beneath it and keeps the result under the
@@ -176,7 +181,7 @@ struct Composition: Equatable, Sendable {
         // Two vector layers that mix plainly stay one vector layer.
         if var lowerVector = lower.vector, let upperVector = upper.vector,
            upper.blendMode == .normal, upper.opacity == lower.opacity, upper.filters.isEmpty, upper.mask == nil,
-           upper.effects.isEmpty, lower.effects.isEmpty, !upper.isClipped {
+           upper.effects.isEmpty, lower.effects.isEmpty, !upper.isClipped, !lower.isClipped {
             let toLower = upper.affineTransform.concatenating(lower.affineTransform.inverted())
             lowerVector.paths += upperVector.paths.map { path in
                 var path = path.mappingNodes { $0.mapped(toLower) }
@@ -188,14 +193,21 @@ struct Composition: Equatable, Sendable {
             layers.replaceSubrange((index - 1)...index, with: [merged])
             return merged.id
         }
-        let merged = CompositionRenderer.render(
-            layers: [lower.with(opacity: 1, blendMode: .normal), upper], size: size
-        )
+        // Drawn on their own: the lower layer as the base, the upper clipped
+        // to it only if it was clipped to it rather than to a layer below.
+        var base = lower.with(opacity: 1, blendMode: .normal)
+        base.isClipped = false
+        var top = upper
+        top.isClipped = upper.isClipped && !lower.isClipped
+        let merged = CompositionRenderer.render(layers: [base, top], size: size)
         var result = Layer(name: lower.name, image: LayerImage(merged), canvasSize: size)
         result.id = lower.id
         result.opacity = lower.opacity
         result.blendMode = lower.blendMode
+        result.groupID = lower.groupID
+        result.isClipped = lower.isClipped
         layers.replaceSubrange((index - 1)...index, with: [result])
+        normalizeGroups()
         return result.id
     }
 

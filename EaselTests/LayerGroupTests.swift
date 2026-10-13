@@ -73,6 +73,43 @@ struct LayerGroupTests {
         #expect(composition.layers.last?.groupID == nil)
     }
 
+    @Test func mergingDownInAGroupStaysInIt() throws {
+        let group = LayerGroup(name: "G")
+        var lower = layer("Lower", RGBAColor(red: 1, green: 0, blue: 0), group: group.id)
+        lower.isClipped = true
+        var composition = Composition(size: size, layers: [
+            layer("Base", .black), lower, layer("Upper", RGBAColor(red: 0, green: 0, blue: 1), group: group.id),
+        ], groups: [group])
+        // The base is outside the group, so the clipped lower layer stands
+        // on its own; it stays clipped all the same.
+        let mergedID = composition.mergeDown(composition.layers[2].id)
+        let merged = try #require(mergedID)
+        let result = try #require(composition[merged])
+        #expect(result.groupID == group.id)
+        #expect(result.isClipped)
+        #expect(composition.groups == [group])
+        #expect(TestImages.isBlue(result.image.cgImage, x: 4, y: 4))
+    }
+
+    @Test func mergingDownIsRefusedWhereItWouldLoseSomething() {
+        let group = LayerGroup(name: "G")
+        let lockedGroup = LayerGroup(name: "Locked", isLocked: true)
+        let red = RGBAColor(red: 1, green: 0, blue: 0)
+        var hidden = layer("Hidden", red)
+        hidden.isVisible = false
+        var adjustment = Composition(size: size, layers: []).adjustmentLayer(.invert)
+        adjustment.groupID = nil
+        let composition = Composition(size: size, layers: [
+            layer("A", red), layer("In group", red, group: group.id),
+            layer("B", red), hidden, layer("C", red),
+            adjustment, layer("D", red),
+            layer("E", red, group: lockedGroup.id), layer("F", red, group: lockedGroup.id),
+        ], groups: [group, lockedGroup])
+        let mergeable = composition.layers.map { composition.canMergeDown($0.id) }
+        // Only the adjustment can go down, into C.
+        #expect(mergeable == [false, false, false, false, false, true, false, false, false])
+    }
+
     @Test func groupsAreSaved() throws {
         let group = LayerGroup(name: "Saved", opacity: 0.4, isLocked: true)
         let composition = Composition(size: size, layers: [layer("In", .black, group: group.id)], groups: [group])
