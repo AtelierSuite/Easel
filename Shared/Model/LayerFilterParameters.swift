@@ -251,6 +251,12 @@ extension LayerFilter.Kind {
                 FilterParameter(labelKey: "LayerFilters.UndefinedAreas", range: 0...1, defaultValue: 1,
                                 style: .choice(["LayerFilters.WrapAround", "LayerFilters.RepeatEdges"])),
             ]
+        case .variations:
+            // For the shadows, midtones and highlights: how far towards red,
+            // green and blue (or away, towards cyan, magenta and yellow), and
+            // lighter or darker; then saturation.
+            return (0..<12).map { _ in FilterParameter(labelKey: "LayerFilters.Weight", range: -100...100, defaultValue: 0, style: .signedPercent) }
+                + [FilterParameter(labelKey: "Adjust.Saturation", range: -100...100, defaultValue: 0, style: .signedPercent)]
         case .custom:
             // Five rows of five weights, then the divisor and the offset.
             let weights = [Double](repeating: 0, count: 12) + [1] + [Double](repeating: 0, count: 12)

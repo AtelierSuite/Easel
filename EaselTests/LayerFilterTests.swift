@@ -339,4 +339,14 @@ struct ColorFilterTests {
         layer.filters[0].displacementMap = nil
         #expect(TestImages.isRed(layer.renderedImage, x: 1, y: 1))
     }
+
+    @Test func variationsPushEachToneItsOwnWay() {
+        var shifts = [[Double]](repeating: [0, 0, 0, 0], count: 3)
+        shifts[0] = [0, 0, 0.4, 0]
+        // Blue in the shadows tints dark grey, and barely touches white.
+        let dark = LayerFilter.varied(SIMD3(repeating: 0.1), shifts: shifts, saturation: 0)
+        #expect(dark.z > dark.x + 0.1)
+        let white = LayerFilter.varied(SIMD3(repeating: 1), shifts: shifts, saturation: 0)
+        #expect(abs(white.z - 1) < 0.001)
+    }
 }

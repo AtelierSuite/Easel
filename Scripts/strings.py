@@ -951,6 +951,8 @@ S = {
 "LayerFilters.ChooseMap": ("Choose Map…", "マップを選択…", "맵 선택…", "选择置换图…", "選擇置換圖…"),
 "LinkedFile.MapDetail": ("A Displace filter uses it as its map. Choose it to see the filter.", "置き換えフィルターがマップとして使用しています。選択するとフィルターが表示されます。", "변위 필터가 맵으로 사용합니다. 선택하면 필터가 보입니다.", "置换滤镜将其用作置换图。选择它以查看滤镜效果。", "置換濾鏡將其用作置換圖。選擇它以查看濾鏡效果。"),
 "LinkedFile.MapDetail.More %lld": ("A Displace filter uses it as its map. Still missing after this one: %lld", "置き換えフィルターがマップとして使用しています。このほかに見つからないファイル：%lld", "변위 필터가 맵으로 사용합니다. 이 파일 외에 없는 파일: %lld", "置换滤镜将其用作置换图。此后仍缺少：%lld", "置換濾鏡將其用作置換圖。此後仍缺少：%lld"),
+"LayerFilter.Variations": ("Variations", "バリエーション", "변형", "变化", "變化"),
+"LayerFilters.Midtones": ("Midtones", "中間調", "중간 영역", "中间调", "中間調"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

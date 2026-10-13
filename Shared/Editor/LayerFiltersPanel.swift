@@ -294,6 +294,12 @@ struct FilterRow: View {
             customControls
         } else if filter.kind == .channelMixer {
             mixerControls
+        } else if filter.kind == .variations {
+            rangedControls(
+                ranges: ["Adjust.Shadows", "LayerFilters.Midtones", "Adjust.Highlights"],
+                labels: ["LayerFilters.Red", "LayerFilters.Green", "LayerFilters.Blue", "LayerFilters.Lightness"],
+                range: -100...100, extra: 12
+            )
         } else if filter.kind == .selectiveColor {
             rangedControls(
                 ranges: ["LayerFilters.Reds", "LayerFilters.Yellows", "LayerFilters.Greens", "LayerFilters.Cyans", "LayerFilters.Blues",

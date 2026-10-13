@@ -134,6 +134,9 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Each pixel moved by a picture of its own: across by its first
         /// channel, down by its second, mid-grey moving nothing.
         case displace
+        /// Shadows, midtones and highlights pushed towards a colour, lighter
+        /// or darker, as Photoshop's Variations does.
+        case variations
 
         var id: String { rawValue }
 
@@ -146,7 +149,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         static let categories: [(titleKey: String?, kinds: [Kind])] = [
             (nil, [.blackAndWhite, .sepia, .saturation, .brightness, .contrast]),
             (nil, [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor]),
-            ("FilterCategory.Adjustments", [.exposure, .vibrance, .photoFilter, .channelMixer, .selectiveColor, .desaturate, .invert, .posterize,
+            ("FilterCategory.Adjustments", [.exposure, .vibrance, .photoFilter, .channelMixer, .selectiveColor, .variations, .desaturate, .invert, .posterize,
                                             .threshold, .solarize, .equalize, .shadowsHighlights]),
             ("FilterCategory.Blur", [.gaussianBlur, .motionBlur, .zoomBlur, .spinBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur,
                                      .blur, .blurMore, .average]),
@@ -167,7 +170,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .displace, .liquify, .shadowsHighlights, .selectiveColor:
+                 .channelMixer, .desaturate, .equalize, .variations, .displace, .liquify, .shadowsHighlights, .selectiveColor:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -250,6 +253,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .channelMixer: return "slider.horizontal.3"
             case .desaturate: return "drop.degreesign.slash"
             case .equalize: return "chart.bar.xaxis"
+            case .variations: return "square.grid.3x3.square"
             case .displace: return "square.3.layers.3d.down.right"
             case .liquify: return "hand.draw"
             case .shadowsHighlights: return "circle.lefthalf.filled.righthalf.striped.horizontal"
@@ -311,7 +315,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .displace, .liquify, .shadowsHighlights, .selectiveColor: return 1
+                 .channelMixer, .desaturate, .equalize, .variations, .displace, .liquify, .shadowsHighlights, .selectiveColor: return 1
             }
         }
 

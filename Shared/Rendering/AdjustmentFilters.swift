@@ -76,6 +76,11 @@ extension LayerFilter {
             return PixelFilters.map(input) { color in
                 color = Self.selectiveColor(color / 255, inks: inks, relative: relative) * 255
             }
+        case .variations:
+            let shifts = (0..<3).map { range in (0..<4).map { value(range * 4 + $0) / 100 } }, saturation = value(12) / 100
+            return PixelFilters.map(input) { color in
+                color = Self.varied(color / 255, shifts: shifts, saturation: saturation) * 255
+            }
         case .desaturate:
             return PixelFilters.map(input) { color in color = SIMD3(repeating: (color.max() + color.min()) / 2) }
         case .equalize:
@@ -152,6 +157,19 @@ extension LayerFilter {
             }
         }
         return result
+    }
+
+    /// Variations: each tonal range's push towards red, green and blue and
+    /// lighter, as much as the colour's shade belongs to it, then the
+    /// saturation. `color` is 0...1.
+    static func varied(_ color: SIMD3<Double>, shifts: [[Double]], saturation: Double) -> SIMD3<Double> {
+        let shade = PixelFilters.luminosity(color * 255) / 255
+        let shadows = (1 - shade) * (1 - shade), highlights = shade * shade
+        var result = color
+        for (weight, shift) in zip([shadows, 1 - shadows - highlights, highlights], shifts) {
+            result += (SIMD3(shift[0], shift[1], shift[2]) + SIMD3(repeating: shift[3])) * weight * 0.5
+        }
+        return saturated(result * 255, by: saturation) / 255
     }
 
     /// Photoshop's Vibrance, as near as one sample of it shows: saturation
