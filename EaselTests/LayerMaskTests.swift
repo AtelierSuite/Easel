@@ -15,6 +15,19 @@ struct LayerMaskTests {
         }))
     }
 
+    @Test func previewsAreMadeOnceForEachSize() {
+        let image = LayerImage(TestImages.halves(width: 400, height: 200))
+        #expect(image.thumbnail(maxPixelSize: 100).width == 100)
+        #expect(image.thumbnail(maxPixelSize: 40).width == 40)
+        #expect(image.thumbnail(maxPixelSize: 100) === image.thumbnail(maxPixelSize: 100))
+        let mask = LayerMask(image: image)
+        #expect(mask.preview() === mask.preview())
+        #expect(mask.preview(maxPixelSize: 40).width == 40)
+        // The mask's preview is black where the mask hides, so it is not
+        // the plain thumbnail.
+        #expect(mask.preview(maxPixelSize: 40) !== image.thumbnail(maxPixelSize: 40))
+    }
+
     private func masked() -> Layer {
         var layer = Layer(name: "Halves", image: LayerImage(TestImages.halves()), canvasSize: size)
         layer.mask = leftHalfMask()

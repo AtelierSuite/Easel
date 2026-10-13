@@ -47,14 +47,17 @@ struct LayerMask: Equatable, Sendable {
         return copy
     }
 
-    /// The mask as black and white, for its thumbnail.
+    /// The mask as black and white, for its thumbnail, made once for its
+    /// pixels.
     func preview(maxPixelSize: Int = 160) -> CGImage {
-        let small = image.thumbnail(maxPixelSize: maxPixelSize)
-        let size = CGSize(width: small.width, height: small.height)
-        return Bitmap.render(size: size) { context in
-            context.setFillColor(RGBAColor.black.cgColor)
-            context.fill(CGRect(origin: .zero, size: size))
-            Bitmap.draw(small, in: CGRect(origin: .zero, size: size), context: context)
+        image.thumbnail("mask", maxPixelSize: maxPixelSize) {
+            let small = image.thumbnail(maxPixelSize: maxPixelSize)
+            let size = CGSize(width: small.width, height: small.height)
+            return Bitmap.render(size: size) { context in
+                context.setFillColor(RGBAColor.black.cgColor)
+                context.fill(CGRect(origin: .zero, size: size))
+                Bitmap.draw(small, in: CGRect(origin: .zero, size: size), context: context)
+            }
         }
     }
 

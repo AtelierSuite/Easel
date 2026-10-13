@@ -22,7 +22,8 @@ final class LayerImage: Sendable {
     /// layer is the slowest part of a save, and a layer nobody touched has
     /// no reason to be encoded again.
     private let encoded: Mutex<Data?>
-    private let thumbnailCache = Mutex<CGImage?>(nil)
+    /// Small copies made from these pixels, by what they are for and size.
+    private let thumbnailCache = Mutex<[String: CGImage]>([:])
 
     init(_ cgImage: CGImage, isBlank: Bool = false, encoded: Data? = nil) {
         self.cgImage = cgImage
@@ -42,11 +43,18 @@ final class LayerImage: Sendable {
         return data
     }
 
-    /// A small copy for the layers list, made once.
+    /// A small copy for the layers list, made once for each size.
     func thumbnail(maxPixelSize: Int = 160) -> CGImage {
-        if let cached = thumbnailCache.withLock({ $0 }) { return cached }
-        let made = Bitmap.scaled(cgImage, toFit: maxPixelSize) ?? cgImage
-        thumbnailCache.withLock { $0 = made }
+        thumbnail("plain", maxPixelSize: maxPixelSize) { Bitmap.scaled(cgImage, toFit: maxPixelSize) ?? cgImage }
+    }
+
+    /// A small picture made from these pixels by `make`, made once for
+    /// each `kind` and size and kept.
+    func thumbnail(_ kind: String, maxPixelSize: Int, make: () -> CGImage) -> CGImage {
+        let key = "\(kind)-\(maxPixelSize)"
+        if let cached = thumbnailCache.withLock({ $0[key] }) { return cached }
+        let made = make()
+        thumbnailCache.withLock { $0[key] = made }
         return made
     }
 }
