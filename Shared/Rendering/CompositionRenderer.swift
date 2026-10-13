@@ -36,36 +36,55 @@ enum CompositionRenderer {
             // The base at full opacity with the clipped layers mixed over
             // it, cut back to the base's shape, between the base's effects
             // behind and in front of it; all put down as the base would be.
-            context.saveGState()
-            context.setAlpha(base.opacity)
-            context.setBlendMode(base.blendMode.cgBlendMode)
-            context.beginTransparencyLayer(auxiliaryInfo: nil)
-            let plain = base.with(opacity: 1, blendMode: .normal)
-            if let behind = styled.behind { draw(plain, image: behind, padding: styled.padding, in: context) }
-            // Drawn apart, so adjustment layers clipped to the base see
-            // only the group beneath them.
-            let group = offscreen(like: context) { group in
-                // Drawing the base's shape over the group only cuts within
-                // the image's own edges; past them, the clip does.
-                group.addLines(between: plain.corners(padding: styled.padding))
-                group.closePath()
-                group.clip()
-                draw(plain, image: opaque(styled.content), padding: styled.padding, in: group)
-                for layer in clipped {
-                    if layer.isAdjustment {
-                        adjust(group, with: layer)
-                    } else {
-                        let image = layer.styledImage
-                        draw(layer, image: image.composite, padding: image.padding, in: group)
+            put(base.blendMode, in: context) { context in
+                context.setAlpha(base.opacity)
+                context.beginTransparencyLayer(auxiliaryInfo: nil)
+                let plain = base.with(opacity: 1, blendMode: .normal)
+                if let behind = styled.behind { draw(plain, image: behind, padding: styled.padding, in: context) }
+                // Drawn apart, so adjustment layers clipped to the base see
+                // only the group beneath them.
+                let group = offscreen(like: context) { group in
+                    // Drawing the base's shape over the group only cuts within
+                    // the image's own edges; past them, the clip does.
+                    group.addLines(between: plain.corners(padding: styled.padding))
+                    group.closePath()
+                    group.clip()
+                    draw(plain, image: opaque(styled.content), padding: styled.padding, in: group)
+                    for layer in clipped {
+                        if layer.isAdjustment {
+                            adjust(group, with: layer)
+                        } else {
+                            let image = layer.styledImage
+                            draw(layer, image: image.composite, padding: image.padding, in: group)
+                        }
                     }
+                    draw(plain, image: styled.content, padding: styled.padding, in: group, blendMode: .destinationIn)
                 }
-                draw(plain, image: styled.content, padding: styled.padding, in: group, blendMode: .destinationIn)
+                if let group { drawInDeviceSpace(group, in: context) }
+                if let front = styled.front { draw(plain, image: front, padding: styled.padding, in: context) }
+                context.endTransparencyLayer()
             }
-            if let group { drawInDeviceSpace(group, in: context) }
-            if let front = styled.front { draw(plain, image: front, padding: styled.padding, in: context) }
-            context.endTransparencyLayer()
-            context.restoreGState()
         }
+    }
+
+    /// Runs `body` to draw something that mixes with what is in `context`
+    /// as `mode` says. Modes Core Graphics has are set on the context; the
+    /// others are drawn apart and mixed in pixel by pixel, which only
+    /// bitmaps allow: elsewhere they fall back on the nearest.
+    private static func put(_ mode: LayerBlendMode, in context: CGContext, _ body: (CGContext) -> Void) {
+        if let custom = BlendModes.Custom(mode), let backdrop = context.makeImage(),
+           let top = offscreen(like: context, body),
+           let mixed = BlendModes.mix(custom, top, over: backdrop, toCanvas: context.ctm.inverted()) {
+            context.saveGState()
+            context.setBlendMode(.copy)
+            drawInDeviceSpace(mixed, in: context)
+            context.restoreGState()
+            return
+        }
+        context.saveGState()
+        context.setBlendMode(mode.cgBlendMode)
+        body(context)
+        context.restoreGState()
     }
 
     /// Changes what is drawn in `context` so far with an adjustment layer's
@@ -88,11 +107,10 @@ enum CompositionRenderer {
             masked.maskImage = CIImage(cgImage: mask)
             return masked.outputImage ?? changed
         }, to: backdrop)
-        context.saveGState()
-        context.setAlpha(layer.opacity)
-        context.setBlendMode(layer.blendMode.cgBlendMode)
-        drawInDeviceSpace(adjusted, in: context)
-        context.restoreGState()
+        put(layer.blendMode, in: context) { context in
+            context.setAlpha(layer.opacity)
+            drawInDeviceSpace(adjusted, in: context)
+        }
     }
 
     /// A transparent bitmap the size of `context`'s, drawn into through the
@@ -121,6 +139,11 @@ enum CompositionRenderer {
     private static func draw(
         _ layer: Layer, image: CGImage, padding: Double, in context: CGContext, blendMode: CGBlendMode? = nil
     ) {
+        if blendMode == nil, layer.blendMode.isCustom {
+            let plain = layer.with(opacity: layer.opacity, blendMode: .normal)
+            put(layer.blendMode, in: context) { draw(plain, image: image, padding: padding, in: $0) }
+            return
+        }
         context.saveGState()
         context.setAlpha(layer.opacity)
         context.setBlendMode(blendMode ?? layer.blendMode.cgBlendMode)

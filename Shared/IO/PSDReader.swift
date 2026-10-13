@@ -727,6 +727,15 @@ enum PSDReader {
         case "sat ": return .saturation
         case "colr": return .color
         case "lum ": return .luminosity
+        case "diss": return .dissolve
+        case "dkCl": return .darkerColor
+        case "lgCl": return .lighterColor
+        case "vLit": return .vividLight
+        case "lLit": return .linearLight
+        case "pLit": return .pinLight
+        case "hMix": return .hardMix
+        case "fsub": return .subtract
+        case "fdiv": return .divide
         default: return .normal
         }
     }

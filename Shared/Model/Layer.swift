@@ -153,24 +153,29 @@ struct LayerTransform: Codable, Equatable, Sendable {
 /// How a layer mixes with the layers beneath it. The raw values are what the
 /// file stores, so they stay put.
 enum LayerBlendMode: String, Codable, CaseIterable, Identifiable, Sendable {
-    case normal
-    case multiply, darken, colorBurn, plusDarker
-    case screen, lighten, colorDodge, plusLighter
-    case overlay, softLight, hardLight
-    case difference, exclusion
+    case normal, dissolve
+    case multiply, darken, colorBurn, plusDarker, darkerColor
+    case screen, lighten, colorDodge, plusLighter, lighterColor
+    case overlay, softLight, hardLight, vividLight, linearLight, pinLight, hardMix
+    case difference, exclusion, subtract, divide
     case hue, saturation, color, luminosity
 
     var id: String { rawValue }
 
-    /// The modes as menus present them: grouped by what they do.
+    /// The modes as menus present them: grouped by what they do, in
+    /// Photoshop's order.
     static let groups: [[LayerBlendMode]] = [
-        [.normal],
-        [.multiply, .darken, .colorBurn, .plusDarker],
-        [.screen, .lighten, .colorDodge, .plusLighter],
-        [.overlay, .softLight, .hardLight],
-        [.difference, .exclusion],
+        [.normal, .dissolve],
+        [.darken, .multiply, .colorBurn, .plusDarker, .darkerColor],
+        [.lighten, .screen, .colorDodge, .plusLighter, .lighterColor],
+        [.overlay, .softLight, .hardLight, .vividLight, .linearLight, .pinLight, .hardMix],
+        [.difference, .exclusion, .subtract, .divide],
         [.hue, .saturation, .color, .luminosity],
     ]
+
+    /// Modes Core Graphics and SwiftUI have no match for, which are mixed
+    /// pixel by pixel instead; see `BlendModes`.
+    var isCustom: Bool { BlendModes.Custom(self) != nil }
 
     var label: String {
         switch self {
@@ -192,14 +197,29 @@ enum LayerBlendMode: String, Codable, CaseIterable, Identifiable, Sendable {
         case .saturation: return String(localized: "BlendMode.Saturation")
         case .color: return String(localized: "BlendMode.Color")
         case .luminosity: return String(localized: "BlendMode.Luminosity")
+        case .dissolve: return String(localized: "BlendMode.Dissolve")
+        case .darkerColor: return String(localized: "BlendMode.DarkerColor")
+        case .lighterColor: return String(localized: "BlendMode.LighterColor")
+        case .vividLight: return String(localized: "BlendMode.VividLight")
+        case .linearLight: return String(localized: "BlendMode.LinearLight")
+        case .pinLight: return String(localized: "BlendMode.PinLight")
+        case .hardMix: return String(localized: "BlendMode.HardMix")
+        case .subtract: return String(localized: "BlendMode.Subtract")
+        case .divide: return String(localized: "BlendMode.Divide")
         }
     }
 
     /// For drawing on screen. The same modes as `cgBlendMode`, so what is
-    /// shown is what is exported.
+    /// shown is what is exported; custom modes are mixed by the canvas
+    /// itself, and this is only the nearest.
     var swiftUI: BlendMode {
         switch self {
-        case .normal: return .normal
+        case .normal, .dissolve: return .normal
+        case .darkerColor: return .darken
+        case .lighterColor: return .lighten
+        case .vividLight, .linearLight, .pinLight, .hardMix: return .hardLight
+        case .subtract: return .difference
+        case .divide: return .colorDodge
         case .multiply: return .multiply
         case .darken: return .darken
         case .colorBurn: return .colorBurn
@@ -220,9 +240,16 @@ enum LayerBlendMode: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// For custom modes, the nearest, for contexts that cannot be mixed
+    /// pixel by pixel, such as PDF pages.
     var cgBlendMode: CGBlendMode {
         switch self {
-        case .normal: return .normal
+        case .normal, .dissolve: return .normal
+        case .darkerColor: return .darken
+        case .lighterColor: return .lighten
+        case .vividLight, .linearLight, .pinLight, .hardMix: return .hardLight
+        case .subtract: return .difference
+        case .divide: return .colorDodge
         case .multiply: return .multiply
         case .darken: return .darken
         case .colorBurn: return .colorBurn

@@ -24,9 +24,10 @@ enum VectorExportItem {
             let base = unit.base
             defer { drawn.append(base); drawn += unit.clipped }
             guard base.isVisible, base.opacity > 0 else { continue }
-            if base.isActiveAdjustment {
-                // It changes everything beneath it, which becomes one picture.
-                items = [canvasImage(CompositionRenderer.render(layers: drawn + [base], size: size))]
+            if base.isActiveAdjustment || base.blendMode.isCustom {
+                // It changes everything beneath it, or mixes with it in a
+                // way vector files cannot say, so all becomes one picture.
+                items = [canvasImage(CompositionRenderer.render(layers: drawn + [base] + unit.clipped, size: size))]
                 continue
             }
             if unit.clipped.contains(where: \.isVisible) {
@@ -427,6 +428,9 @@ enum SVGWriter {
         case .saturation: return "saturation"
         case .color: return "color"
         case .luminosity: return "luminosity"
+        // CSS has none of these; layers in them are drawn out as pixels.
+        case .dissolve, .darkerColor, .lighterColor, .vividLight, .linearLight, .pinLight, .hardMix, .subtract, .divide:
+            return nil
         }
     }
 

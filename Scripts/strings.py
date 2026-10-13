@@ -964,6 +964,15 @@ S = {
 "LayerFilters.NoSource": ("None", "なし", "없음", "无", "無"),
 "LayerFilters.ChooseSource": ("Choose Source Layer", "ソースレイヤーを選択", "소스 레이어 선택", "选择源图层", "選擇來源圖層"),
 "LayerFilters.SourceChosen": ("Matching a Layer", "レイヤーに適用中", "레이어와 일치 중", "正在匹配图层", "正在符合圖層"),
+"BlendMode.Dissolve": ("Dissolve", "ディザ合成", "디졸브", "溶解", "溶解"),
+"BlendMode.DarkerColor": ("Darker Color", "カラー比較（暗）", "어두운 색상", "深色", "顏色變暗"),
+"BlendMode.LighterColor": ("Lighter Color", "カラー比較（明）", "밝은 색상", "浅色", "顏色變亮"),
+"BlendMode.VividLight": ("Vivid Light", "ビビッドライト", "선명한 라이트", "亮光", "強烈光源"),
+"BlendMode.LinearLight": ("Linear Light", "リニアライト", "선형 라이트", "线性光", "線性光源"),
+"BlendMode.PinLight": ("Pin Light", "ピンライト", "핀 라이트", "点光", "小光源"),
+"BlendMode.HardMix": ("Hard Mix", "ハードミックス", "하드 혼합", "实色混合", "實色疊印混合"),
+"BlendMode.Subtract": ("Subtract", "減算", "빼기", "减去", "減去"),
+"BlendMode.Divide": ("Divide", "除算", "나누기", "划分", "分割"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

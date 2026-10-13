@@ -109,11 +109,23 @@ struct CanvasView: View {
     }
 
     /// Layers drawn bottom first. An adjustment layer changes everything
-    /// drawn before it, so the stack is split at the topmost one.
+    /// drawn before it, and a layer in a blend mode SwiftUI does not have
+    /// is mixed with it by hand, so the stack is split at the topmost one.
     private func stacked(_ units: ArraySlice<ClippingUnit>, _ viewport: CanvasViewport) -> AnyView {
-        if let index = units.lastIndex(where: { $0.base.isVisible && $0.base.isActiveAdjustment }) {
+        if let index = units.lastIndex(where: { $0.base.isVisible && ($0.base.isActiveAdjustment || $0.base.blendMode.isCustom) }) {
+            let unit = units[index]
+            let below = stacked(units[..<index], viewport)
+            var plain = unit.base
+            plain.blendMode = .normal
+            let clipped = unit.clipped.filter(\.isVisible)
             return AnyView(ZStack(alignment: .topLeading) {
-                adjusted(stacked(units[..<index], viewport), by: units[index].base, viewport)
+                if unit.base.isAdjustment {
+                    adjusted(below, by: unit.base, viewport)
+                } else if clipped.isEmpty {
+                    blended(below, layerView(plain, viewport), mode: unit.base.blendMode, viewport)
+                } else {
+                    blended(below, clippingGroup(plain, clipped: clipped, viewport), mode: unit.base.blendMode, viewport)
+                }
                 stacked(units[(index + 1)...], viewport)
             }
             .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading))
@@ -134,9 +146,14 @@ struct CanvasView: View {
     /// Layers clipped to a base, over `bottom`, split at adjustment layers
     /// as `stacked` does.
     private func stackedClipped(_ bottom: AnyView, _ layers: ArraySlice<Layer>, _ viewport: CanvasViewport) -> AnyView {
-        if let index = layers.lastIndex(where: \.isActiveAdjustment) {
+        if let index = layers.lastIndex(where: { $0.isActiveAdjustment || $0.blendMode.isCustom }) {
             let below = stackedClipped(bottom, layers[..<index], viewport)
-            return stackedClipped(AnyView(adjusted(below, by: layers[index], viewport)), layers[(index + 1)...], viewport)
+            let layer = layers[index]
+            var plain = layer
+            plain.blendMode = .normal
+            let mixed = layer.isAdjustment ? AnyView(adjusted(below, by: layer, viewport))
+                : AnyView(blended(below, layerView(plain, viewport), mode: layer.blendMode, viewport))
+            return stackedClipped(mixed, layers[(index + 1)...], viewport)
         }
         return AnyView(ZStack(alignment: .topLeading) {
             bottom
@@ -150,31 +167,62 @@ struct CanvasView: View {
     /// `below`, and over it `below` as an adjustment layer changes it, where
     /// the adjustment's mask shows, mixed in as the layer says. Strokes on
     /// their way into the mask show as they are drawn.
-    private func adjusted(_ below: AnyView, by layer: Layer, _ viewport: CanvasViewport) -> some View {
+    private func adjusted(_ below: AnyView, by layer: Layer, _ viewport: CanvasViewport) -> AnyView {
         let cube = layer.adjustment.map(ColorCube.image(for:)) ?? Bitmap.empty
         var maskLayer = layer.with(opacity: 1, blendMode: .normal)
         maskLayer.mask = nil
+        let changed = below
+            .colorEffect(ShaderLibrary.colorCube(
+                .image(Image(decorative: cube, scale: 1)), .float(Float(ColorCube.size))
+            ))
+            .mask(alignment: .topLeading) {
+                if let mask = layer.activeMask {
+                    LayerView(
+                        layer: maskLayer, displayed: mask.image.cgImage, masksItself: false,
+                        strokes: strokes(on: layer.id, mask: true), maskStrokes: [], retouch: nil,
+                        canvasSize: composition.size, viewport: viewport, displayScale: displayScale
+                    )
+                } else {
+                    Rectangle()
+                }
+            }
+            .opacity(layer.opacity)
+        if layer.blendMode.isCustom {
+            return AnyView(blended(below, changed, mode: layer.blendMode, viewport))
+        }
+        return AnyView(ZStack(alignment: .topLeading) {
+            below
+            changed.blendMode(layer.blendMode.swiftUI)
+        }
+        .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading))
+    }
+
+    /// `top` mixed over `below` in a blend mode SwiftUI does not have. A
+    /// shader can only read the view it is applied to, so the two are laid
+    /// side by side in one view twice the width, each cut to its own half,
+    /// and the shader mixes them into the left half.
+    private func blended(_ below: AnyView, _ top: some View, mode: LayerBlendMode, _ viewport: CanvasViewport) -> some View {
+        let size = viewport.viewportSize
+        let canvas = viewport.canvasFrame
         return ZStack(alignment: .topLeading) {
             below
-            below
-                .colorEffect(ShaderLibrary.colorCube(
-                    .image(Image(decorative: cube, scale: 1)), .float(Float(ColorCube.size))
-                ))
-                .mask(alignment: .topLeading) {
-                    if let mask = layer.activeMask {
-                        LayerView(
-                            layer: maskLayer, displayed: mask.image.cgImage, masksItself: false,
-                            strokes: strokes(on: layer.id, mask: true), maskStrokes: [], retouch: nil,
-                            canvasSize: composition.size, viewport: viewport, displayScale: displayScale
-                        )
-                    } else {
-                        Rectangle()
-                    }
-                }
-                .opacity(layer.opacity)
-                .blendMode(layer.blendMode.swiftUI)
+                .frame(width: size.width, height: size.height, alignment: .topLeading)
+                .clipped()
+            top
+                .frame(width: size.width, height: size.height, alignment: .topLeading)
+                .clipped()
+                .offset(x: size.width)
         }
-        .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
+        .frame(width: size.width * 2, height: size.height, alignment: .topLeading)
+        .layerEffect(
+            ShaderLibrary.blendLayers(
+                .float(size.width), .float(Float(BlendModes.Custom(mode)?.rawValue ?? 0)),
+                .float2(canvas.minX, canvas.minY), .float(viewport.scale)
+            ),
+            maxSampleOffset: CGSize(width: size.width, height: 0)
+        )
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .clipped()
     }
 
     /// Which part of a layer with effects to show; see `StyledLayer`.

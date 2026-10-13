@@ -398,6 +398,15 @@ enum PSDWriter {
         case .saturation: return "sat "
         case .color: return "colr"
         case .luminosity: return "lum "
+        case .dissolve: return "diss"
+        case .darkerColor: return "dkCl"
+        case .lighterColor: return "lgCl"
+        case .vividLight: return "vLit"
+        case .linearLight: return "lLit"
+        case .pinLight: return "pLit"
+        case .hardMix: return "hMix"
+        case .subtract: return "fsub"
+        case .divide: return "fdiv"
         }
     }
 }
