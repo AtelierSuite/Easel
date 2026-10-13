@@ -96,7 +96,7 @@ struct CanvasView: View {
     }
 
     private func layerStack(_ viewport: CanvasViewport) -> some View {
-        stacked(composition.displayLayers.clippingUnits[...], viewport)
+        stacked(StackItem.items(composition.drawItems)[...], viewport)
         .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading)
         // Blend modes mix with the layers beneath, not with the checkerboard.
         .compositingGroup()
@@ -108,39 +108,107 @@ struct CanvasView: View {
         .allowsHitTesting(false)
     }
 
+    /// One thing in the stack on the canvas: a layer with any clipped to
+    /// it, or a group put together on its own before it mixes.
+    private enum StackItem: Identifiable {
+        case unit(ClippingUnit)
+        case group(LayerGroup, [StackItem])
+
+        var id: UUID {
+            switch self {
+            case .unit(let unit): return unit.id
+            case .group(let group, _): return group.id
+            }
+        }
+
+        var isVisible: Bool {
+            switch self {
+            case .unit(let unit): return unit.base.isVisible
+            case .group(let group, _): return group.isVisible && group.opacity > 0
+            }
+        }
+
+        var blendMode: LayerBlendMode {
+            switch self {
+            case .unit(let unit): return unit.base.blendMode
+            case .group(let group, _): return group.blendMode ?? .normal
+            }
+        }
+
+        /// Layers next to each other cut into clipping units, as the
+        /// renderer does; groups between them stay whole.
+        static func items(_ drawn: [DrawItem]) -> [StackItem] {
+            var result: [StackItem] = []
+            var run: [Layer] = []
+            func flush() {
+                result += run.clippingUnits.map { .unit($0) }
+                run = []
+            }
+            for item in drawn {
+                switch item {
+                case .layer(let layer):
+                    run.append(layer)
+                case .group(let group, let inside):
+                    flush()
+                    result.append(.group(group, items(inside)))
+                }
+            }
+            flush()
+            return result
+        }
+    }
+
     /// Layers drawn bottom first. An adjustment layer changes everything
     /// drawn before it, and a layer in a blend mode SwiftUI does not have
     /// is mixed with it by hand, so the stack is split at the topmost one.
-    private func stacked(_ units: ArraySlice<ClippingUnit>, _ viewport: CanvasViewport) -> AnyView {
-        if let index = units.lastIndex(where: { $0.base.isVisible && ($0.base.isActiveAdjustment || $0.base.blendMode.isCustom) }) {
-            let unit = units[index]
-            let below = stacked(units[..<index], viewport)
-            var plain = unit.base
-            plain.blendMode = .normal
-            let clipped = unit.clipped.filter(\.isVisible)
+    private func stacked(_ items: ArraySlice<StackItem>, _ viewport: CanvasViewport) -> AnyView {
+        let splits: (StackItem) -> Bool = { item in
+            guard item.isVisible else { return false }
+            if case .unit(let unit) = item, unit.base.isActiveAdjustment { return true }
+            return item.blendMode.isCustom
+        }
+        if let index = items.lastIndex(where: splits) {
+            let item = items[index]
+            let below = stacked(items[..<index], viewport)
             return AnyView(ZStack(alignment: .topLeading) {
-                if unit.base.isAdjustment {
+                if case .unit(let unit) = item, unit.base.isAdjustment {
                     adjusted(below, by: unit.base, viewport)
-                } else if clipped.isEmpty {
-                    blended(below, layerView(plain, viewport), mode: unit.base.blendMode, viewport)
                 } else {
-                    blended(below, clippingGroup(plain, clipped: clipped, viewport), mode: unit.base.blendMode, viewport)
+                    blended(below, itemView(item, mixing: false, viewport), mode: item.blendMode, viewport)
                 }
-                stacked(units[(index + 1)...], viewport)
+                stacked(items[(index + 1)...], viewport)
             }
             .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading))
         }
         return AnyView(ZStack(alignment: .topLeading) {
-            ForEach(Array(units)) { unit in
-                let clipped = unit.clipped.filter(\.isVisible)
-                if unit.base.isVisible, clipped.isEmpty {
-                    layerView(unit.base, viewport)
-                } else if unit.base.isVisible, !unit.base.isAdjustment {
-                    clippingGroup(unit.base, clipped: clipped, viewport)
-                }
+            ForEach(Array(items)) { item in
+                itemView(item, mixing: true, viewport)
             }
         }
         .frame(width: viewport.viewportSize.width, height: viewport.viewportSize.height, alignment: .topLeading))
+    }
+
+    /// One item of the stack as it shows, mixing with what is beneath in
+    /// its blend mode, or with none when `mixing` is false so the caller can.
+    private func itemView(_ item: StackItem, mixing: Bool, _ viewport: CanvasViewport) -> AnyView {
+        switch item {
+        case .unit(let unit):
+            var base = unit.base
+            if !mixing { base.blendMode = .normal }
+            let clipped = unit.clipped.filter(\.isVisible)
+            if base.isVisible, clipped.isEmpty {
+                return AnyView(layerView(base, viewport))
+            } else if base.isVisible, !base.isAdjustment {
+                return AnyView(clippingGroup(base, clipped: clipped, viewport))
+            }
+            return AnyView(EmptyView())
+        case .group(let group, let inside):
+            guard item.isVisible else { return AnyView(EmptyView()) }
+            return AnyView(stacked(inside[...], viewport)
+                .compositingGroup()
+                .opacity(group.opacity)
+                .blendMode(mixing ? item.blendMode.swiftUI : .normal))
+        }
     }
 
     /// Layers clipped to a base, over `bottom`, split at adjustment layers

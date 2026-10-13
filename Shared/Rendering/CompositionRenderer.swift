@@ -5,7 +5,33 @@ import CoreImage.CIFilterBuiltins
 /// Flattens layers into one image, the way the canvas shows them.
 enum CompositionRenderer {
     static func render(_ composition: Composition, background: RGBAColor? = nil) -> CGImage {
-        render(layers: composition.displayLayers, size: composition.size, background: background)
+        render(layers: drawnLayers(composition), size: composition.size, background: background)
+    }
+
+    /// The layers to draw: the composition's as they show, with each group
+    /// that does not pass through put together into one layer of its own.
+    static func drawnLayers(_ composition: Composition) -> [Layer] {
+        layers(composition.drawItems, size: composition.size)
+    }
+
+    private static func layers(_ items: [DrawItem], size: CGSize) -> [Layer] {
+        items.compactMap { item in
+            switch item {
+            case .layer(let layer):
+                return layer
+            case .group(let group, let inside):
+                guard group.isVisible, group.opacity > 0 else { return nil }
+                var layer = Layer(
+                    name: group.name, image: LayerImage(render(layers: layers(inside, size: size), size: size)), canvasSize: size
+                )
+                layer.opacity = group.opacity
+                layer.blendMode = group.blendMode ?? .normal
+                // A group of its own, so nothing above clips to it, as
+                // nothing does on the canvas.
+                layer.groupID = UUID()
+                return layer
+            }
+        }
     }
 
     static func render(layers: [Layer], size: CGSize, background: RGBAColor? = nil) -> CGImage {
@@ -181,7 +207,7 @@ enum CompositionRenderer {
                 context.fill(CGRect(origin: .zero, size: size))
             }
             context.scaleBy(x: size.width / composition.size.width, y: size.height / composition.size.height)
-            draw(composition.displayLayers, in: context)
+            draw(drawnLayers(composition), in: context)
         }
     }
 
@@ -191,7 +217,7 @@ enum CompositionRenderer {
         guard composition.canvasRect.contains(point) else { return nil }
         let image = Bitmap.render(size: CGSize(width: 1, height: 1)) { context in
             context.translateBy(x: -point.x.rounded(.down), y: -point.y.rounded(.down))
-            draw(composition.displayLayers, in: context)
+            draw(drawnLayers(composition), in: context)
         }
         guard let pixels = Bitmap.pixels(of: image) else { return nil }
         let sample = pixels.color(x: 0, y: 0)

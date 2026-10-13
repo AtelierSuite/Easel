@@ -100,7 +100,7 @@ enum PSDWriter {
         func close(down to: Int) {
             while open.count > to, let id = open.popLast(), let group = composition.group(id) {
                 records.append(folderRecord(name: group.name, opacity: group.opacity, isVisible: group.isVisible,
-                                            type: group.isExpanded ? 1 : 2))
+                                            type: group.isExpanded ? 1 : 2, blendKey: group.blendMode.map(blendKey) ?? "pass"))
             }
         }
         for layer in composition.layers {
@@ -109,7 +109,7 @@ enum PSDWriter {
             while common < min(open.count, chain.count), open[common] == chain[common] { common += 1 }
             close(down: common)
             for id in chain[common...] {
-                records.append(folderRecord(name: "</Layer group>", opacity: 1, isVisible: true, type: 3))
+                records.append(folderRecord(name: "</Layer group>", opacity: 1, isVisible: true, type: 3, blendKey: "norm"))
                 open.append(id)
             }
             records.append(layerRecord(layer, canvasSize: composition.size, swatches: composition.patterns))
@@ -241,7 +241,9 @@ enum PSDWriter {
                       tiles: effects == nil ? [] : tile.map { [$0] } ?? [], filterEffect: filterEffect)
     }
 
-    private static func folderRecord(name: String, opacity: Double, isVisible: Bool, type: Int) -> Record {
+    /// `blendKey` is the group's; Photoshop's `pass` lets its layers mix
+    /// one by one.
+    private static func folderRecord(name: String, opacity: Double, isVisible: Bool, type: Int, blendKey: String) -> Record {
         var header = PSDBinaryWriter()
         header.zeros(16)
         header.uint16(4)
@@ -250,7 +252,7 @@ enum PSDWriter {
             header.uint32(2)
         }
         header.ascii("8BIM")
-        header.ascii(type == 3 ? "norm" : "pass")
+        header.ascii(blendKey)
         header.uint8(Int((min(max(opacity, 0), 1) * 255).rounded()))
         header.uint8(0)
         header.uint8(isVisible ? 0 : 2)
@@ -266,7 +268,7 @@ enum PSDWriter {
         extra.uint32(type)
         if type != 3 {
             extra.ascii("8BIM")
-            extra.ascii("pass")
+            extra.ascii(blendKey)
         }
         header.uint32(extra.data.count)
         header.bytes(extra.data)

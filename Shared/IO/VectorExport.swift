@@ -20,7 +20,7 @@ enum VectorExportItem {
         func canvasImage(_ image: CGImage) -> VectorExportItem {
             .raster(image: image, rect: CGRect(origin: .zero, size: size), transform: .identity, opacity: 1, blendMode: .normal)
         }
-        for unit in composition.displayLayers.clippingUnits {
+        for unit in CompositionRenderer.drawnLayers(composition).clippingUnits {
             let base = unit.base
             defer { drawn.append(base); drawn += unit.clipped }
             guard base.isVisible, base.opacity > 0 else { continue }
@@ -75,7 +75,7 @@ enum SVGWriter {
         func canvasImage(_ layers: [Layer]) -> String {
             imageElement(CompositionRenderer.render(layers: layers, size: size), rect: CGRect(origin: .zero, size: size))
         }
-        for unit in composition.displayLayers.clippingUnits {
+        for unit in CompositionRenderer.drawnLayers(composition).clippingUnits {
             let base = unit.base
             defer { drawn.append(base); drawn += unit.clipped }
             guard base.isVisible, base.opacity > 0 else { continue }

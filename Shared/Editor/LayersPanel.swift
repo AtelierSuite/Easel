@@ -580,6 +580,12 @@ private struct GroupRow: View {
             Text(group.name)
                 .lineLimit(1)
                 .opacity(group.isVisible ? 1 : 0.5)
+            if let mode = group.blendMode {
+                Text(mode.label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             if group.opacity < 0.995 {
                 Text(verbatim: "\(Int((group.opacity * 100).rounded()))%")
                     .font(.caption)
@@ -620,8 +626,8 @@ private struct GroupRow: View {
     }
 }
 
-/// A picked group's settings: its name, opacity and lock, and the ways to
-/// take it apart.
+/// A picked group's settings: its name, opacity, blend mode and lock, and
+/// the ways to take it apart.
 private struct GroupSection: View {
     let group: LayerGroup
     let state: EditorState
@@ -641,6 +647,20 @@ private struct GroupSection: View {
                 valueText: "\(Int((group.opacity * 100).rounded()))%"
             )
             .accessibilityIdentifier("groupOpacity")
+            Picker("Layers.BlendMode", selection: Binding(
+                get: { group.blendMode },
+                set: { value in state.updateGroup(group.id) { $0.blendMode = value } }
+            )) {
+                Text("BlendMode.PassThrough").tag(LayerBlendMode?.none)
+                ForEach(Array(LayerBlendMode.groups.enumerated()), id: \.offset) { _, modes in
+                    Section {
+                        ForEach(modes) { mode in
+                            Text(mode.label).tag(LayerBlendMode?.some(mode))
+                        }
+                    }
+                }
+            }
+            .accessibilityIdentifier("groupBlendMode")
             Toggle("Layers.Lock", isOn: Binding(
                 get: { group.isLocked }, set: { value in state.updateGroup(group.id) { $0.isLocked = value } }
             ))

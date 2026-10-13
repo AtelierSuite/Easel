@@ -125,6 +125,8 @@ enum PSDReader {
         /// 1 or 2: a group folder's own record, above its layers; 3: the
         /// divider below them.
         var sectionType = 0
+        /// A group's blend mode, which `lsct` may carry as well.
+        var sectionBlendKey: String?
         var mask: MaskRecord?
         /// Tagged blocks kept for what they say about the layer beyond its
         /// pixels: adjustments, styles, smart objects.
@@ -203,6 +205,8 @@ enum PSDReader {
                 groups[index].opacity = Double(record.opacity) / 255
                 groups[index].isVisible = !record.isHidden
                 groups[index].isExpanded = record.sectionType == 1
+                let key = record.sectionBlendKey ?? record.blendKey
+                groups[index].blendMode = key == "pass" ? nil : blendMode(key)
                 continue
             }
             if record.blocks.keys.contains(where: PSDAdjustments.adjustmentKeys.contains) {
@@ -419,6 +423,7 @@ enum PSDReader {
                 let type = try reader.uint32()
                 record.isGroupBoundary = (1...3).contains(type)
                 record.sectionType = Int(type)
+                if length >= 12, try reader.ascii(4) == "8BIM" { record.sectionBlendKey = try reader.ascii(4) }
             default:
                 if keptBlocks.contains(key) { record.blocks[key] = try reader.bytes(length) }
             }

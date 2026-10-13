@@ -83,6 +83,56 @@ struct LayerGroupTests {
         #expect(read.groups == [group])
         #expect(read.layers[0].groupID == group.id)
     }
+
+    /// Passing through, a group's layers mix with what is beneath it; in
+    /// any other mode, only with each other.
+    @Test func groupsInABlendModeMixAsOne() {
+        let red = RGBAColor(red: 1, green: 0, blue: 0), green = RGBAColor(red: 0, green: 1, blue: 0)
+        for mode in [nil, LayerBlendMode.normal] {
+            let group = LayerGroup(name: "G", blendMode: mode)
+            var screened = layer("Green", green, group: group.id)
+            screened.blendMode = .screen
+            let composition = Composition(size: size, layers: [layer("Red", red), screened], groups: [group])
+            let pixel = TestImages.pixel(CompositionRenderer.render(composition), x: 4, y: 4)
+            let alone = TestImages.pixel(screened.image.cgImage, x: 4, y: 4)
+            // Screened with red, yellow; on its own, green.
+            #expect(mode == nil ? pixel.red > alone.red + 60 : abs(pixel.red - alone.red) < 3)
+        }
+    }
+
+    @Test func aGroupsOpacityFadesItAsOne() {
+        let group = LayerGroup(name: "G", opacity: 0.5, blendMode: .normal)
+        let composition = Composition(size: size, layers: [
+            layer("White", .white),
+            layer("Red", RGBAColor(red: 1, green: 0, blue: 0), group: group.id),
+            layer("Black", .black, group: group.id),
+        ], groups: [group])
+        // Half black over white: the red under the black never shows.
+        let pixel = TestImages.pixel(CompositionRenderer.render(composition), x: 4, y: 4)
+        #expect(abs(pixel.red - pixel.green) < 4)
+        #expect(pixel.red > 100 && pixel.red < 160)
+    }
+
+    @Test func groupBlendModesAreSavedAndOldFilesPassThrough() throws {
+        let group = LayerGroup(name: "Saved", blendMode: .multiply)
+        let data = try JSONEncoder().encode(group)
+        #expect(try JSONDecoder().decode(LayerGroup.self, from: data) == group)
+        var older = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        older["blendMode"] = nil
+        let read = try JSONDecoder().decode(LayerGroup.self, from: JSONSerialization.data(withJSONObject: older))
+        #expect(read.blendMode == nil)
+    }
+
+    @Test func groupBlendModesSurviveAPhotoshopRoundTrip() throws {
+        let multiplied = LayerGroup(name: "Multiplied", blendMode: .multiply)
+        let passing = LayerGroup(name: "Passing")
+        let composition = Composition(size: size, layers: [
+            layer("A", .black, group: multiplied.id), layer("B", .white, group: passing.id),
+        ], groups: [multiplied, passing])
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: composition))
+        #expect(read.groups.map(\.name) == ["Multiplied", "Passing"])
+        #expect(read.groups.map(\.blendMode) == [.multiply, nil])
+    }
 }
 
 @MainActor

@@ -14,6 +14,18 @@ struct LayerGroup: Identifiable, Codable, Equatable, Sendable {
     var isLocked = false
     /// Whether its layers are listed under it in the Layers panel.
     var isExpanded = true
+    /// Nil passes through, as Photoshop's groups do unless told otherwise:
+    /// the group's layers mix with what is beneath one by one. Any mode
+    /// puts the group's layers together on their own first, and mixes that
+    /// with what is beneath as one layer would be.
+    var blendMode: LayerBlendMode?
+}
+
+/// One thing in the stack as it is drawn: a layer, or a group whose layers
+/// are put together on their own before they mix with what is beneath.
+enum DrawItem {
+    case layer(Layer)
+    case group(LayerGroup, [DrawItem])
 }
 
 extension Composition {
@@ -50,6 +62,47 @@ extension Composition {
             }
             return shown
         }
+    }
+
+    /// The stack as it is drawn, bottom first. Groups that pass through
+    /// leave their layers in the stack, hidden and faded with the group;
+    /// the others hold theirs, faded and hidden by the groups around them.
+    var drawItems: [DrawItem] {
+        guard !groups.isEmpty else { return layers.map { .layer($0) } }
+        func items(_ members: [Layer], in parent: UUID?, isVisible: Bool, opacity: Double) -> [DrawItem] {
+            var result: [DrawItem] = []
+            var placed = Set<UUID>()
+            for layer in members {
+                // The group directly under `parent` that holds this layer.
+                let chain = ancestors(of: layer.groupID).map(\.id)
+                let child: UUID? = if let parent {
+                    chain.firstIndex(of: parent).flatMap { $0 > 0 ? chain[$0 - 1] : nil }
+                } else {
+                    chain.last
+                }
+                guard let child, let folder = group(child) else {
+                    var shown = layer
+                    shown.isVisible = shown.isVisible && isVisible
+                    shown.opacity *= opacity
+                    result.append(.layer(shown))
+                    continue
+                }
+                guard placed.insert(child).inserted else { continue }
+                let inside = members.filter { member in
+                    member.groupID == child || ancestors(of: member.groupID).contains { $0.id == child }
+                }
+                if folder.blendMode == nil {
+                    result += items(inside, in: child, isVisible: isVisible && folder.isVisible, opacity: opacity * folder.opacity)
+                } else {
+                    var shown = folder
+                    shown.isVisible = folder.isVisible && isVisible
+                    shown.opacity = folder.opacity * opacity
+                    result.append(.group(shown, items(inside, in: child, isVisible: true, opacity: 1)))
+                }
+            }
+            return result
+        }
+        return items(layers, in: nil, isVisible: true, opacity: 1)
     }
 
     /// Whether a layer or any group it is in is locked.

@@ -870,14 +870,16 @@ extension EditorState {
                 if other.id == groupID || composition.group(groupID, isInside: other.id) {
                     other.isVisible = true
                     other.opacity = 1
+                    other.blendMode = nil
                 }
                 return other
             }
-            let shown = inner.displayLayers.filter { layer in members.contains { $0.id == layer.id } }
+            inner.layers.removeAll { layer in !members.contains { $0.id == layer.id } }
             var merged = Layer(
-                name: group.name, image: LayerImage(CompositionRenderer.render(layers: shown, size: size)), canvasSize: size
+                name: group.name, image: LayerImage(CompositionRenderer.render(inner)), canvasSize: size
             )
             merged.opacity = group.opacity
+            merged.blendMode = group.blendMode ?? .normal
             merged.isVisible = group.isVisible
             merged.groupID = group.parentID
             let doomed = Set(members.map(\.id))

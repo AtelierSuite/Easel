@@ -29,7 +29,7 @@ extension Composition {
                 context.fill(CGRect(origin: .zero, size: rect.size))
             }
             context.translateBy(x: -rect.minX, y: -rect.minY)
-            CompositionRenderer.draw(displayLayers, in: context)
+            CompositionRenderer.draw(CompositionRenderer.drawnLayers(self), in: context)
         }
     }
 }
