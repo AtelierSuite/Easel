@@ -76,6 +76,34 @@ struct StylizeFilterTests {
         }
     }
 
+    @Test func motionBlurMatchesSamplingAlongTheLine() {
+        // Noise, partly clear, against the blur worked out sample by sample.
+        var random = StylizeRandom(seed: 3)
+        var pixels = PixelFilters.Pixels(width: 40, height: 30)
+        for index in pixels.bytes.indices { pixels.bytes[index] = UInt8(random.next() * 256) }
+        for index in stride(from: 3, to: pixels.bytes.count, by: 40) { pixels.bytes[index] = 0 }
+        let length = 9.3, direction = SIMD2(cos(0.7), sin(0.7))
+        var blurred = pixels
+        LayerFilter.motionBlur(&blurred, length: length, direction: direction)
+        let steps = Int((length * 2).rounded())
+        for y in 0..<30 {
+            for x in 0..<40 {
+                var sum = SIMD4<Double>(repeating: 0)
+                for step in 0..<steps {
+                    let t = (Double(step) / Double(steps - 1) - 0.5) * length
+                    let colour = LayerFilter.sample(pixels, Double(x) + direction.x * t, Double(y) + direction.y * t, clamped: true)
+                    sum += SIMD4(colour.x * colour.w, colour.y * colour.w, colour.z * colour.w, colour.w)
+                }
+                sum /= Double(steps)
+                #expect(abs(Int(blurred[x, y, 3]) - Int(PixelFilters.byte(sum.w))) <= 1)
+                guard sum.w > 0 else { continue }
+                for channel in 0..<3 {
+                    #expect(abs(Int(blurred[x, y, channel]) - Int(PixelFilters.byte(sum[channel] / sum.w))) <= 1)
+                }
+            }
+        }
+    }
+
     @Test func mezzotintMarksAreWholeCells() {
         var pixels = PixelFilters.Pixels(width: 60, height: 60)
         for index in stride(from: 0, to: pixels.bytes.count, by: 4) {

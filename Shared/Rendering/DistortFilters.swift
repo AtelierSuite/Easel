@@ -333,19 +333,42 @@ extension LayerFilter {
     /// line `length` long, centred on each pixel.
     static func motionBlur(_ pixels: inout PixelFilters.Pixels, length: Double, direction: SIMD2<Double>) {
         guard length >= 1 else { return }
-        let original = pixels
+        let width = pixels.width, height = pixels.height
         let steps = max(2, Int((length * 2).rounded()))
-        let offsets = (0..<steps).map { (Double($0) / Double(steps - 1) - 0.5) * length }
-        for y in 0..<pixels.height {
-            for x in 0..<pixels.width {
-                var sum = SIMD4<Double>(repeating: 0)
-                for t in offsets {
-                    let colour = sample(original, Double(x) + direction.x * t, Double(y) + direction.y * t, clamped: true)
-                    sum += SIMD4(colour.x * colour.w, colour.y * colour.w, colour.z * colour.w, colour.w)
+        // Each sample along the line falls between pixels the same way for
+        // every pixel, so together they come to one set of weights on the
+        // pixels round it, worked out once.
+        var weights: [SIMD2<Int>: Double] = [:]
+        for step in 0..<steps {
+            let t = (Double(step) / Double(steps - 1) - 0.5) * length
+            let offset = direction * t
+            let x0 = Int(offset.x.rounded(.down)), y0 = Int(offset.y.rounded(.down))
+            let fx = offset.x - Double(x0), fy = offset.y - Double(y0)
+            for (dx, dy, weight) in [(0, 0, (1 - fx) * (1 - fy)), (1, 0, fx * (1 - fy)), (0, 1, (1 - fx) * fy), (1, 1, fx * fy)] where weight > 0 {
+                weights[SIMD2(x0 + dx, y0 + dy), default: 0] += weight / Double(steps)
+            }
+        }
+        let taps = weights.map { (x: $0.key.x, y: $0.key.y, weight: $0.value) }
+        let source = pixels.bytes
+        source.withUnsafeBufferPointer { source in
+            pixels.bytes.withUnsafeMutableBufferPointer { output in
+                let output = output
+                DispatchQueue.concurrentPerform(iterations: height) { y in
+                    for x in 0..<width {
+                        // Premultiplied, so clear pixels add nothing; edges
+                        // carry on.
+                        var sum = SIMD4<Double>(repeating: 0)
+                        for tap in taps {
+                            let index = (min(max(y + tap.y, 0), height - 1) * width + min(max(x + tap.x, 0), width - 1)) * 4
+                            let alpha = Double(source[index + 3])
+                            sum += SIMD4(Double(source[index]) * alpha, Double(source[index + 1]) * alpha, Double(source[index + 2]) * alpha, alpha)
+                                * tap.weight
+                        }
+                        let index = (y * width + x) * 4
+                        output[index + 3] = PixelFilters.byte(sum.w)
+                        for channel in 0..<3 { output[index + channel] = sum.w > 0 ? PixelFilters.byte(sum[channel] / sum.w) : 0 }
+                    }
                 }
-                sum /= Double(offsets.count)
-                pixels[x, y, 3] = PixelFilters.byte(sum.w)
-                for channel in 0..<3 { pixels[x, y, channel] = sum.w > 0 ? PixelFilters.byte(sum[channel] / sum.w) : 0 }
             }
         }
     }
