@@ -179,6 +179,40 @@ struct GroupCommandTests {
         _ = top
     }
 
+    @Test func movingUpAndDownStepsInAndOutOfGroups() throws {
+        let state = editor()
+        state.addEmptyLayer()
+        state.addEmptyLayer()
+        let layers = state.composition.layers.map(\.id)
+        state.activeLayerID = layers[1]
+        state.groupActiveLayer()
+        let groupID = try #require(state.activeGroupID)
+        func order() -> [Layer.ID] { state.composition.layers.map(\.id) }
+        func group(_ id: Layer.ID) -> UUID? { state.composition[id]?.groupID }
+        // Moving down onto the group goes into it, at its top.
+        state.moveLayer(layers[2], by: -1)
+        #expect(order() == layers)
+        #expect(group(layers[2]) == groupID)
+        // Within it, past the layer beneath.
+        state.moveLayer(layers[2], by: -1)
+        #expect(order() == [layers[0], layers[2], layers[1]])
+        #expect(group(layers[2]) == groupID)
+        // From its bottom, out of it.
+        state.moveLayer(layers[2], by: -1)
+        #expect(order() == [layers[0], layers[2], layers[1]])
+        #expect(group(layers[2]) == nil)
+        // Up past a layer outside it, then into it from beneath.
+        state.moveLayer(layers[0], by: 1)
+        #expect(order() == [layers[2], layers[0], layers[1]])
+        state.moveLayer(layers[0], by: 1)
+        #expect(group(layers[0]) == groupID)
+        // From its top, out of it.
+        state.moveLayer(layers[1], by: 1)
+        #expect(order() == [layers[2], layers[0], layers[1]])
+        #expect(group(layers[1]) == nil)
+        #expect(group(layers[0]) == groupID)
+    }
+
     @Test func mergingAGroupLeavesOneLayer() throws {
         let state = editor()
         state.addEmptyLayer()

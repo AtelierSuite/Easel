@@ -132,12 +132,33 @@ struct Composition: Equatable, Sendable {
         return copy.id
     }
 
-    /// Moves a layer one step up (towards the top) or down the stack.
+    /// Moves a layer step by step up (towards the top) or down the stack,
+    /// as the Layers panel shows it: past a layer in its own group, into
+    /// a group it meets, at that group's near end, or out of its own group
+    /// at either end of it.
     mutating func move(_ id: Layer.ID, by offset: Int) {
-        guard let index = index(of: id) else { return }
-        let target = min(max(index + offset, 0), layers.count - 1)
-        guard target != index else { return }
-        layers.swapAt(index, target)
+        for _ in 0..<abs(offset) {
+            guard let index = index(of: id) else { return }
+            let groupID = layers[index].groupID
+            let neighbour = offset > 0 ? index + 1 : index - 1
+            guard layers.indices.contains(neighbour) else {
+                // At an end of the stack, it can still leave its group.
+                guard let group = group(groupID) else { return }
+                layers[index].groupID = group.parentID
+                continue
+            }
+            let other = layers[neighbour]
+            if other.groupID == groupID {
+                layers.swapAt(index, neighbour)
+            } else if let child = ancestors(of: other.groupID).first(where: { $0.parentID == groupID }) {
+                // Into the group beside it, one level at a time.
+                layers[index].groupID = child.id
+            } else {
+                // At the end of its own group: out into the one around it.
+                layers[index].groupID = group(groupID)?.parentID
+            }
+        }
+        normalizeGroups()
     }
 
     func canMergeDown(_ id: Layer.ID) -> Bool {
