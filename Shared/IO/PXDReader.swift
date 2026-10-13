@@ -22,7 +22,7 @@ enum PXDReader {
     }
 
     static func composition(from wrapper: FileWrapper) throws -> Composition {
-        let files = try Self.files(in: wrapper)
+        let files = try Files(wrapper)
         guard let metadata = files["metadata.info"] else { throw Failure.notPixelmator }
         let database = try Database(data: metadata)
 
@@ -108,7 +108,7 @@ enum PXDReader {
     }
 
     private static func rasterLayer(
-        _ row: LayerRow, info: [String: [UInt8]], files: [String: Data], canvas: CGSize, inherited: Inherited
+        _ row: LayerRow, info: [String: [UInt8]], files: Files, canvas: CGSize, inherited: Inherited
     ) -> Layer? {
         let image: CGImage?
         if let buffer = files["data/\(row.identifier)"] {
@@ -154,35 +154,41 @@ enum PXDReader {
 
     // MARK: - Files
 
-    private static func files(in wrapper: FileWrapper) throws -> [String: Data] {
-        if wrapper.isDirectory {
-            var files: [String: Data] = [:]
-            func walk(_ wrapper: FileWrapper, path: String) {
-                for (name, child) in wrapper.fileWrappers ?? [:] {
-                    let childPath = path.isEmpty ? name : "\(path)/\(name)"
-                    if child.isDirectory {
-                        walk(child, path: childPath)
-                    } else if let data = child.regularFileContents {
-                        files[childPath] = data
-                    }
-                }
+    /// The document's files by path, each read only when asked for: from
+    /// the package folder, or out of the ZIP without inflating the rest.
+    private struct Files {
+        private let folder: FileWrapper?
+        private let archive: Data?
+
+        init(_ wrapper: FileWrapper) throws {
+            if wrapper.isDirectory {
+                folder = wrapper
+                archive = nil
+            } else {
+                guard let data = wrapper.regularFileContents else { throw Failure.notPixelmator }
+                folder = nil
+                archive = data
             }
-            walk(wrapper, path: "")
-            return files
         }
-        guard let data = wrapper.regularFileContents else { throw Failure.notPixelmator }
-        return try ZipArchive.entries(in: data)
+
+        subscript(path: String) -> Data? {
+            if let archive { return try? ZipArchive.entry(named: path, in: archive) }
+            var node = folder
+            for name in path.split(separator: "/") { node = node?.fileWrappers?[String(name)] }
+            guard let node, node.isRegularFile else { return nil }
+            return node.regularFileContents
+        }
     }
 
     /// Pixelmator's own small preview of the whole picture.
-    private static func preview(_ files: [String: Data]) -> CGImage? {
+    private static func preview(_ files: Files) -> CGImage? {
         for name in ["QuickLook/Thumbnail.webp", "QuickLook/Thumbnail.tiff", "QuickLook/Thumbnail.png", "QuickLook/Icon.webp"] {
             if let data = files[name], let image = try? ImageCodec.decode(data) { return image }
         }
         return nil
     }
 
-    private static func previewSize(_ files: [String: Data]) -> CGSize? {
+    private static func previewSize(_ files: Files) -> CGSize? {
         preview(files).map { CGSize(width: $0.width, height: $0.height) }
     }
 

@@ -50,6 +50,22 @@ struct DocumentPreviewTests {
         #expect(image.width == 16)
     }
 
+    /// Only the preview is read: other entries, even damaged ones, are
+    /// left alone.
+    @Test func onlyTheNamedEntryIsRead() throws {
+        let png = try ImageCodec.encode(TestImages.halves(width: 16, height: 8), as: .png)
+        var archive = zip([("metadata.info", Data([1, 2, 3])), ("QuickLook/Thumbnail.png", png)])
+        // The first entry's bytes no longer match its checksum.
+        archive[30 + "metadata.info".utf8.count] ^= 0xFF
+        #expect(throws: (any Error).self) { try ZipArchive.entries(in: archive) }
+        #expect(try ZipArchive.entry(named: "QuickLook/Thumbnail.png", in: archive) == png)
+        #expect(try ZipArchive.entry(named: "QuickLook/Icon.webp", in: archive) == nil)
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).pxd")
+        try archive.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(DocumentPreview.image(at: url)?.width == 16)
+    }
+
     @Test func missingPreviewsGiveNothing() {
         #expect(DocumentPreview.image(at: URL(fileURLWithPath: "/nonexistent.easel")) == nil)
     }

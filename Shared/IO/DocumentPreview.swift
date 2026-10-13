@@ -19,10 +19,13 @@ enum DocumentPreview {
             }
             return nil
         }
-        // A single-file package, as Pixelmator Pro saves by default.
-        guard let data = try? Data(contentsOf: url), let entries = try? ZipArchive.entries(in: data) else { return nil }
+        // A single-file package, as Pixelmator Pro saves by default: only
+        // the preview is read out of it.
+        guard let archive = try? ZipArchive.mappedFile(at: url) else { return nil }
         for name in candidates {
-            if let data = entries[name], let image = try? ImageCodec.decode(data) { return image }
+            if let data = try? ZipArchive.entry(named: name, in: archive), let image = try? ImageCodec.decode(data) {
+                return image
+            }
         }
         return nil
     }

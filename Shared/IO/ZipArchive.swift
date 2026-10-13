@@ -47,7 +47,7 @@ enum ZipArchive {
 
     /// Reads every entry into a path-keyed table.
     static func entries(in data: Data) throws -> [String: Data] {
-        let bytes = [UInt8](data)
+        let bytes = zeroBased(data)
         guard !bytes.starts(with: compoundFileSignature) else { throw ZipError.protectedOrLegacyWorkbook }
         guard let directoryStart = locateCentralDirectory(bytes) else { throw ZipError.notAnArchive }
 
@@ -69,6 +69,35 @@ enum ZipArchive {
         return result
     }
 
+    /// Reads the one entry at `path`, or nil if there is none, found
+    /// through the central directory without inflating any other. Given
+    /// mapped data, only the pages that entry and the directory lie on are
+    /// read from disk.
+    static func entry(named path: String, in data: Data) throws -> Data? {
+        let bytes = zeroBased(data)
+        guard let directoryStart = locateCentralDirectory(bytes) else { throw ZipError.notAnArchive }
+        var offset = directoryStart
+        while offset + 46 <= bytes.count, readUInt32(bytes, offset) == centralDirectorySignature {
+            let record = try directoryRecord(bytes, at: offset)
+            if record.name == path {
+                guard record.flags & 1 == 0 else { throw ZipError.encryptedEntry(record.name) }
+                return try extract(bytes, record: record)
+            }
+            offset += record.length
+        }
+        return nil
+    }
+
+    /// The file at `url`, mapped rather than read, for `entry(named:in:)`.
+    static func mappedFile(at url: URL) throws -> Data {
+        try Data(contentsOf: url, options: .alwaysMapped)
+    }
+
+    /// Data whose indices start at zero, as the reading below counts them.
+    private static func zeroBased(_ data: Data) -> Data {
+        data.startIndex == 0 ? data : Data(data)
+    }
+
     /// Everything one central directory record says about a single entry.
     private struct DirectoryRecord {
         var name: String
@@ -82,7 +111,7 @@ enum ZipArchive {
         var length: Int
     }
 
-    private static func directoryRecord(_ bytes: [UInt8], at offset: Int) throws -> DirectoryRecord {
+    private static func directoryRecord(_ bytes: Data, at offset: Int) throws -> DirectoryRecord {
         let nameLength = Int(readUInt16(bytes, offset + 28))
         let extraLength = Int(readUInt16(bytes, offset + 30))
         let commentLength = Int(readUInt16(bytes, offset + 32))
@@ -125,7 +154,7 @@ enum ZipArchive {
 
     /// Locates the body of the ZIP64 extended information field inside an extra
     /// field block, returning a cursor over its 64-bit values.
-    private static func zip64ExtraField(_ bytes: [UInt8], in range: Range<Int>) -> Zip64Cursor? {
+    private static func zip64ExtraField(_ bytes: Data, in range: Range<Int>) -> Zip64Cursor? {
         var offset = range.lowerBound
         while offset + 4 <= range.upperBound {
             let identifier = readUInt16(bytes, offset)
@@ -143,7 +172,7 @@ enum ZipArchive {
         let end: Int
     }
 
-    private static func readZip64Value(_ bytes: [UInt8], at cursor: inout Zip64Cursor, name: String) throws -> Int {
+    private static func readZip64Value(_ bytes: Data, at cursor: inout Zip64Cursor, name: String) throws -> Int {
         guard cursor.offset + 8 <= cursor.end else { throw ZipError.corruptEntry(name) }
         let value = readUInt64(bytes, cursor.offset)
         guard value <= UInt64(Int.max) else { throw ZipError.corruptEntry(name) }
@@ -151,7 +180,7 @@ enum ZipArchive {
         return Int(value)
     }
 
-    private static func extract(_ bytes: [UInt8], record: DirectoryRecord) throws -> Data {
+    private static func extract(_ bytes: Data, record: DirectoryRecord) throws -> Data {
         let name = record.name
         guard record.localHeaderOffset >= 0, record.localHeaderOffset + 30 <= bytes.count,
               readUInt32(bytes, record.localHeaderOffset) == localHeaderSignature else {
@@ -192,7 +221,7 @@ enum ZipArchive {
 
     /// Scans backwards for the end-of-central-directory record, preferring the
     /// ZIP64 record behind it when the archive has one.
-    private static func locateCentralDirectory(_ bytes: [UInt8]) -> Int? {
+    private static func locateCentralDirectory(_ bytes: Data) -> Int? {
         guard bytes.count >= 22 else { return nil }
         let lowerBound = max(0, bytes.count - 22 - 65_535)
         var offset = bytes.count - 22
@@ -213,7 +242,7 @@ enum ZipArchive {
 
     /// Follows the ZIP64 locator that sits immediately before the classic
     /// end-of-central-directory record.
-    private static func zip64CentralDirectoryStart(_ bytes: [UInt8], endOfCentralDirectory: Int) -> Int? {
+    private static func zip64CentralDirectoryStart(_ bytes: Data, endOfCentralDirectory: Int) -> Int? {
         let locator = endOfCentralDirectory - 20
         guard locator >= 0, readUInt32(bytes, locator) == zip64LocatorSignature else { return nil }
 
@@ -223,7 +252,7 @@ enum ZipArchive {
         return offsetWithin(bytes, readUInt64(bytes, record + 48))
     }
 
-    private static func offsetWithin(_ bytes: [UInt8], _ value: UInt64) -> Int? {
+    private static func offsetWithin(_ bytes: Data, _ value: UInt64) -> Int? {
         guard value <= UInt64(bytes.count) else { return nil }
         return Int(value)
     }
@@ -289,18 +318,18 @@ enum ZipArchive {
 
     // MARK: - Byte access
 
-    private static func readUInt16(_ bytes: [UInt8], _ offset: Int) -> UInt16 {
+    private static func readUInt16(_ bytes: Data, _ offset: Int) -> UInt16 {
         guard offset + 2 <= bytes.count else { return 0 }
         return UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)
     }
 
-    private static func readUInt32(_ bytes: [UInt8], _ offset: Int) -> UInt32 {
+    private static func readUInt32(_ bytes: Data, _ offset: Int) -> UInt32 {
         guard offset + 4 <= bytes.count else { return 0 }
         return UInt32(bytes[offset]) | (UInt32(bytes[offset + 1]) << 8)
             | (UInt32(bytes[offset + 2]) << 16) | (UInt32(bytes[offset + 3]) << 24)
     }
 
-    private static func readUInt64(_ bytes: [UInt8], _ offset: Int) -> UInt64 {
+    private static func readUInt64(_ bytes: Data, _ offset: Int) -> UInt64 {
         guard offset + 8 <= bytes.count else { return 0 }
         return UInt64(readUInt32(bytes, offset)) | (UInt64(readUInt32(bytes, offset + 4)) << 32)
     }
