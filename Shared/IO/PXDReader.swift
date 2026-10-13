@@ -34,6 +34,8 @@ enum PXDReader {
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
         var skipped = 0
+        // Each group once, however a damaged file nests them.
+        var visited: Set<String> = [""]
 
         /// Bottom first: Pixelmator lists layers top first.
         func visit(_ parent: String, inherited: Inherited) {
@@ -52,6 +54,10 @@ enum PXDReader {
                 own.groupID = inherited.groupID
                 switch row.type {
                 case 4:
+                    guard visited.insert(row.identifier).inserted else {
+                        skipped += 1
+                        continue
+                    }
                     // A group: its own place and angle only frame its layers,
                     // which keep theirs on the canvas already.
                     var group = own

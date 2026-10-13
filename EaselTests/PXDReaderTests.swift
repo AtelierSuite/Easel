@@ -206,6 +206,21 @@ struct PXDReaderTests {
         #expect(sticker.transform.scaleX == 1)
     }
 
+    /// A damaged file whose group is its own parent still opens.
+    @Test func groupsInsideThemselvesAreReadOnce() throws {
+        let group = UUID().uuidString
+        let wrapper = try PXDBuilder(canvas: (8, 8), layers: [
+            .init(identifier: group, index: 0, type: 4, name: "Group", position: CGPoint(x: 4, y: 4),
+                  size: CGSize(width: 8, height: 8)),
+            .init(identifier: group, parent: group, index: 0, type: 4, name: "Loop", position: CGPoint(x: 4, y: 4),
+                  size: CGSize(width: 8, height: 8)),
+            .init(parent: group, index: 1, type: 1, name: "Paint", position: CGPoint(x: 4, y: 4), size: CGSize(width: 8, height: 8),
+                  pixels: bgra(0, 0, 255, width: 8, height: 8)),
+        ]).build()
+        let composition = try PXDReader.composition(from: wrapper)
+        #expect(composition.layers.filter { $0.name == "Paint" }.count == 1)
+    }
+
     @Test func textLayersBringThePreviewAlong() throws {
         let wrapper = try PXDBuilder(canvas: (8, 8), layers: [
             .init(index: 0, type: 2, name: "Title", position: CGPoint(x: 4, y: 4), size: CGSize(width: 8, height: 2)),
