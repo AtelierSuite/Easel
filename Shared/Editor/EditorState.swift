@@ -606,7 +606,8 @@ final class EditorState {
         if editsAnyMask, ![Tool.brush, .eraser, .gradient].contains(tool) {
             return String(localized: "Error.MaskTool")
         }
-        if layer.isSmartObject, !editsAnyMask, tool.paintsPixels {
+        // Liquify bends a smart object through its Liquify filter instead.
+        if layer.isSmartObject, !editsAnyMask, tool.paintsPixels, tool != .liquify {
             return String(localized: "Error.SmartObject")
         }
         if !layer.isVisible || composition.ancestors(of: layer.groupID).contains(where: { !$0.isVisible }) {
