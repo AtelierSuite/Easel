@@ -349,4 +349,18 @@ struct ColorFilterTests {
         let white = LayerFilter.varied(SIMD3(repeating: 1), shifts: shifts, saturation: 0)
         #expect(abs(white.z - 1) < 0.001)
     }
+
+    @Test func hdrToningBringsTheEndsTogether() {
+        var pixels = PixelFilters.Pixels(width: 32, height: 8)
+        for index in 0..<256 {
+            let shade: UInt8 = index % 32 < 16 ? 10 : 250
+            pixels.bytes.replaceSubrange((index * 4)..<(index * 4 + 4), with: [shade, shade, shade, 255])
+        }
+        var toned = pixels
+        LayerFilter.hdrToning(&toned, .init(radius: 40, strength: 2, gamma: 1, exposure: 0, detail: 0,
+                                            shadows: 0, highlights: 0, vibrance: 0, saturation: 0))
+        // Far from the edge, the dark half is lighter and the light half darker.
+        #expect(toned[2, 4, 0] > 10)
+        #expect(toned[29, 4, 0] < 250)
+    }
 }

@@ -953,6 +953,8 @@ S = {
 "LinkedFile.MapDetail.More %lld": ("A Displace filter uses it as its map. Still missing after this one: %lld", "置き換えフィルターがマップとして使用しています。このほかに見つからないファイル：%lld", "변위 필터가 맵으로 사용합니다. 이 파일 외에 없는 파일: %lld", "置换滤镜将其用作置换图。此后仍缺少：%lld", "置換濾鏡將其用作置換圖。此後仍缺少：%lld"),
 "LayerFilter.Variations": ("Variations", "バリエーション", "변형", "变化", "變化"),
 "LayerFilters.Midtones": ("Midtones", "中間調", "중간 영역", "中间调", "中間調"),
+"LayerFilter.HdrToning": ("HDR Toning", "HDR トーン", "HDR 토닝", "HDR 色调", "HDR 色調"),
+"LayerFilters.Detail": ("Detail", "ディテール", "세부", "细节", "細部"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

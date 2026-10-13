@@ -257,6 +257,21 @@ extension LayerFilter.Kind {
             // lighter or darker; then saturation.
             return (0..<12).map { _ in FilterParameter(labelKey: "LayerFilters.Weight", range: -100...100, defaultValue: 0, style: .signedPercent) }
                 + [FilterParameter(labelKey: "Adjust.Saturation", range: -100...100, defaultValue: 0, style: .signedPercent)]
+        case .hdrToning:
+            // Photoshop's Local Adaptation: how wide the glow round edges
+            // is and how strong; then gamma, exposure and detail; the
+            // shadows and highlights; and vibrance and saturation.
+            return [
+                FilterParameter(labelKey: "LayerFilters.Radius", range: 1...500, defaultValue: 15, style: .length),
+                FilterParameter(labelKey: "LayerFilters.Strength", range: 0.1...4, defaultValue: 0.52, style: .decimal),
+                FilterParameter(labelKey: "LayerFilters.Gamma", range: 0.1...2, defaultValue: 1, style: .decimal),
+                FilterParameter(labelKey: "LayerFilters.Exposure", range: -5...5, defaultValue: 0, style: .decimal),
+                FilterParameter(labelKey: "LayerFilters.Detail", range: -100...300, defaultValue: 30, style: .signedPercent),
+                FilterParameter(labelKey: "Adjust.Shadows", range: -100...100, defaultValue: 0, style: .signedPercent),
+                FilterParameter(labelKey: "Adjust.Highlights", range: -100...100, defaultValue: 0, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.Vibrance", range: -100...100, defaultValue: 0, style: .signedPercent),
+                FilterParameter(labelKey: "Adjust.Saturation", range: -100...100, defaultValue: 20, style: .signedPercent),
+            ]
         case .custom:
             // Five rows of five weights, then the divisor and the offset.
             let weights = [Double](repeating: 0, count: 12) + [1] + [Double](repeating: 0, count: 12)

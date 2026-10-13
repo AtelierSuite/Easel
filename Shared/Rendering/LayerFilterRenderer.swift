@@ -169,7 +169,7 @@ extension LayerFilter {
             output = applyDistort(to: input)
         case .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare:
             output = applyRender(to: input)
-        case .shadowsHighlights:
+        case .shadowsHighlights, .hdrToning:
             output = applyTone(to: input)
         }
         return output.cropped(to: extent)

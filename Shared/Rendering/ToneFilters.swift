@@ -16,8 +16,49 @@ extension LayerFilter {
             return PixelFilters.process(input) { pixels in
                 Self.shadowsHighlights(&pixels, shadow: shadow, highlight: highlight, colour: colour, contrast: contrast, clips: clips)
             }
+        case .hdrToning:
+            let settings = HDRSettings(
+                radius: value(0) * unit, strength: value(1), gamma: value(2), exposure: value(3), detail: value(4) / 100,
+                shadows: value(5) / 100, highlights: value(6) / 100, vibrance: value(7) / 100, saturation: value(8) / 100
+            )
+            return PixelFilters.process(input) { Self.hdrToning(&$0, settings) }
         default:
             return input
+        }
+    }
+
+    struct HDRSettings {
+        var radius, strength, gamma, exposure, detail, shadows, highlights, vibrance, saturation: Double
+    }
+
+    /// Local adaptation, worked on the logarithm of each shade: the broad
+    /// shading round each pixel is pressed together by the strength while
+    /// the detail on top of it is kept, or raised; then exposure, gamma,
+    /// the shadows and highlights, and the colour's vibrance and saturation.
+    static func hdrToning(_ pixels: inout PixelFilters.Pixels, _ settings: HDRSettings) {
+        let width = pixels.width, height = pixels.height
+        let shades = shades(pixels)
+        let logs = shades.map { log($0 + 0.004) }
+        let broad = softBlur(logs, width: width, height: height, sigma: max(settings.radius, 0.5))
+        var opaque = 0.0, total = 0.0
+        for index in logs.indices where pixels.bytes[index * 4 + 3] > 0 {
+            total += broad[index]
+            opaque += 1
+        }
+        let middle = opaque > 0 ? total / opaque : log(0.5)
+        let squeeze = 1 / (1 + settings.strength), lift = pow(2, settings.exposure)
+        for index in logs.indices {
+            let fine = logs[index] - broad[index]
+            var shade = exp(middle + (broad[index] - middle) * squeeze + fine * (1 + settings.detail)) - 0.004
+            shade = pow(min(max(shade * lift, 0), 1), 1 / max(settings.gamma, 0.01))
+            shade += settings.shadows * (1 - shade) * (1 - shade) * 0.5
+            shade += settings.highlights * shade * shade * 0.5
+            let original = shades[index]
+            let color = SIMD3(Double(pixels.bytes[index * 4]), Double(pixels.bytes[index * 4 + 1]), Double(pixels.bytes[index * 4 + 2]))
+            let ratio = min(max(shade / max(original, 0.004), 0), 8)
+            var result = SIMD3(repeating: shade * 255) + (color - SIMD3(repeating: original * 255)) * min(ratio, 2)
+            result = vibrant(result, vibrance: settings.vibrance, saturation: settings.saturation)
+            for channel in 0..<3 { pixels.bytes[index * 4 + channel] = PixelFilters.byte(result[channel]) }
         }
     }
 
