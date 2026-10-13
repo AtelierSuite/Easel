@@ -12,14 +12,30 @@ enum PSDSmartObjects {
     /// Photoshop does, it goes both as `SoLd` and as the older `PlLd`.
     /// `filters` are its smart filters, if it has any.
     static func blocks(for layer: Layer, id: String, filters: PSDDescriptor? = nil) -> [(key: String, data: [UInt8])] {
-        let size = layer.image.size
-        let points = layer.corners.flatMap { [$0.x, $0.y] }
+        let size = layer.smartObject?.contents.size ?? layer.image.size
+        // Where the contents' corners go, and the grid they are bent to,
+        // scaled so it spans their size, as Photoshop keeps it.
+        var quad = layer.corners
+        var mesh: [CGPoint]?
+        switch layer.canvasWarp {
+        case .perspective(let corners):
+            quad = corners
+        case .warp(let points):
+            let xs = points.map(\.x), ys = points.map(\.y)
+            let rect = CGRect(x: xs.min()!, y: ys.min()!, width: max(xs.max()! - xs.min()!, 0.0001), height: max(ys.max()! - ys.min()!, 0.0001))
+            quad = [CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY),
+                    CGPoint(x: rect.maxX, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY)]
+            mesh = points.map { CGPoint(x: ($0.x - rect.minX) / rect.width * size.width, y: ($0.y - rect.minY) / rect.height * size.height) }
+        case nil:
+            break
+        }
+        let points = quad.flatMap { [$0.x, $0.y] }
         let corners = points.map { PSDDescriptor.Value.double($0) }
         func frame(_ numerator: Int32) -> PSDDescriptor.Value {
             .descriptor(PSDDescriptor(classID: "null", items: [("numerator", .integer(numerator)), ("denominator", .integer(600))]))
         }
-        let warp = PSDDescriptor(classID: "warp", items: [
-            ("warpStyle", .enumerated(type: "warpStyle", value: "warpNone")), ("warpValue", .double(0)),
+        var warp = PSDDescriptor(classID: "warp", items: [
+            ("warpStyle", .enumerated(type: "warpStyle", value: mesh == nil ? "warpNone" : "warpCustom")), ("warpValue", .double(0)),
             ("warpPerspective", .double(0)), ("warpPerspectiveOther", .double(0)),
             ("warpRotate", .enumerated(type: "Ornt", value: "Hrzn")),
             ("bounds", .descriptor(PSDDescriptor(classID: "Rctn", items: [
@@ -28,6 +44,13 @@ enum PSDSmartObjects {
             ]))),
             ("uOrder", .integer(4)), ("vOrder", .integer(4)),
         ])
+        if let mesh {
+            warp.items.append(("customEnvelopeWarp", .descriptor(PSDDescriptor(classID: "customEnvelopeWarp", items: [
+                ("meshPoints", .objectArray(count: 16, PSDDescriptor(classID: "rationalPoint", items: [
+                    ("Hrzn", .unitFloats("#Pxl", mesh.map { Double($0.x) })), ("Vrtc", .unitFloats("#Pxl", mesh.map { Double($0.y) })),
+                ]))),
+            ]))))
+        }
         var descriptor = PSDDescriptor(classID: "null", items: [
             ("Idnt", .text(id)), ("placed", .text(id)), ("PgNm", .integer(1)), ("totalPages", .integer(1)),
             ("frameStep", frame(0)), ("duration", frame(0)), ("frameCount", .integer(1)),
@@ -113,10 +136,12 @@ enum PSDSmartObjects {
     }
 
     /// Which embedded file a layer shows, where its corners sit on the
-    /// canvas, clockwise from top left, and its smart filters, if any.
+    /// canvas, clockwise from top left, the grid it is bent to there if it
+    /// is, and its smart filters, if any.
     struct Placement {
         var id: String
         var corners: [CGPoint]
+        var mesh: [CGPoint]?
         var filters: PSDDescriptor?
     }
 
@@ -124,12 +149,29 @@ enum PSDSmartObjects {
         var reader = BigEndianReader(bytes: data)
         guard (try? reader.ascii(4)) == "soLD", (try? reader.uint32()) != nil, (try? reader.uint32()) == 16,
               let descriptor = try? PSDDescriptor.read(&reader), let id = descriptor["Idnt"]?.text else { return nil }
-        // A warped smart object is drawn in a way Easel cannot.
-        if let warp = descriptor["warp"]?.descriptor, !isUnwarped(warp) { return nil }
         let values = (descriptor["nonAffineTransform"] ?? descriptor["Trnf"])?.list?.compactMap(\.number) ?? []
         guard values.count == 8 else { return nil }
         let corners = stride(from: 0, to: 8, by: 2).map { CGPoint(x: values[$0], y: values[$0 + 1]) }
-        return Placement(id: id, corners: corners, filters: descriptor["filterFX"]?.descriptor)
+        var mesh: [CGPoint]?
+        if let warp = descriptor["warp"]?.descriptor, !isUnwarped(warp) {
+            // Photoshop's preset bends are drawn in ways Easel cannot.
+            guard warp["warpStyle"]?.enumValue == "warpCustom", let points = meshPoints(warp) else { return nil }
+            // The grid's own extent is what is placed on the corners.
+            let xs = points.map(\.x), ys = points.map(\.y)
+            let minX = xs.min()!, minY = ys.min()!
+            let width = max(xs.max()! - minX, 0.0001), height = max(ys.max()! - minY, 0.0001)
+            let placed = WarpShape.perspective(corners)
+            mesh = points.map { placed.point(($0.x - minX) / width, ($0.y - minY) / height) }
+        }
+        return Placement(id: id, corners: corners, mesh: mesh, filters: descriptor["filterFX"]?.descriptor)
+    }
+
+    /// A custom bend's sixteen points, four rows of four from the top left.
+    private static func meshPoints(_ warp: PSDDescriptor) -> [CGPoint]? {
+        guard let mesh = warp["customEnvelopeWarp"]?.descriptor?["meshPoints"]?.descriptor,
+              case .unitFloats(_, let xs) = mesh["Hrzn"], case .unitFloats(_, let ys) = mesh["Vrtc"],
+              xs.count == 16, ys.count == 16 else { return nil }
+        return zip(xs, ys).map { CGPoint(x: $0, y: $1) }
     }
 
     /// Whether a warp leaves the contents as they are: none, or a custom
@@ -138,19 +180,20 @@ enum PSDSmartObjects {
         switch warp["warpStyle"]?.enumValue {
         case nil, "warpNone": return true
         case "warpCustom": break
-        default: return abs(warp["warpValue"]?.number ?? 0) < 0.001
+        default:
+            // Presets set by several values, as the cylinder is, always bend.
+            guard warp["warpValues"] == nil else { return false }
+            return ["warpValue", "warpPerspective", "warpPerspectiveOther"].allSatisfy { abs(warp[$0]?.number ?? 0) < 0.001 }
         }
         guard let bounds = warp["bounds"]?.descriptor,
               let top = bounds["Top "]?.number, let left = bounds["Left"]?.number,
               let bottom = bounds["Btom"]?.number, let right = bounds["Rght"]?.number,
-              let mesh = warp["customEnvelopeWarp"]?.descriptor?["meshPoints"]?.descriptor,
-              case .unitFloats(_, let xs) = mesh["Hrzn"], case .unitFloats(_, let ys) = mesh["Vrtc"],
-              xs.count == 16, ys.count == 16 else { return false }
-        for index in 0..<16 {
+              let points = meshPoints(warp) else { return false }
+        for (index, point) in points.enumerated() {
             let column = Double(index % 4) / 3
             let row = Double(index / 4) / 3
-            guard abs(xs[index] - (left + (right - left) * column)) < 0.5,
-                  abs(ys[index] - (top + (bottom - top) * row)) < 0.5 else { return false }
+            guard abs(point.x - (left + (right - left) * column)) < 0.5,
+                  abs(point.y - (top + (bottom - top) * row)) < 0.5 else { return false }
         }
         return true
     }

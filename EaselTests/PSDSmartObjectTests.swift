@@ -95,8 +95,47 @@ struct PSDSmartObjectTests {
         #expect(read.smartObject?.contents.layers.first?.smartObject?.contents.layers.count == 2)
     }
 
-    @Test func perspectiveCornersAreNotPlaced() {
+    @Test func perspectiveCornersAreNotAMoveAndScale() {
         let corners = [CGPoint(x: 0, y: 0), CGPoint(x: 10, y: 2), CGPoint(x: 12, y: 12), CGPoint(x: 0, y: 10)]
         #expect(PSDSmartObjects.transform(corners: corners, size: CGSize(width: 10, height: 10)) == nil)
+    }
+
+    @Test func objectsInPerspectiveComeBackBent() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        let corners = [CGPoint(x: 20, y: 10), CGPoint(x: 60, y: 18), CGPoint(x: 64, y: 50), CGPoint(x: 16, y: 44)]
+        layer.setSmartObjectWarp(.perspective(corners))
+        let before = CompositionRenderer.render(Composition(size: size, layers: [layer]))
+        let read = try #require(try roundTrip([layer]).layers.first)
+        #expect(read.isSmartObject)
+        guard case .perspective(let back) = try #require(read.canvasWarp) else { Issue.record("not in perspective"); return }
+        for (a, b) in zip(back, corners) { #expect(hypot(a.x - b.x, a.y - b.y) < 0.01) }
+        let after = CompositionRenderer.render(Composition(size: size, layers: [read]))
+        for (x, y) in [(25, 20), (55, 25), (40, 40), (60, 45)] {
+            let p = TestImages.pixel(before, x: x, y: y), q = TestImages.pixel(after, x: x, y: y)
+            #expect(abs(Int(p.red) - Int(q.red)) < 10 && abs(Int(p.blue) - Int(q.blue)) < 10 && abs(Int(p.alpha) - Int(q.alpha)) < 10)
+        }
+    }
+
+    @Test func warpedObjectsComeBackWithTheirGrid() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        var points = WarpShape.points(warp: true, quad: [CGPoint(x: 20, y: 10), CGPoint(x: 60, y: 10), CGPoint(x: 60, y: 50), CGPoint(x: 20, y: 50)])
+        points[5].y -= 12
+        points[6].x += 9
+        layer.setSmartObjectWarp(.warp(points))
+        let read = try #require(try roundTrip([layer]).layers.first)
+        #expect(read.isSmartObject)
+        guard case .warp(let back) = try #require(read.canvasWarp) else { Issue.record("not warped"); return }
+        for (a, b) in zip(back, points) { #expect(hypot(a.x - b.x, a.y - b.y) < 0.01) }
+    }
+
+    @Test func aBendStaysWhenTheContentsChange() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        layer.setSmartObjectWarp(.perspective([CGPoint(x: 20, y: 10), CGPoint(x: 60, y: 18), CGPoint(x: 64, y: 50), CGPoint(x: 16, y: 44)]))
+        let size = layer.image.size
+        var contents = try #require(layer.smartObject?.contents)
+        contents.layers.removeLast()
+        layer.setSmartObjectContents(contents)
+        #expect(layer.image.size == size)
+        #expect(layer.smartObject?.warp != nil)
     }
 }

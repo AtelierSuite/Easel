@@ -20,6 +20,9 @@ struct PSDDescriptor: Equatable {
         /// A reference to one thing named by an enumerated value, as curves
         /// and levels name their channel: class, type and value.
         case enumReference(classID: String, type: String, value: String)
+        /// An array of `count` objects, written as one descriptor of their
+        /// values, as a custom warp's grid is. Read back as `descriptor`.
+        case objectArray(count: Int, PSDDescriptor)
         /// Kinds kept only so they can be skipped.
         case unsupported
 
@@ -234,6 +237,10 @@ struct PSDDescriptor: Equatable {
             writer.ascii(unit)
             writer.uint32(values.count)
             for value in values { writer.float64(value) }
+        case .objectArray(let count, let descriptor):
+            writer.ascii("ObAr")
+            writer.uint32(count)
+            descriptor.write(to: &writer)
         case .enumReference(let classID, let type, let value):
             writer.ascii("obj ")
             writer.uint32(1)

@@ -251,9 +251,11 @@ enum PSDReader {
             }
             if let placed = record.blocks["SoLd"].flatMap(PSDSmartObjects.placement(from:)),
                let file = embedded[placed.id], let contents = PSDSmartObjects.contents(from: file),
-               let transform = PSDSmartObjects.transform(corners: placed.corners, size: contents.size),
+               let (transform, warp) = smartPlacement(placed, size: contents.size),
                let filters = placed.filters.map({
-                   PSDSmartFilters.filters(from: $0, placement: .init(transform, size: contents.size))
+                   // Filters run on the layer's pixels, bent ones on the canvas.
+                   PSDSmartFilters.filters(from: $0, placement: warp.map { .init(LayerTransform(position: .zero), size: $0.bounds.size) }
+                                           ?? .init(transform, size: contents.size))
                }) ?? [] {
                 // A smart object: its contents whole, drawn where its
                 // corners sit. Ones Easel cannot place stay as pixels.
@@ -264,6 +266,7 @@ enum PSDReader {
                 }
                 layer.setSmartObjectContents(contents)
                 layer.transform = transform
+                if let warp { layer.setSmartObjectWarp(warp) }
                 layer.filters = filters
                 layer.mask = canvasMask.map { mask in
                     LayerMask(image: LayerImage(inLayerSpace(mask.image.cgImage, of: layer, outside: record.mask?.defaultColor ?? 255)),
@@ -280,6 +283,15 @@ enum PSDReader {
         }
         let used = Set(layers.flatMap(\.effects).compactMap(\.pattern.swatchID))
         return (layers, groups, swatches.filter { used.contains($0.id) }, records.count)
+    }
+
+    /// Where a smart object's contents go: moved, scaled and turned, or bent
+    /// on the canvas when its corners are skewed or in perspective, or it is
+    /// warped.
+    private static func smartPlacement(_ placed: PSDSmartObjects.Placement, size: CGSize) -> (LayerTransform, WarpShape?)? {
+        if let mesh = placed.mesh { return (LayerTransform(position: .zero), .warp(mesh)) }
+        if let transform = PSDSmartObjects.transform(corners: placed.corners, size: size) { return (transform, nil) }
+        return (LayerTransform(position: .zero), .perspective(placed.corners))
     }
 
     /// The `fxrp` block: two doubles, a point on the canvas.
