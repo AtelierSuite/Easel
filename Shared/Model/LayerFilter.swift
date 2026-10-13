@@ -203,8 +203,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Filters Core Image works out by mixing neighbouring pixels, which
         /// it is given shades as they look to mix.
         var mixesShades: Bool {
-            [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic, .unsharpMask,
-             .twirl, .pinch, .halftone, .lensCorrection, .blur, .blurMore, .sharpen, .sharpenMore].contains(self)
+            [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .unsharpMask,
+             .twirl, .pinch, .lensCorrection, .blur, .blurMore, .sharpen, .sharpenMore].contains(self)
         }
 
         /// Filters that are simply on or off.
@@ -212,11 +212,11 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             [.invert, .solarize, .blur, .blurMore, .average, .sharpen, .sharpenMore, .sharpenEdges, .despeckle].contains(self)
         }
 
-        var hasAngle: Bool { [.motionBlur, .emboss, .halftone].contains(self) }
+        var hasAngle: Bool { [.motionBlur, .emboss].contains(self) }
         /// Filters set with their own controls rather than one amount.
         var hasAmount: Bool {
             ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor].contains(self) && !hasNoSettings
-                && (parameters.isEmpty || self == .blackAndWhite)
+                && (parameters.isEmpty || self == .blackAndWhite || self == .emboss)
         }
         var hasCenter: Bool { [.zoomBlur, .twirl, .pinch].contains(self) }
         /// How far round each pixel a filter looks, set apart from its amount.

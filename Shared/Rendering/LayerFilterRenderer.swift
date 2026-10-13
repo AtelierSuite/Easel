@@ -182,32 +182,8 @@ extension LayerFilter {
             filter.radius = Float(min(extent.width, extent.height) / 2)
             filter.scale = Float(-amount)
             output = filter.outputImage ?? input
-        case .emboss:
-            output = emboss(input, extent: extent)
-        case .halftone:
-            let filter = CIFilter.cmykHalftone()
-            filter.inputImage = input
-            filter.center = CGPoint(x: extent.minX, y: extent.maxY)
-            filter.width = Float(max(2, amount * 30 * unit))
-            filter.angle = Float(-angle * .pi / 180)
-            filter.sharpness = 0.7
-            filter.grayComponentReplacement = 1
-            filter.underColorRemoval = 0.5
-            // Dots cover transparent pixels too; the layer keeps its shape.
-            output = (filter.outputImage ?? input)
-                .applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: input])
-        case .mosaic:
-            // Each cell the average of what it covers, transparency too:
-            // blurred across a cell, then read at the cell's middle.
-            let cell = max(1, amount * 60 * unit)
-            let average = CIFilter.boxBlur()
-            average.inputImage = input
-            average.radius = Float(cell / 2)
-            let filter = CIFilter.pixellate()
-            filter.inputImage = average.outputImage ?? input
-            filter.scale = Float(cell)
-            filter.center = CGPoint(x: extent.minX, y: extent.maxY)
-            output = filter.outputImage ?? input
+        case .emboss, .halftone, .mosaic:
+            output = applyStylize(to: input)
         }
         return output.cropped(to: extent)
     }
@@ -330,30 +306,6 @@ extension LayerFilter {
     /// Image's coordinates.
     private func point(in extent: CGRect) -> CGPoint {
         CGPoint(x: extent.minX + centerX * extent.width, y: extent.minY + (1 - centerY) * extent.height)
-    }
-
-    /// Grey relief lit from `angle`: each pixel lightened by what lies
-    /// towards the light and darkened by what lies away from it.
-    private func emboss(_ input: CIImage, extent: CGRect) -> CIImage {
-        let grey = CIFilter.colorControls()
-        grey.inputImage = input.applyingFilter("CILinearToSRGBToneCurve")
-        grey.saturation = 0
-        let radians = angle * .pi / 180
-        // Core Image's y runs up, as the light's does.
-        let light = (x: cos(radians), y: sin(radians))
-        var weights: [CGFloat] = []
-        for row in [1.0, 0, -1] {
-            for column in [-1.0, 0, 1] {
-                weights.append(CGFloat((column * light.x + row * light.y) * amount * 2))
-            }
-        }
-        let filter = CIFilter.convolutionRGB3X3()
-        filter.inputImage = grey.outputImage?.clampedToExtent()
-        filter.weights = CIVector(values: weights, count: 9)
-        filter.bias = 0.5
-        guard let relief = filter.outputImage?.cropped(to: extent) else { return input }
-        return relief.applyingFilter("CISRGBToneCurveToLinear")
-            .applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: input])
     }
 
     /// A chain of filters, run in order.

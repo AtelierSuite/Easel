@@ -779,6 +779,12 @@ S = {
 "LayerFilters.PreserveDetails": ("Preserve Details", "ディテールを保持", "세부 묘사 유지", "保留细节", "保留細節"),
 "LayerFilters.ReduceColorNoise": ("Reduce Color Noise", "カラーノイズを軽減", "색상 노이즈 감소", "减少杂色", "減少色彩雜訊"),
 "LayerFilters.SharpenDetails": ("Sharpen Details", "ディテールをシャープに", "세부 묘사 선명하게", "锐化细节", "銳利化細節"),
+"LayerFilters.Height": ("Height", "高さ", "높이", "高度", "高度"),
+"LayerFilters.MaximumRadius": ("Maximum Radius", "最大半径", "최대 반경", "最大半径", "最大強度"),
+"LayerFilters.Screen1": ("Screen Angle 1", "スクリーン角度 1", "스크린 각도 1", "网角 1", "網角 1"),
+"LayerFilters.Screen2": ("Screen Angle 2", "スクリーン角度 2", "스크린 각도 2", "网角 2", "網角 2"),
+"LayerFilters.Screen3": ("Screen Angle 3", "スクリーン角度 3", "스크린 각도 3", "网角 3", "網角 3"),
+"LayerFilters.Screen4": ("Screen Angle 4", "スクリーン角度 4", "스크린 각도 4", "网角 4", "網角 4"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

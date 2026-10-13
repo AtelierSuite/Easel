@@ -224,13 +224,16 @@ struct PSDSmartObjectTests {
 
     @Test(arguments: [
         "boxBlur", "blur", "blurMore", "average", "surfaceBlur", "smartBlur", "sharpen", "sharpenMore", "sharpenEdges",
-        "median", "minimum", "maximum", "dustAndScratches", "addNoise", "reduceNoise", "despeckle",
+        "median", "minimum", "maximum", "dustAndScratches", "addNoise", "reduceNoise", "despeckle", "halftone", "emboss",
     ])
     func photoshopsFiltersComeBack(_ kind: String) throws {
         var filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)
         // Photoshop keeps this radius in whole pixels: two, on a layer
         // forty across.
         if filter.kind == .dustAndScratches { filter.values = [50, 4] }
+        // These too, in whole pixels Photoshop allows.
+        if filter.kind == .halftone { filter.values = [250, 108, 162, 90, 45] }
+        if filter.kind == .emboss { filter.values = [75] }
         var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30), scaleX: 2, scaleY: 2))
         layer.filters = [filter]
         let read = try #require(try roundTrip([layer]).layers.first)

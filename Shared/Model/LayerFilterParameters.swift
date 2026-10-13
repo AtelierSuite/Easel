@@ -84,6 +84,12 @@ extension LayerFilter.Kind {
                 FilterParameter(labelKey: "LayerFilters.ReduceColorNoise", range: 0...100, defaultValue: 45, style: .signedPercent),
                 FilterParameter(labelKey: "LayerFilters.SharpenDetails", range: 0...100, defaultValue: 25, style: .signedPercent),
             ]
+        case .emboss:
+            return [FilterParameter(labelKey: "LayerFilters.Height", range: 0.5...30, defaultValue: 3, style: .length)]
+        case .halftone:
+            return [FilterParameter(labelKey: "LayerFilters.MaximumRadius", range: 1...130, defaultValue: 8, style: .length)]
+                + (1...4).map { FilterParameter(labelKey: "LayerFilters.Screen\($0)", range: -360...360,
+                                                defaultValue: [108.0, 162, 90, 45][$0 - 1], style: .degrees) }
         case .addNoise:
             return [
                 FilterParameter(labelKey: "LayerFilters.Amount", range: 0.1...400, defaultValue: 12.5, style: .signedPercent),
@@ -121,6 +127,11 @@ extension LayerFilter {
     /// Setting `index` of `kind.parameters`, or its default.
     func value(_ index: Int) -> Double {
         if let values, values.indices.contains(index) { return values[index] }
+        // Halftones made before their screens were set by angle: their dot
+        // width and one angle.
+        if kind == .halftone, values == nil {
+            return [amount * 30 / 2.squareRoot(), angle + 63, angle + 117, angle + 45, angle][min(index, 4)]
+        }
         let parameters = kind.parameters
         return parameters.indices.contains(index) ? parameters[index].defaultValue : 0
     }

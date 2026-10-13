@@ -110,8 +110,14 @@ enum PSDSmartFilters {
         case "Embs":
             guard let amount = number("Amnt") else { return nil }
             return make(.emboss) {
-                $0.amount = amount / 200 * (number("Hght") ?? 3) / 3
+                $0.amount = amount / 200
                 $0.angle = (number("Angl") ?? 135) + placement.turn
+                $0.setValue((number("Hght") ?? 3) / unit, at: 0)
+            }
+        case "ClrH":
+            guard let radius = number("Rds ") else { return nil }
+            return make(.halftone) { filter in
+                filter.values = [radius / unit] + ["Ang1", "Ang2", "Ang3", "Ang4"].map { (number($0) ?? 45) + placement.turn }
             }
         case "Msc ":
             guard let size = number("ClSz") else { return nil }
@@ -383,8 +389,15 @@ enum PSDSmartFilters {
             return entry("Pinch...", "Pnch", [("Amnt", .integer(Int32(min(max(filter.amount * 100, -100), 100).rounded())))])
         case .emboss:
             return entry("Emboss...", "Embs", [
-                ("Angl", .integer(Int32((filter.angle - placement.turn).rounded()))), ("Hght", .integer(3)),
+                ("Angl", .integer(Int32((filter.angle - placement.turn).rounded()))),
+                ("Hght", .integer(Int32(min(max((filter.value(0) * unit).rounded(), 1), 100)))),
                 ("Amnt", .integer(Int32(min(max(filter.amount * 200, 1), 500).rounded()))),
+            ])
+        case .halftone:
+            func angle(_ index: Int) -> PSDDescriptor.Value { .integer(Int32((filter.value(index) - placement.turn).rounded())) }
+            return entry("Color Halftone...", "ClrH", [
+                ("Rds ", .integer(Int32(min(max((filter.value(0) * unit).rounded(), 4), 127)))),
+                ("Ang1", angle(1)), ("Ang2", angle(2)), ("Ang3", angle(3)), ("Ang4", angle(4)),
             ])
         case .mosaic:
             return entry("Mosaic...", "Msc ", [("ClSz", .unit("#Pxl", max(2, filter.amount * 60 * unit)))])
