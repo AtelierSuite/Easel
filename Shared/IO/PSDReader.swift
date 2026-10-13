@@ -56,7 +56,7 @@ enum PSDReader {
         }
         guard reader.seek(to: resourcesEnd) else { throw Failure.damaged }
 
-        let layerSectionLength = isLarge ? Int(try reader.uint64()) : Int(try reader.uint32())
+        let layerSectionLength = try reader.length(long: isLarge)
         let layerSectionEnd = reader.offset + layerSectionLength
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
@@ -171,7 +171,7 @@ enum PSDReader {
     private static func readLayers(
         _ reader: inout BigEndianReader, isLarge: Bool, format: PixelFormat, canvas: CGSize, sectionEnd: Int
     ) throws -> (layers: [Layer], groups: [LayerGroup], patterns: [PatternSwatch], recordCount: Int, extras: LayerExtras) {
-        let infoLength = isLarge ? Int(try reader.uint64()) : Int(try reader.uint32())
+        let infoLength = try reader.length(long: isLarge)
         let infoStart = reader.offset
         let infoEnd = infoStart + infoLength
         // Smart objects' contents and pattern tiles come after all the
@@ -366,7 +366,7 @@ enum PSDReader {
             let signature = try reader.ascii(4)
             guard signature == "8BIM" || signature == "8B64" else { break }
             let key = try reader.ascii(4)
-            let length = isLarge && longKeys.contains(key) ? Int(try reader.uint64()) : Int(try reader.uint32())
+            guard let length = try? reader.length(long: isLarge && longKeys.contains(key)) else { break }
             let start = reader.offset
             if ["lnk2", "lnk3", "lnkD", "lnkE"].contains(key) {
                 let found = PSDSmartObjects.embeddedFiles(from: try reader.bytes(length))
@@ -401,7 +401,7 @@ enum PSDReader {
         let channels = Int(try reader.uint16())
         for _ in 0..<channels {
             let id = Int(try reader.int16())
-            let length = isLarge ? Int(try reader.uint64()) : Int(try reader.uint32())
+            let length = try reader.length(long: isLarge)
             record.channels.append(ChannelInfo(id: id, length: length))
         }
         guard try reader.ascii(4) == "8BIM" else { throw Failure.damaged }
@@ -443,7 +443,7 @@ enum PSDReader {
             let signature = try reader.ascii(4)
             guard signature == "8BIM" || signature == "8B64" else { break }
             let key = try reader.ascii(4)
-            let length = isLarge && longKeys.contains(key) ? Int(try reader.uint64()) : Int(try reader.uint32())
+            guard let length = try? reader.length(long: isLarge && longKeys.contains(key)) else { break }
             let blockEnd = reader.offset + length
             switch key {
             case "luni":
@@ -802,12 +802,12 @@ struct BigEndianReader {
     }
 
     mutating func skip(_ count: Int) throws {
-        guard count >= 0, offset + count <= data.count else { throw PSDReader.Failure.damaged }
+        guard count >= 0, count <= data.count - offset else { throw PSDReader.Failure.damaged }
         offset += count
     }
 
     mutating func bytes(_ count: Int) throws -> [UInt8] {
-        guard count >= 0, offset + count <= data.count else { throw PSDReader.Failure.damaged }
+        guard count >= 0, count <= data.count - offset else { throw PSDReader.Failure.damaged }
         defer { offset += count }
         return Array(data[offset..<(offset + count)])
     }
@@ -830,6 +830,14 @@ struct BigEndianReader {
 
     mutating func uint64() throws -> UInt64 {
         UInt64(try uint32()) << 32 | UInt64(try uint32())
+    }
+
+    /// A length in eight bytes, or four when not `long`, that fits in
+    /// what is left, so it can be added to the offset.
+    mutating func length(long: Bool = true) throws -> Int {
+        let value = long ? try uint64() : UInt64(try uint32())
+        guard value <= UInt64(remaining) else { throw PSDReader.Failure.damaged }
+        return Int(value)
     }
 
     mutating func ascii(_ count: Int) throws -> String {

@@ -133,7 +133,7 @@ enum PSDSmartObjects {
         var reader = BigEndianReader(bytes: data)
         var files: [String: [UInt8]] = [:]
         var links: [String: String] = [:]
-        while reader.remaining >= 8, let length = try? Int(reader.uint64()), length > 0 {
+        while reader.remaining >= 8, let length = try? reader.length(), length > 0 {
             let end = reader.offset + length
             switch try? entry(&reader) {
             case .file(let id, let contents): files[id] = contents
@@ -161,7 +161,8 @@ enum PSDSmartObjects {
         while units.last == 0 { units.removeLast() }
         let name = String(decoding: units, as: UTF16.self)
         try reader.skip(8) // Type and creator.
-        let size = Int(try reader.uint64())
+        // A linked file's size, which need not be kept here.
+        let size = Int(clamping: try reader.uint64())
         if try reader.uint8() != 0 {
             _ = try reader.uint32()
             _ = try PSDDescriptor.read(&reader)

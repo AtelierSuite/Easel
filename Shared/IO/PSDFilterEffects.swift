@@ -19,7 +19,7 @@ enum PSDFilterEffects {
         var reader = BigEndianReader(bytes: data)
         guard let version = try? reader.uint32(), (1...3).contains(version) else { return [:] }
         var masks: [String: Mask] = [:]
-        while reader.remaining > 8, let length = try? Int(reader.uint64()), length > 0 {
+        while reader.remaining > 8, let length = try? reader.length(), length > 0 {
             let end = reader.offset + length
             if let (id, mask) = try? entry(&reader, end: end) { masks[id] = mask }
             guard reader.seek(to: end + (4 - length % 4) % 4) || reader.seek(to: end) else { break }
@@ -36,12 +36,12 @@ enum PSDFilterEffects {
         let channels = Int(try reader.uint32())
         // The colours, transparency and so on, skipped.
         for _ in 0..<(channels + 2) {
-            if try reader.uint32() != 0 { try reader.skip(Int(try reader.uint64())) }
+            if try reader.uint32() != 0 { try reader.skip(try reader.length()) }
         }
         guard reader.offset < end, try reader.uint8() != 0 else { return nil }
         let top = Int(try reader.int32()), left = Int(try reader.int32())
         let bottom = Int(try reader.int32()), right = Int(try reader.int32())
-        let length = Int(try reader.uint64())
+        let length = try reader.length()
         let compression = try reader.uint16()
         let width = right - left, height = bottom - top
         guard width > 0, height > 0,

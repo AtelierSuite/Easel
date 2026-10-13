@@ -225,6 +225,25 @@ struct PSDReaderTests {
         #expect(PSDReader.unpackBits(packed, expected: 7) == [1, 2, 3, 9, 9, 9, 9])
     }
 
+    /// Lengths past what the file holds, even past what an Int holds, are
+    /// damage rather than a crash.
+    @Test func hugeLengthsAreRefused() throws {
+        var reader = BigEndianReader(bytes: [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 1])
+        #expect(throws: PSDReader.Failure.self) { try reader.length() }
+        var skipping = BigEndianReader(bytes: [1, 2])
+        try skipping.skip(1)
+        #expect(throws: PSDReader.Failure.self) { try skipping.skip(Int.max) }
+        #expect(throws: PSDReader.Failure.self) { try skipping.bytes(Int.max) }
+
+        // A large document whose layer section claims eight bytes' worth.
+        var psb: [UInt8] = Array("8BPS".utf8) + [0, 2] + [UInt8](repeating: 0, count: 6)
+        psb += [0, 4, 0, 0, 0, 4, 0, 0, 0, 4, 0, 8, 0, 3] + [0, 0, 0, 0] + [0, 0, 0, 0]
+        psb += [UInt8](repeating: 0xFF, count: 8) + [0, 0, 0, 0]
+        #expect(throws: (any Error).self) { try PSDReader.composition(from: Data(psb)) }
+        let embedded = [UInt8](repeating: 0xFF, count: 8) + Array("liFD".utf8)
+        #expect(PSDSmartObjects.embeddedFiles(from: embedded).files.isEmpty)
+    }
+
     /// Settings nested past any depth Photoshop uses are damage, not a
     /// stack overflow.
     @Test func deeplyNestedDescriptorsAreRefused() throws {
