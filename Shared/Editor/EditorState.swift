@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// A file that must be saved as a copy before it is edited: whether it still
+/// has to be, and how to save the copy, reporting whether one was saved.
+struct CopyBeforeEditing {
+    var isRequired: () -> Bool
+    var save: (_ completion: @escaping (_ saved: Bool) -> Void) -> Void
+}
+
 /// Everything about an editing session that is not part of the picture
 /// itself: the tool in hand, its settings, the selection, the view onto the
 /// canvas, and edits still being worked out.
@@ -160,6 +167,13 @@ final class EditorState {
     var shapeBuilder: ShapeBuilderSession?
     /// The smart object layer whose contents are open for editing.
     var editingSmartObject: SmartObjectEditing?
+    /// An edit waiting on the file being saved as a copy first, which the
+    /// person is asked about; see `copyBeforeEditing`.
+    var heldEdit: (() -> Void)? {
+        didSet { isAskingToCopy = heldEdit != nil }
+    }
+    /// Whether the person is being asked about the held edit.
+    var isAskingToCopy = false
     @ObservationIgnored var vectorDrag: VectorDrag?
     var draftSelection: Selection?
     var draftShape: ShapeSpec?
@@ -234,6 +248,9 @@ final class EditorState {
     /// one the undo took away. Those are echoes, not changes.
     @ObservationIgnored private var recentlyPublished: [Composition] = []
     @ObservationIgnored private var hasSizedBrushes = false
+    /// Set by a host whose file is never edited in place: until a copy is
+    /// saved, each edit is held back and the person asked first.
+    @ObservationIgnored var copyBeforeEditing: CopyBeforeEditing?
     /// Told of every change made here, which is what undo records. Changes
     /// the host makes — such as a document reading itself back after its
     /// first save — are not edits and are not undoable.
@@ -299,6 +316,10 @@ final class EditorState {
 
     /// Replaces the picture and passes it to the host.
     func write(_ composition: Composition) {
+        if holdsEdits {
+            heldEdit = { [weak self] in self?.write(composition) }
+            return
+        }
         let previous = self.composition
         self.composition = composition
         recentlyPublished.append(composition)
@@ -356,6 +377,33 @@ final class EditorState {
         self.composition = composition
         if activeLayerID.flatMap({ composition.index(of: $0) }) == nil {
             activeLayerID = composition.layers.last?.id
+        }
+    }
+
+    /// Whether an edit has to wait for the file to be saved as a copy.
+    var holdsEdits: Bool { copyBeforeEditing?.isRequired() == true }
+
+    /// Saves the copy the held edit is waiting on, then makes the edit, or
+    /// drops it if no copy was saved.
+    func saveCopyForHeldEdit() {
+        guard let copyBeforeEditing else { return }
+        let save = {
+            copyBeforeEditing.save { [weak self] saved in
+                guard let self else { return }
+                let edit = heldEdit
+                heldEdit = nil
+                if saved { edit?() }
+            }
+        }
+        guard presentedPanel != nil else {
+            save()
+            return
+        }
+        // A panel's sheet goes down first; nothing else can come up over it.
+        presentedPanel = nil
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            save()
         }
     }
 

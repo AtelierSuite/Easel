@@ -5390,37 +5390,37 @@
         }
       }
     },
-    "CopyToEasel.Close": {
+    "CopyToEasel.CancelEdit": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Close"
+            "value": "Cancel Edit"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "閉じる"
+            "value": "編集をキャンセル"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "닫기"
+            "value": "편집 취소"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "关闭"
+            "value": "取消编辑"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "關閉"
+            "value": "取消編輯"
           }
         }
       }
@@ -5460,37 +5460,37 @@
         }
       }
     },
-    "CopyToEasel.Save": {
+    "CopyToEasel.SaveAndEdit": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save Copy"
+            "value": "Save Copy and Edit"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "コピーを保存"
+            "value": "コピーを保存して編集"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "사본 저장"
+            "value": "사본 저장 후 편집"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "存储副本"
+            "value": "存储副本并编辑"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "儲存副本"
+            "value": "儲存副本並編輯"
           }
         }
       }

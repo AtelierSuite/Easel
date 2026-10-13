@@ -913,6 +913,11 @@ extension EditorState {
     /// Opens the active smart object's contents to edit.
     func editSmartObjectContents() {
         guard let layer = activeLayer, layer.isSmartObject else { return }
+        // What changes inside comes back as an edit, so ask before opening.
+        guard !holdsEdits else {
+            heldEdit = { [weak self] in self?.editSmartObjectContents() }
+            return
+        }
         let editing = SmartObjectEditing(layerID: layer.id)
         guard presentedPanel != nil else {
             editingSmartObject = editing

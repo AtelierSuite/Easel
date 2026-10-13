@@ -8,55 +8,50 @@ struct DocumentView: View {
     @State private var errorMessage: String?
     @State private var savedToPhotos = false
     @State private var isExportingWithPresets = false
-    @State private var isAskingToCopy = false
     @State private var isSavingCopy = false
     @State private var hasCopy = false
-    @Environment(\.dismiss) private var dismiss
+    /// Told whether the copy being saved was, so the edit waiting on it is
+    /// made or dropped.
+    @State private var copySaved: ((Bool) -> Void)?
 
     private var name: String {
         fileURL?.deletingPathExtension().lastPathComponent ?? String(localized: "Export.DefaultName")
     }
 
     /// A Photoshop or Pixelmator Pro file, not yet saved as an Easel copy,
-    /// which stays untouched until it is.
-    private var requiresCopy: Bool {
-        !hasCopy && fileURL.map(DocumentConversion.requiresCopy) == true
+    /// which stays untouched until it is: it opens to look at, and the first
+    /// edit asks for the copy.
+    private var copyBeforeEditing: CopyBeforeEditing? {
+        guard fileURL.map(DocumentConversion.requiresCopy) == true else { return nil }
+        return CopyBeforeEditing(isRequired: { !hasCopy }) { completion in
+            copySaved = completion
+            isSavingCopy = true
+        }
     }
 
     var body: some View {
-        EditorView(composition: $document.composition) { exportMenu }
-            .disabled(requiresCopy)
+        EditorView(composition: $document.composition, copyBeforeEditing: copyBeforeEditing) { exportMenu }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarTitleMenu { titleMenu }
             .alert(
                 "Alert.Error.Title",
                 isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })
             ) {
-                Button("Common.OK", role: .cancel) {
-                    errorMessage = nil
-                    if requiresCopy { isAskingToCopy = true }
-                }
+                Button("Common.OK", role: .cancel) { errorMessage = nil }
             } message: {
                 Text(errorMessage ?? "")
-            }
-            .alert("CopyToEasel.Title", isPresented: $isAskingToCopy) {
-                Button("CopyToEasel.Save") { isSavingCopy = true }
-                Button("CopyToEasel.Close", role: .cancel) { dismiss() }
-            } message: {
-                Text("CopyToEasel.Message")
             }
             .fileExporter(
                 isPresented: $isSavingCopy, document: document, contentTypes: [.easelImage], defaultFilename: name
             ) { result in
                 switch result {
                 case .success(let url): adoptCopy(at: url)
-                case .failure(let error): errorMessage = error.localizedDescription
+                case .failure(let error):
+                    errorMessage = error.localizedDescription
+                    finishSavingCopy(saved: false)
                 }
             } onCancellation: {
-                isAskingToCopy = true
-            }
-            .onAppear {
-                if requiresCopy { isAskingToCopy = true }
+                finishSavingCopy(saved: false)
             }
             .sensoryFeedback(.success, trigger: savedToPhotos)
             .sheet(isPresented: $isExportingWithPresets) {
@@ -70,16 +65,26 @@ struct DocumentView: View {
     /// access is held for as long as the app runs, through the document's
     /// last save as it closes.
     private func adoptCopy(at url: URL) {
-        guard let fileURL else { return }
+        guard let fileURL else {
+            finishSavingCopy(saved: false)
+            return
+        }
         _ = url.startAccessingSecurityScopedResource()
         Task {
             do {
                 try await DocumentConversion.adopt(copyAt: url, of: fileURL)
                 hasCopy = true
+                finishSavingCopy(saved: true)
             } catch {
                 errorMessage = error.localizedDescription
+                finishSavingCopy(saved: false)
             }
         }
+    }
+
+    private func finishSavingCopy(saved: Bool) {
+        copySaved?(saved)
+        copySaved = nil
     }
 
     private var exportMenu: some View {

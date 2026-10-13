@@ -10,9 +10,12 @@ import UniformTypeIdentifiers
 /// Hosts — a document window, a photo opened from the library, the Photos
 /// editing extension — supply the picture and add their own toolbar items.
 /// A host's own action, such as sharing, goes in `actions`, grouped with the
-/// "…" menu.
+/// "…" menu. A host whose file is never edited in place supplies
+/// `copyBeforeEditing`, and the person is asked to save a copy at their
+/// first edit.
 struct EditorView<Actions: View>: View {
     @Binding var composition: Composition
+    private let copyBeforeEditing: CopyBeforeEditing?
     private let actions: Actions
     @State private var state = EditorState()
     @State private var history = CompositionHistory()
@@ -24,8 +27,12 @@ struct EditorView<Actions: View>: View {
     @State private var panelDetent: PresentationDetent = .medium
     @State private var bottomToolbarInset: CGFloat = 0
 
-    init(composition: Binding<Composition>, @ViewBuilder actions: () -> Actions) {
+    init(
+        composition: Binding<Composition>, copyBeforeEditing: CopyBeforeEditing? = nil,
+        @ViewBuilder actions: () -> Actions
+    ) {
         _composition = composition
+        self.copyBeforeEditing = copyBeforeEditing
         self.actions = actions()
     }
 
@@ -106,6 +113,7 @@ struct EditorView<Actions: View>: View {
                 // A sheet covers the editor, so what goes wrong in a panel
                 // is told from the panel.
                 .errorAlert(state, isActive: true)
+                .copyBeforeEditingAlert(state, isActive: true)
             }
             .toolbar { editingToolbar }
             .fileImporter(
@@ -127,6 +135,7 @@ struct EditorView<Actions: View>: View {
             }
             .sensoryFeedback(.selection, trigger: state.tool)
             .errorAlert(state, isActive: !isCompact || state.presentedPanel == nil)
+            .copyBeforeEditingAlert(state, isActive: !isCompact || state.presentedPanel == nil)
             .selectionEditAlert(state)
             .fullScreenCover(item: $state.editingSmartObject) { editing in
                 SmartObjectEditor(state: state, layerID: editing.layerID)
@@ -141,6 +150,7 @@ struct EditorView<Actions: View>: View {
     private func attach() {
         let binding = $composition
         state.attach(to: composition) { binding.wrappedValue = $0 }
+        state.copyBeforeEditing = copyBeforeEditing
         let state = state
         let history = history
         state.edited = { history.record(from: $0, to: $1, tool: state.tool) }
@@ -417,6 +427,23 @@ extension View {
             Button("Common.OK", role: .cancel) { state.errorMessage = nil }
         } message: {
             Text(state.errorMessage ?? "")
+        }
+    }
+
+    /// Asks, while an edit is held, whether to save the file as a copy and
+    /// make the edit there, shown from this view while `isActive`.
+    func copyBeforeEditingAlert(_ state: EditorState, isActive: Bool) -> some View {
+        alert(
+            "CopyToEasel.Title",
+            isPresented: Binding(
+                get: { isActive && state.isAskingToCopy },
+                set: { if !$0 { state.isAskingToCopy = false } }
+            )
+        ) {
+            Button("CopyToEasel.SaveAndEdit") { state.saveCopyForHeldEdit() }
+            Button("CopyToEasel.CancelEdit", role: .cancel) { state.heldEdit = nil }
+        } message: {
+            Text("CopyToEasel.Message")
         }
     }
 }
