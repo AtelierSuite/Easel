@@ -818,8 +818,12 @@ final class EditorState {
             }
             if let group = groupMoveOrigin {
                 var dx = last.location.x - group.start.x, dy = last.location.y - group.start.y
+                let indices = Dictionary(
+                    composition.layers.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first }
+                )
                 let bounds = group.layers.reduce(CGRect.null) { bounds, member in
-                    guard var layer = composition[member.0] else { return bounds }
+                    guard let index = indices[member.0] else { return bounds }
+                    var layer = composition.layers[index]
                     layer.transform = member.1
                     return bounds.union(layer.bounds)
                 }
@@ -830,10 +834,12 @@ final class EditorState {
                 }
                 update { composition in
                     for (id, transform) in group.layers {
+                        guard let index = indices[id], composition.layers.indices.contains(index),
+                              composition.layers[index].id == id else { continue }
                         var moved = transform
                         moved.position.x += dx
                         moved.position.y += dy
-                        composition[id]?.transform = moved
+                        composition.layers[index].transform = moved
                     }
                 }
                 return

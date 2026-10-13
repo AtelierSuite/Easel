@@ -189,6 +189,15 @@ struct EditScope: Equatable {
             return
         }
         let changed = zip(old.layers, new.layers).filter { $0 != $1 }
+        if changed.count > 1, changed.allSatisfy({ before, after in
+            var moved = before
+            moved.transform = after.transform
+            return moved == after
+        }) {
+            // A group being dragged: its layers move together, frame by frame.
+            self.init(layerID: changed[0].1.id, kind: .transform)
+            return
+        }
         guard changed.count == 1, let (before, after) = changed.first else {
             self.init(layerID: nil, kind: .other)
             return

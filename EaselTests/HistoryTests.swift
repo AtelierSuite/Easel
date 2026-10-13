@@ -25,6 +25,19 @@ struct HistoryTests {
         history.undo()
         #expect(published.layers[0].transform.position == start.layers[0].transform.position)
     }
+
+    @Test func aGroupDragCoalescesLikeALayerDrag() {
+        var before = Composition.blank(size: CGSize(width: 10, height: 10))
+        before.layers.append(before.emptyLayer())
+        var after = before
+        for index in after.layers.indices { after.layers[index].transform.position.x += 3 }
+        let scope = EditScope(from: before, to: after)
+        #expect(scope.kind == .transform)
+        #expect(scope.coalesces)
+        // Anything besides placement is a step of its own.
+        after.layers[1].opacity = 0.5
+        #expect(!EditScope(from: before, to: after).coalesces)
+    }
 }
 
 @MainActor
