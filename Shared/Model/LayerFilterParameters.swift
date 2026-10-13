@@ -149,6 +149,67 @@ extension LayerFilter.Kind {
                 "LayerFilters.ShortLines", "LayerFilters.MediumLines", "LayerFilters.LongLines",
                 "LayerFilters.ShortStrokes", "LayerFilters.MediumStrokes", "LayerFilters.LongStrokes",
             ]))]
+        case .spherize:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Amount", range: -100...100, defaultValue: 100, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.Mode", range: 0...2, defaultValue: 0,
+                                style: .choice(["LayerFilters.Normal", "LayerFilters.HorizontalOnly", "LayerFilters.VerticalOnly"])),
+            ]
+        case .polarCoordinates:
+            return [FilterParameter(labelKey: "LayerFilters.Conversion", range: 0...1, defaultValue: 0,
+                                    style: .choice(["LayerFilters.RectangularToPolar", "LayerFilters.PolarToRectangular"]))]
+        case .shear:
+            return [FilterParameter(labelKey: "LayerFilters.Edges", range: 0...1, defaultValue: 0,
+                                    style: .choice(["LayerFilters.WrapAround", "LayerFilters.RepeatEdges"]))]
+        case .zigzag:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Amount", range: -100...100, defaultValue: 10, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.Ridges", range: 1...20, defaultValue: 5, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.Style", range: 0...2, defaultValue: 2, style: .choice([
+                    "LayerFilters.AroundCenter", "LayerFilters.OutFromCenter", "LayerFilters.PondRipples",
+                ])),
+            ]
+        case .ripple:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Amount", range: -999...999, defaultValue: 100, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.Size", range: 0...2, defaultValue: 1,
+                                style: .choice(["LayerFilters.Small", "LayerFilters.Medium", "LayerFilters.Large"])),
+            ]
+        case .wave:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Generators", range: 1...64, defaultValue: 5, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.MinimumWavelength", range: 1...999, defaultValue: 10, style: .length),
+                FilterParameter(labelKey: "LayerFilters.MaximumWavelength", range: 1...999, defaultValue: 120, style: .length),
+                FilterParameter(labelKey: "LayerFilters.MinimumAmplitude", range: 1...999, defaultValue: 5, style: .length),
+                FilterParameter(labelKey: "LayerFilters.MaximumAmplitude", range: 1...999, defaultValue: 35, style: .length),
+                FilterParameter(labelKey: "LayerFilters.HorizontalScale", range: 1...100, defaultValue: 100, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.VerticalScale", range: 1...100, defaultValue: 100, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.Type", range: 0...2, defaultValue: 0,
+                                style: .choice(["LayerFilters.Sine", "LayerFilters.Triangle", "LayerFilters.Square"])),
+                FilterParameter(labelKey: "LayerFilters.Edges", range: 0...1, defaultValue: 1,
+                                style: .choice(["LayerFilters.WrapAround", "LayerFilters.RepeatEdges"])),
+            ]
+        case .spinBlur:
+            return [FilterParameter(labelKey: "LayerFilters.Angle", range: 1...100, defaultValue: 10, style: .degrees)]
+        case .deInterlace:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Eliminate", range: 0...1, defaultValue: 0,
+                                style: .choice(["LayerFilters.OddLines", "LayerFilters.EvenLines"])),
+                FilterParameter(labelKey: "LayerFilters.CreateNewFields", range: 0...1, defaultValue: 1,
+                                style: .choice(["LayerFilters.Duplication", "LayerFilters.Interpolation"])),
+            ]
+        case .fibers:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Variance", range: 1...64, defaultValue: 16, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.Strength", range: 1...64, defaultValue: 4, style: .integer),
+            ]
+        case .lensFlare:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Brightness", range: 10...300, defaultValue: 100, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.LensType", range: 0...3, defaultValue: 0, style: .choice([
+                    "LayerFilters.ZoomLens", "LayerFilters.Prime35", "LayerFilters.Prime105", "LayerFilters.MoviePrime",
+                ])),
+            ]
         case .custom:
             // Five rows of five weights, then the divisor and the offset.
             let weights = [Double](repeating: 0, count: 12) + [1] + [Double](repeating: 0, count: 12)
@@ -164,10 +225,10 @@ extension LayerFilter.Kind {
     }
 
     /// Filters with a colour of their own to set.
-    var hasColor: Bool { self == .photoFilter || self == .blackAndWhite || self == .tiles }
+    var hasColor: Bool { [.photoFilter, .blackAndWhite, .tiles, .clouds, .differenceClouds, .fibers].contains(self) }
 
     /// Filters that show the background colour.
-    var hasBackgroundColor: Bool { self == .tiles || self == .pointillize }
+    var hasBackgroundColor: Bool { [.tiles, .pointillize, .clouds, .differenceClouds, .fibers].contains(self) }
 
     var defaultColor: RGBAColor? {
         switch self {

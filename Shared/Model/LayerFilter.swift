@@ -92,6 +92,31 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case pointillize
         /// Dots, lines or strokes of pure colour.
         case mezzotint
+        /// Bulged out, or pinched in, as if seen through a glass sphere.
+        case spherize
+        /// Rows turned into rings, or rings back into rows.
+        case polarCoordinates
+        /// Rows pushed across along a curve.
+        case shear
+        /// Ripples about the middle, as on a pond.
+        case zigzag
+        /// Small waves, as on water.
+        case ripple
+        /// Waves of one's own setting, many laid together.
+        case wave
+        /// Blurred round and round a centre.
+        case spinBlur
+        /// Every other row of a video frame, filled from its neighbours.
+        case deInterlace
+        /// Colours a television signal cannot carry, brought in.
+        case ntscColors
+        /// Clouds from the foreground colour to the background colour, or
+        /// their difference from the picture.
+        case clouds, differenceClouds
+        /// Fibres woven from the foreground and background colours.
+        case fibers
+        /// Light caught in a lens, shining into the picture.
+        case lensFlare
 
         var id: String { rawValue }
 
@@ -104,9 +129,11 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur, .blur, .blurMore, .average],
             [.noiseReduction, .reduceNoise, .despeckle, .addNoise, .median, .dustAndScratches, .minimum, .maximum],
             [.unsharpMask, .sharpen, .sharpenMore, .sharpenEdges, .highPass, .lensCorrection],
-            [.twirl, .pinch, .offset],
+            [.twirl, .pinch, .spherize, .zigzag, .ripple, .wave, .shear, .polarCoordinates, .offset],
             [.emboss, .findEdges, .traceContour, .wind, .diffuse, .tiles, .extrude],
             [.mosaic, .halftone, .crystallize, .pointillize, .mezzotint, .facet, .fragment],
+            [.spinBlur, .deInterlace, .ntscColors],
+            [.clouds, .differenceClouds, .fibers, .lensFlare],
             [.custom],
         ]
 
@@ -115,7 +142,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize,
                  .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
-                 .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint:
+                 .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
+                 .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -182,6 +210,19 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .crystallize: return "diamond"
             case .pointillize: return "circle.grid.cross"
             case .mezzotint: return "rectangle.pattern.checkered"
+            case .spherize: return "globe"
+            case .polarCoordinates: return "circle.circle"
+            case .shear: return "scribble.variable"
+            case .zigzag: return "dot.radiowaves.left.and.right"
+            case .ripple: return "water.waves"
+            case .wave: return "waveform"
+            case .spinBlur: return "arrow.trianglehead.2.clockwise.rotate.90"
+            case .deInterlace: return "line.3.horizontal"
+            case .ntscColors: return "tv"
+            case .clouds: return "cloud"
+            case .differenceClouds: return "cloud.fill"
+            case .fibers: return "line.3.horizontal.decrease.circle"
+            case .lensFlare: return "sun.min"
             case .blackAndWhite: return "circle.righthalf.filled"
             case .sepia: return "sun.dust"
             case .saturation: return "drop.halffull"
@@ -237,7 +278,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize,
                  .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
-                 .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint: return 1
+                 .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
+                 .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare: return 1
             }
         }
 
@@ -255,7 +297,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Filters that are simply on or off.
         var hasNoSettings: Bool {
             [.invert, .solarize, .blur, .blurMore, .average, .sharpen, .sharpenMore, .sharpenEdges, .despeckle,
-             .findEdges, .facet].contains(self)
+             .findEdges, .facet, .ntscColors, .clouds, .differenceClouds].contains(self)
         }
 
         var hasAngle: Bool { [.motionBlur, .emboss].contains(self) }
@@ -264,7 +306,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor].contains(self) && !hasNoSettings
                 && (parameters.isEmpty || self == .blackAndWhite || self == .emboss)
         }
-        var hasCenter: Bool { [.zoomBlur, .twirl, .pinch].contains(self) }
+        var hasCenter: Bool { [.zoomBlur, .twirl, .pinch, .spinBlur, .lensFlare].contains(self) }
         /// How far round each pixel a filter looks, set apart from its amount.
         var hasRadius: Bool { self == .unsharpMask }
     }

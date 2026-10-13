@@ -227,6 +227,8 @@ struct PSDSmartObjectTests {
         "median", "minimum", "maximum", "dustAndScratches", "addNoise", "reduceNoise", "despeckle",
         "offset", "custom", "findEdges", "traceContour", "fragment", "facet", "wind", "diffuse", "tiles", "extrude",
         "crystallize", "pointillize", "mezzotint", "halftone", "emboss",
+        "spherize", "polarCoordinates", "shear", "zigzag", "ripple", "wave", "spinBlur", "deInterlace", "ntscColors",
+        "clouds", "differenceClouds", "fibers", "lensFlare",
     ])
     func photoshopsFiltersComeBack(_ kind: String) throws {
         var filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)
@@ -240,6 +242,7 @@ struct PSDSmartObjectTests {
         if filter.kind == .extrude { filter.values = [1, 250, 40, 1] }
         if filter.kind == .emboss { filter.values = [75] }
         if filter.kind == .fragment { filter.values = [100] }
+        if filter.kind == .wave { filter.values = [5, 250, 2500, 125, 875, 100, 100, 0, 1] }
         var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30), scaleX: 2, scaleY: 2))
         layer.filters = [filter]
         let read = try #require(try roundTrip([layer]).layers.first)

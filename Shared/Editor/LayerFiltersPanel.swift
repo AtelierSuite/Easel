@@ -289,6 +289,7 @@ struct FilterRow: View {
         } else {
             settingControls
         }
+        if filter.kind == .shear { shearControls }
         if filter.kind.hasColor, filter.kind != .blackAndWhite || filter.value(6) >= 0.5 {
             ColorPicker(filter.kind.hasBackgroundColor ? "LayerFilters.Foreground" : "LayerFilters.Color", selection: Binding(
                 get: { (filter.color ?? filter.kind.defaultColor ?? .white).color },
@@ -302,6 +303,28 @@ struct FilterRow: View {
                 set: { color in state.updateFilter(filter.id) { $0.backgroundColor = RGBAColor(color) } }
             ), supportsOpacity: false)
             .font(.subheadline)
+        }
+    }
+
+    /// How far each of Shear's points pushes its row across, top first.
+    @ViewBuilder
+    private var shearControls: some View {
+        let points = filter.shearPoints
+        ForEach(points.indices, id: \.self) { index in
+            LabeledSlider(
+                label: "LayerFilters.Point \(index + 1)",
+                value: Binding(
+                    get: { points[index].x },
+                    set: { value in
+                        state.updateFilter(filter.id) { filter in
+                            var moved = filter.shearPoints
+                            moved[index].x = value
+                            filter.curvePoints = [moved.flatMap { [$0.x, $0.y] }]
+                        }
+                    }
+                ),
+                range: -64...64, valueText: "\(Int(points[index].x.rounded()))"
+            )
         }
     }
 

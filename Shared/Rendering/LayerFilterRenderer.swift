@@ -164,6 +164,10 @@ extension LayerFilter {
         case .emboss, .halftone, .mosaic, .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse,
              .tiles, .extrude, .crystallize, .pointillize, .mezzotint:
             output = applyStylize(to: input)
+        case .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace:
+            output = applyDistort(to: input)
+        case .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare:
+            output = applyRender(to: input)
         }
         return output.cropped(to: extent)
     }

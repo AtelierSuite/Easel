@@ -83,6 +83,15 @@ enum PSDSmartFilters {
                 // Easel's turns clockwise on screen.
                 $0.angle = -((number("Angl") ?? 0) + placement.turn)
             }
+        case "RdlB" where settings["BlrM"]?.enumValue == "Spn ":
+            guard let amount = number("Amnt") else { return nil }
+            return make(.spinBlur) {
+                $0.setValue(amount, at: 0)
+                if let center = settings["Cntr"]?.descriptor, let x = center["Hrzn"]?.number, let y = center["Vrtc"]?.number {
+                    $0.centerX = x / 100
+                    $0.centerY = y / 100
+                }
+            }
         case "RdlB":
             guard settings["BlrM"]?.enumValue == "Zm  ", let amount = number("Amnt") else { return nil }
             return make(.zoomBlur) {
@@ -213,6 +222,51 @@ enum PSDSmartFilters {
         case "Mztn":
             let type = choice("MztT", ["FnDt", "MdmD", "GrnD", "CrsD", "ShrL", "MdmL", "LngL", "ShSt", "MdmS", "LnSt"])
             return make(.mezzotint) { $0.setValue(type, at: 0) }
+        case "Sphr":
+            return make(.spherize) { $0.values = [number("Amnt") ?? 100, choice("SphM", ["Nrml", "HrzO", "VrtO"])] }
+        case "Plr ":
+            return make(.polarCoordinates) { $0.setValue(choice("Cnvr", ["RctP", "PlrR"]), at: 0) }
+        case "Shr ":
+            let points = settings["ShrP"]?.list?.compactMap(\.descriptor) ?? []
+            guard points.count >= 2 else { return nil }
+            return make(.shear) {
+                $0.setValue(choice("UndA", ["WrpA", "RptE"]), at: 0)
+                $0.curvePoints = [points.flatMap { [$0["Hrzn"]?.number ?? 0, $0["Vrtc"]?.number ?? 0] }]
+            }
+        case "ZgZg":
+            return make(.zigzag) {
+                $0.values = [number("Amnt") ?? 10, number("NmbR") ?? 5, choice("ZZTy", ["ArnC", "OtFr", "PndR"])]
+            }
+        case "Rple":
+            return make(.ripple) { $0.values = [number("Amnt") ?? 100, choice("RplS", ["Sml ", "Mdm ", "Lrg "])] }
+        case "Wave":
+            return make(.wave) {
+                $0.values = [
+                    number("NmbG") ?? 5, (number("WLMn") ?? 10) / unit, (number("WLMx") ?? 120) / unit,
+                    (number("AmMn") ?? 5) / unit, (number("AmMx") ?? 35) / unit, number("SclH") ?? 100, number("SclV") ?? 100,
+                    choice("Wvtp", ["WvSn", "WvTr", "WvSq"]), choice("UndA", ["WrpA", "RptE"]),
+                ]
+            }
+        case "Dntr":
+            return make(.deInterlace) { $0.values = [choice("IntE", ["ElmO", "ElmE"]), choice("IntC", ["CrtD", "CrtI"])] }
+        case "NTSC": return LayerFilter(kind: .ntscColors)
+        case "Clds": return LayerFilter(kind: .clouds)
+        case "DfrC": return LayerFilter(kind: .differenceClouds)
+        case "Fbrs":
+            return make(.fibers) { $0.values = [number("Vrnc") ?? 16, number("Strg") ?? 4] }
+        case "LnsF":
+            return make(.lensFlare) {
+                $0.values = [number("Brgh") ?? 100, choice("Lns ", ["Zm  ", "Nkn ", "Nkn1", "PnVs"])]
+                if let point = settings["FlrC"]?.descriptor {
+                    $0.centerX = point["Hrzn"]?.number ?? 0.5
+                    $0.centerY = point["Vrtc"]?.number ?? 0.5
+                }
+            }
+        case "shapeBlur":
+            // Blurred through a shape Easel does not have: near enough as a
+            // Gaussian blur, going back to Photoshop as it was.
+            guard let radius = number("Rds ") else { return nil }
+            return make(.gaussianBlur) { $0.amount = radius * 0.5 / (50 * unit) }
         case "Invr":
             return LayerFilter(kind: .invert)
         case "Slrz":
@@ -531,6 +585,68 @@ enum PSDSmartFilters {
             ])
         case .despeckle:
             return entry("Despeckle", "Dspc", noSettings)
+        case .spinBlur:
+            return entry("Radial Blur...", "RdlB", [
+                ("Amnt", .integer(Int32(min(max(filter.value(0), 1), 100).rounded()))),
+                ("BlrM", .enumerated(type: "BlrM", value: "Spn ")), ("BlrQ", .enumerated(type: "BlrQ", value: "Gd  ")),
+                ("Cntr", .descriptor(PSDDescriptor(classID: "Pnt ", items: [
+                    ("Hrzn", .unit("#Prc", filter.centerX * 100)), ("Vrtc", .unit("#Prc", filter.centerY * 100)),
+                ]))),
+            ])
+        case .spherize:
+            return entry("Spherize...", "Sphr", [
+                ("Amnt", .integer(Int32(filter.value(0).rounded()))),
+                ("SphM", .enumerated(type: "SphM", value: ["Nrml", "HrzO", "VrtO"][min(max(Int(filter.value(1).rounded()), 0), 2)])),
+            ])
+        case .polarCoordinates:
+            return entry("Polar Coordinates...", "Plr ", [
+                ("Cnvr", .enumerated(type: "Cnvr", value: filter.value(0) >= 0.5 ? "PlrR" : "RctP")),
+            ])
+        case .shear:
+            let points = filter.shearPoints.map { point in
+                PSDDescriptor.Value.descriptor(PSDDescriptor(classID: "Pnt ", items: [("Hrzn", .double(point.x)), ("Vrtc", .double(point.y))]))
+            }
+            return entry("Shear...", "Shr ", [
+                ("ShrP", .list(points)), ("UndA", .enumerated(type: "UndA", value: filter.value(0) >= 0.5 ? "RptE" : "WrpA")),
+                ("ShrS", .integer(0)), ("ShrE", .integer(Int32(points.count - 1))),
+            ])
+        case .zigzag:
+            return entry("ZigZag...", "ZgZg", [
+                ("Amnt", .integer(Int32(filter.value(0).rounded()))), ("NmbR", .integer(Int32(filter.value(1).rounded()))),
+                ("ZZTy", .enumerated(type: "ZZTy", value: ["ArnC", "OtFr", "PndR"][min(max(Int(filter.value(2).rounded()), 0), 2)])),
+            ])
+        case .ripple:
+            return entry("Ripple...", "Rple", [
+                ("Amnt", .integer(Int32(filter.value(0).rounded()))),
+                ("RplS", .enumerated(type: "RplS", value: ["Sml ", "Mdm ", "Lrg "][min(max(Int(filter.value(1).rounded()), 0), 2)])),
+            ])
+        case .wave:
+            func pixels(_ index: Int) -> PSDDescriptor.Value { .integer(Int32(max(1, (filter.value(index) * unit).rounded()))) }
+            return entry("Wave...", "Wave", [
+                ("Wvtp", .enumerated(type: "Wvtp", value: ["WvSn", "WvTr", "WvSq"][min(max(Int(filter.value(7).rounded()), 0), 2)])),
+                ("NmbG", .integer(Int32(filter.value(0).rounded()))), ("WLMn", pixels(1)), ("WLMx", pixels(2)),
+                ("AmMn", pixels(3)), ("AmMx", pixels(4)),
+                ("SclH", .integer(Int32(filter.value(5).rounded()))), ("SclV", .integer(Int32(filter.value(6).rounded()))),
+                ("UndA", .enumerated(type: "UndA", value: filter.value(8) >= 0.5 ? "RptE" : "WrpA")), ("RndS", .integer(1)),
+            ])
+        case .deInterlace:
+            return entry("De-Interlace...", "Dntr", [
+                ("IntE", .enumerated(type: "IntE", value: filter.value(0) >= 0.5 ? "ElmE" : "ElmO")),
+                ("IntC", .enumerated(type: "IntC", value: filter.value(1) >= 0.5 ? "CrtI" : "CrtD")),
+            ])
+        case .ntscColors: return entry("NTSC Colors", "NTSC", noSettings)
+        case .clouds: return entry("Clouds", "Clds", [("FlRs", .integer(1))])
+        case .differenceClouds: return entry("Difference Clouds", "DfrC", [("FlRs", .integer(1))])
+        case .fibers:
+            return entry("Fibers...", "Fbrs", [
+                ("Vrnc", .integer(Int32(filter.value(0).rounded()))), ("Strg", .integer(Int32(filter.value(1).rounded()))), ("RndS", .integer(1)),
+            ])
+        case .lensFlare:
+            return entry("Lens Flare...", "LnsF", [
+                ("Brgh", .integer(Int32(filter.value(0).rounded()))),
+                ("FlrC", .descriptor(PSDDescriptor(classID: "Pnt ", items: [("Hrzn", .double(filter.centerX)), ("Vrtc", .double(filter.centerY))]))),
+                ("Lns ", .enumerated(type: "Lns ", value: ["Zm  ", "Nkn ", "Nkn1", "PnVs"][min(max(Int(filter.value(1).rounded()), 0), 3)])),
+            ])
         case .invert:
             return entry("Invert", "Invr", noSettings)
         case .solarize:
