@@ -1,5 +1,6 @@
 import Compression
 import Foundation
+import zlib
 
 enum ZipError: LocalizedError {
     case notAnArchive
@@ -300,22 +301,20 @@ enum ZipArchive {
 
     // MARK: - CRC-32
 
-    private static let crcTable: [UInt32] = {
-        (0..<256).map { index -> UInt32 in
-            var value = UInt32(index)
-            for _ in 0..<8 {
-                value = (value & 1) == 1 ? (value >> 1) ^ 0xEDB8_8320 : value >> 1
-            }
-            return value
-        }
-    }()
-
+    /// zlib's, many bytes at a time; it counts at most 4 GB a call.
     static func crc32(_ data: Data) -> UInt32 {
-        var crc: UInt32 = 0xFFFF_FFFF
-        for byte in data {
-            crc = (crc >> 8) ^ crcTable[Int((crc ^ UInt32(byte)) & 0xFF)]
+        var crc = zlib.crc32(0, nil, 0)
+        data.withUnsafeBytes { raw in
+            guard var next = raw.bindMemory(to: Bytef.self).baseAddress else { return }
+            var left = raw.count
+            while left > 0 {
+                let chunk = min(left, Int(UInt32.max))
+                crc = zlib.crc32(crc, next, uInt(chunk))
+                next += chunk
+                left -= chunk
+            }
         }
-        return crc ^ 0xFFFF_FFFF
+        return UInt32(truncatingIfNeeded: crc)
     }
 
     // MARK: - Byte access

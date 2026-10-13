@@ -84,6 +84,11 @@ struct DocumentPreviewTests {
         #expect(throws: (any Error).self) { try ZipArchive.entries(in: archive) }
     }
 
+    @Test func checksumsAreZIPs() {
+        #expect(ZipArchive.crc32(Data("123456789".utf8)) == 0xCBF4_3926)
+        #expect(ZipArchive.crc32(Data()) == 0)
+    }
+
     @Test func missingPreviewsGiveNothing() {
         #expect(DocumentPreview.image(at: URL(fileURLWithPath: "/nonexistent.easel")) == nil)
     }
