@@ -29,6 +29,18 @@ struct PSDSmartObjectTests {
         #expect(read.transform.position == CGPoint(x: 40, y: 30))
     }
 
+    /// Each smart object shows its own contents, embedded files being
+    /// read once each.
+    @Test func severalObjectsKeepTheirOwnContents() throws {
+        var second = smartLayer(transform: LayerTransform(position: CGPoint(x: 60, y: 30)))
+        second.setSmartObjectContents(Composition(size: CGSize(width: 8, height: 8), layers: [
+            Layer(name: "Green", image: LayerImage(TestImages.solid(RGBAColor(red: 0, green: 1, blue: 0), width: 8, height: 8)),
+                  transform: LayerTransform(position: CGPoint(x: 4, y: 4))),
+        ]))
+        let read = try roundTrip([smartLayer(transform: LayerTransform(position: CGPoint(x: 20, y: 30))), second]).layers
+        #expect(read.map { $0.smartObject?.contents.size } == [CGSize(width: 20, height: 20), CGSize(width: 8, height: 8)])
+    }
+
     @Test func movedScaledAndTurnedObjectsKeepTheirPlace() throws {
         let transform = LayerTransform(position: CGPoint(x: 37, y: 28), scaleX: 1.5, scaleY: -2, rotation: Double.pi / 6)
         let read = try #require(try roundTrip([smartLayer(transform: transform)]).layers.first)

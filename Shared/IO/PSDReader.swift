@@ -204,6 +204,15 @@ enum PSDReader {
             patterns[tile.id] = PatternChoice(preset: nil, swatchID: swatch.id).carryingTile(from: swatches)
         }
 
+        // Each embedded file is read once, however many layers show it.
+        var opened: [String: Composition?] = [:]
+        func openedContents(_ id: String) -> Composition? {
+            if let found = opened[id] { return found }
+            let found = embedded[id].flatMap(PSDSmartObjects.contents(from:))
+            opened[id] = .some(found)
+            return found
+        }
+
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
         var extras = LayerExtras()
@@ -298,7 +307,7 @@ enum PSDReader {
             }
             // Linked smart objects keep the same as `SoLE`.
             if let block = record.blocks["SoLd"] ?? record.blocks["SoLE"], let placed = PSDSmartObjects.placement(from: block) {
-                if let file = embedded[placed.id], let contents = PSDSmartObjects.contents(from: file) {
+                if let contents = openedContents(placed.id) {
                     // A smart object: its contents whole, drawn where its
                     // corners sit. Ones Easel cannot place stay as pixels.
                     let canvasMask = record.mask.flatMap { mask -> LayerMask? in
