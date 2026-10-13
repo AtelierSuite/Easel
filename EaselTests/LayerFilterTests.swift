@@ -313,4 +313,16 @@ struct ColorFilterTests {
         #expect(LayerFilter.selectiveColor(SIMD3(repeating: 0.2), inks: blacks, relative: false).x < 0.2)
         #expect(LayerFilter.selectiveColor(SIMD3(repeating: 1), inks: blacks, relative: false).x == 1)
     }
+
+    @Test func shadowsHighlightsOpensUpTheShadows() {
+        var pixels = PixelFilters.Pixels(width: 16, height: 16)
+        for index in 0..<256 {
+            let shade: UInt8 = index % 16 < 8 ? 30 : 230
+            pixels.bytes.replaceSubrange((index * 4)..<(index * 4 + 4), with: [shade, shade, shade, 255])
+        }
+        var lifted = pixels
+        LayerFilter.shadowsHighlights(&lifted, shadow: (0.5, 0.5, 2), highlight: (0.5, 0.5, 2), colour: 0, contrast: 0, clips: (0, 0))
+        #expect(lifted[2, 8, 0] > 40)
+        #expect(lifted[13, 8, 0] < 225)
+    }
 }

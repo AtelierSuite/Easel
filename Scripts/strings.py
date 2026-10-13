@@ -930,6 +930,17 @@ S = {
 "LayerFilters.Magenta": ("Magenta", "マゼンタ", "마젠타", "洋红", "洋紅"),
 "LayerFilters.Yellow": ("Yellow", "イエロー", "노랑", "黄色", "黃色"),
 "LayerFilters.BlackInk": ("Black", "ブラック", "검정", "黑色", "黑色"),
+"LayerFilter.ShadowsHighlights": ("Shadows/Highlights", "シャドウ・ハイライト", "어두운 영역/밝은 영역", "阴影/高光", "陰影/亮部"),
+"LayerFilters.ShadowAmount": ("Shadows Amount", "シャドウの量", "어두운 영역 양", "阴影数量", "陰影總量"),
+"LayerFilters.ShadowTone": ("Shadows Tone", "シャドウの階調", "어두운 영역 색조", "阴影色调", "陰影色調"),
+"LayerFilters.ShadowRadius": ("Shadows Radius", "シャドウの半径", "어두운 영역 반경", "阴影半径", "陰影強度"),
+"LayerFilters.HighlightAmount": ("Highlights Amount", "ハイライトの量", "밝은 영역 양", "高光数量", "亮部總量"),
+"LayerFilters.HighlightTone": ("Highlights Tone", "ハイライトの階調", "밝은 영역 색조", "高光色调", "亮部色調"),
+"LayerFilters.HighlightRadius": ("Highlights Radius", "ハイライトの半径", "밝은 영역 반경", "高光半径", "亮部強度"),
+"LayerFilters.ColorCorrection": ("Color", "カラー", "색상", "颜色", "顏色"),
+"LayerFilters.MidtoneContrast": ("Midtone Contrast", "中間調", "중간 영역 대비", "中间调", "中間調"),
+"LayerFilters.BlackClip": ("Black Clip", "シャドウのクリップ", "검정 클립", "修剪黑色", "黑色剪裁"),
+"LayerFilters.WhiteClip": ("White Clip", "ハイライトのクリップ", "흰색 클립", "修剪白色", "白色剪裁"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

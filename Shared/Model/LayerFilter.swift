@@ -126,6 +126,9 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Ink added or taken away colour by colour: in the reds, yellows
         /// and so on, the whites, the neutrals and the blacks.
         case selectiveColor
+        /// Dark areas opened up and bright ones brought down, each by the
+        /// shades round it, so detail shows in both.
+        case shadowsHighlights
 
         var id: String { rawValue }
 
@@ -139,7 +142,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             (nil, [.blackAndWhite, .sepia, .saturation, .brightness, .contrast]),
             (nil, [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor]),
             ("FilterCategory.Adjustments", [.exposure, .vibrance, .photoFilter, .channelMixer, .selectiveColor, .desaturate, .invert, .posterize,
-                                            .threshold, .solarize, .equalize]),
+                                            .threshold, .solarize, .equalize, .shadowsHighlights]),
             ("FilterCategory.Blur", [.gaussianBlur, .motionBlur, .zoomBlur, .spinBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur,
                                      .blur, .blurMore, .average]),
             ("FilterCategory.Noise", [.noiseReduction, .reduceNoise, .despeckle, .addNoise, .median, .dustAndScratches]),
@@ -159,7 +162,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .selectiveColor:
+                 .channelMixer, .desaturate, .equalize, .shadowsHighlights, .selectiveColor:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -242,6 +245,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .channelMixer: return "slider.horizontal.3"
             case .desaturate: return "drop.degreesign.slash"
             case .equalize: return "chart.bar.xaxis"
+            case .shadowsHighlights: return "circle.lefthalf.filled.righthalf.striped.horizontal"
             case .selectiveColor: return "eyedropper.halffull"
             case .blackAndWhite: return "circle.righthalf.filled"
             case .sepia: return "sun.dust"
@@ -300,13 +304,15 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .selectiveColor: return 1
+                 .channelMixer, .desaturate, .equalize, .shadowsHighlights, .selectiveColor: return 1
             }
         }
 
         /// Filters that change each pixel by its colour alone, which can
         /// also be adjustment layers changing everything beneath them.
-        var isPerPixel: Bool { self != .equalize && Self.groups.prefix(3).contains { $0.contains(self) } }
+        var isPerPixel: Bool {
+            ![.equalize, .shadowsHighlights].contains(self) && Self.groups.prefix(3).contains { $0.contains(self) }
+        }
 
         /// Filters Core Image works out by mixing neighbouring pixels, which
         /// it is given shades as they look to mix.

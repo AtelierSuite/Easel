@@ -272,6 +272,28 @@ struct PSDSmartObjectTests {
         }
     }
 
+    @Test func shadowsHighlightsComeFromPhotoshop() throws {
+        func tone(_ amount: Double, _ width: Double, _ radius: Int32) -> PSDDescriptor.Value {
+            .descriptor(PSDDescriptor(classID: "adaptCorrectTones", items: [
+                ("Amnt", .unit("#Prc", amount)), ("Wdth", .unit("#Prc", width)), ("Rds ", .integer(radius)),
+            ]))
+        }
+        let settings = PSDDescriptor(classID: "adaptCorrect", items: [
+            ("sdwM", tone(60, 40, 20)), ("hglM", tone(25, 30, 10)), ("BlcC", .double(0.5)), ("WhtC", .double(0.2)),
+            ("Cntr", .integer(-10)), ("ClrC", .integer(35)),
+        ])
+        var filter = LayerFilter(kind: .shadowsHighlights)
+        filter.photoshopFilter = PhotoshopFilterRecord(id: 1, name: "Shadows/Highlights...", settings: Data(settings.versionedBytes))
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        layer.filters = [filter]
+        let read = try #require(try roundTrip([layer]).layers.first?.filters.first)
+        #expect(read.kind == .shadowsHighlights)
+        // The radii are in the layer's pixels, twenty across here.
+        let expected: [Double] = [60, 40, 1000, 25, 30, 500, 35, -10, 0.5, 0.2]
+        for (index, value) in expected.enumerated() { #expect(abs(read.value(index) - value) < 0.01) }
+        #expect(read.photoshopFilter?.id == 1)
+    }
+
     @Test func aFilterLeftAloneGoesBackAsPhotoshopHadIt() throws {
         var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
         layer.filters = [LayerFilter(kind: .reduceNoise)]

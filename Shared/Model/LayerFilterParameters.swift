@@ -223,6 +223,22 @@ extension LayerFilter.Kind {
             return (0..<36).map { _ in FilterParameter(labelKey: "LayerFilters.Ink", range: -100...100, defaultValue: 0, style: .signedPercent) }
                 + [FilterParameter(labelKey: "LayerFilters.Method", range: 0...1, defaultValue: 0,
                                    style: .choice(["LayerFilters.Relative", "LayerFilters.Absolute"]))]
+        case .shadowsHighlights:
+            // Photoshop's: for the shadows and then the highlights, how much
+            // they change, how far into the midtones, and how wide an area
+            // decides what is a shadow; then colour, midtone contrast, and
+            // how much is let go to black and white.
+            let tones = ["Shadow", "Highlight"].flatMap { tone in [
+                FilterParameter(labelKey: "LayerFilters.\(tone)Amount", range: 0...100, defaultValue: tone == "Shadow" ? 35 : 0, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.\(tone)Tone", range: 0...100, defaultValue: 50, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.\(tone)Radius", range: 0...2500, defaultValue: 30, style: .length),
+            ] }
+            return tones + [
+                FilterParameter(labelKey: "LayerFilters.ColorCorrection", range: -100...100, defaultValue: 20, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.MidtoneContrast", range: -100...100, defaultValue: 0, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.BlackClip", range: 0...50, defaultValue: 0.01, style: .decimal),
+                FilterParameter(labelKey: "LayerFilters.WhiteClip", range: 0...50, defaultValue: 0.01, style: .decimal),
+            ]
         case .custom:
             // Five rows of five weights, then the divisor and the offset.
             let weights = [Double](repeating: 0, count: 12) + [1] + [Double](repeating: 0, count: 12)

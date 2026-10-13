@@ -301,6 +301,20 @@ enum PSDSmartFilters {
             return curves(settings)
         case "Lvls":
             return levels(settings)
+        case "adaptCorrect":
+            // Shadows/Highlights. Photoshop's id for it is not known, so one
+            // changed here goes back to Photoshop as pixels.
+            return make(.shadowsHighlights) { filter in
+                for (offset, key) in [(0, "sdwM"), (3, "hglM")] {
+                    guard let tone = settings[key]?.descriptor else { continue }
+                    if let amount = tone["Amnt"]?.number { filter.setValue(amount, at: offset) }
+                    if let width = tone["Wdth"]?.number { filter.setValue(width, at: offset + 1) }
+                    if let radius = tone["Rds "]?.number { filter.setValue(radius / unit, at: offset + 2) }
+                }
+                for (index, key) in [(6, "ClrC"), (7, "Cntr"), (8, "BlcC"), (9, "WhtC")] {
+                    if let value = number(key) { filter.setValue(value, at: index) }
+                }
+            }
         case "BrgC":
             guard settings["useLegacy"]?.bool != true else { return nil }
             let brightness = number("Brgh") ?? 0, contrast = number("Cntr") ?? 0
