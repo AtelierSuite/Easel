@@ -49,6 +49,26 @@ struct PSDWriterTests {
         #expect(read.layers[0].groupID == nil)
     }
 
+    /// A layer only moved keeps its pixels past the canvas's edges, and
+    /// its mask with them.
+    @Test func movedLayersKeepPixelsOffTheCanvas() throws {
+        var layer = Layer(name: "Off", image: LayerImage(TestImages.halves(width: 8, height: 4)),
+                          transform: LayerTransform(position: CGPoint(x: 1, y: -1)))
+        layer.mask = LayerMask(image: LayerImage(Bitmap.render(size: CGSize(width: 8, height: 4)) { context in
+            context.setFillColor(RGBAColor.white.cgColor)
+            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        }))
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: Composition(size: size, layers: [layer])))
+        let off = try #require(read.layers.first)
+        #expect(off.image.size == CGSize(width: 8, height: 4))
+        #expect(off.transform.position == CGPoint(x: 1, y: -1))
+        #expect(TestImages.isRed(off.image.cgImage, x: 0, y: 0))
+        #expect(TestImages.isBlue(off.image.cgImage, x: 7, y: 3))
+        let mask = try #require(off.mask)
+        #expect(TestImages.pixel(mask.image.cgImage, x: 0, y: 0).alpha > 250)
+        #expect(TestImages.pixel(mask.image.cgImage, x: 6, y: 3).alpha == 0)
+    }
+
     @Test func otherAppsSeeTheFlattenedPicture() throws {
         let data = try PSDWriter.data(for: sample())
         let image = try ImageCodec.decode(data)

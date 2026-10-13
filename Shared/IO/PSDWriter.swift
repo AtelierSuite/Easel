@@ -161,14 +161,19 @@ enum PSDWriter {
         plain.blendMode = .normal
         plain.isVisible = true
         if effects != nil { plain.effects = [] }
-        let pixels = adjustment == nil ? Bitmap.pixels(of: CompositionRenderer.render(layers: [plain], size: canvasSize)) : nil
-        let rect = pixels.map { opaqueBounds($0) } ?? .zero
+        // What is drawn out: the canvas, and a layer only moved also
+        // whatever of it lies past the canvas's edges, so nothing is lost.
+        let frame = drawnFrame(for: layer, canvasSize: canvasSize)
+        plain.transform.position.x -= frame.minX
+        plain.transform.position.y -= frame.minY
+        let pixels = adjustment == nil ? Bitmap.pixels(of: CompositionRenderer.render(layers: [plain], size: frame.size)) : nil
+        let rect = pixels.map { opaqueBounds($0).offsetBy(dx: frame.minX, dy: frame.minY) } ?? .zero
         // A mask over an adjustment covers the canvas; otherwise the pixels.
         let maskRect = adjustment == nil ? rect : CGRect(origin: .zero, size: canvasSize)
 
         var channels: [(id: Int, data: [UInt8])] = []
         if let pixels, rect.width > 0 {
-            let planes = Self.planes(pixels, rect: rect)
+            let planes = Self.planes(pixels, rect: rect.offsetBy(dx: -frame.minX, dy: -frame.minY))
             channels = [(-1, planes[3]), (0, planes[0]), (1, planes[1]), (2, planes[2])].map { id, plane in
                 (id, channelData(plane, width: Int(rect.width), height: Int(rect.height)))
             }
@@ -180,15 +185,17 @@ enum PSDWriter {
         if let layerMask = layer.mask {
             // The mask drawn where the layer sits; the rest of the canvas
             // shows, as an Easel mask does past the layer's edges.
-            let maskImage = Bitmap.render(size: canvasSize) { context in
+            let maskFrame = adjustment == nil ? frame : CGRect(origin: .zero, size: canvasSize)
+            let maskImage = Bitmap.render(size: maskFrame.size) { context in
                 context.setFillColor(RGBAColor.white.cgColor)
-                context.fill(CGRect(origin: .zero, size: canvasSize))
+                context.fill(CGRect(origin: .zero, size: maskFrame.size))
+                context.translateBy(x: -maskFrame.minX, y: -maskFrame.minY)
                 context.concatenate(layer.affineTransform)
                 context.clear(CGRect(origin: .zero, size: layer.image.size))
                 Bitmap.draw(layerMask.image.cgImage, in: CGRect(origin: .zero, size: layer.image.size), context: context)
             }
             if let maskPixels = Bitmap.pixels(of: maskImage), maskRect.width > 0 {
-                let alpha = planes(maskPixels, rect: maskRect)[3]
+                let alpha = planes(maskPixels, rect: maskRect.offsetBy(dx: -maskFrame.minX, dy: -maskFrame.minY))[3]
                 mask = (maskRect, channelData(alpha, width: Int(maskRect.width), height: Int(maskRect.height)), !layerMask.isEnabled)
                 channels.append((-2, mask!.data))
             }
@@ -268,6 +275,22 @@ enum PSDWriter {
     }
 
     // MARK: - Pixels
+
+    /// The canvas, grown to take in a layer that is only moved, whole
+    /// pixels at a time, so its pixels go out as they are, past the
+    /// canvas's edges too. Turned or scaled layers would be redrawn, so
+    /// they go as they show on the canvas.
+    private static func drawnFrame(for layer: Layer, canvasSize: CGSize) -> CGRect {
+        let canvas = CGRect(origin: .zero, size: canvasSize)
+        let transform = layer.transform
+        guard layer.adjustment == nil, transform.scaleX == 1, transform.scaleY == 1, transform.rotation == 0 else { return canvas }
+        let own = layer.bounds
+        let origin = CGPoint(x: own.minX.rounded(), y: own.minY.rounded())
+        guard abs(own.minX - origin.x) < 0.001, abs(own.minY - origin.y) < 0.001 else { return canvas }
+        let frame = canvas.union(CGRect(origin: origin, size: own.size))
+        guard frame.width <= Double(Bitmap.maximumDimension), frame.height <= Double(Bitmap.maximumDimension) else { return canvas }
+        return frame
+    }
 
     /// The smallest rectangle holding every visible pixel.
     private static func opaqueBounds(_ pixels: PixelBuffer) -> CGRect {
