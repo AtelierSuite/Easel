@@ -29,8 +29,8 @@ enum PSDSmartFilters {
 
     /// Easel's strength for a Photoshop motion blur's distance, and twirl's
     /// angle, fitted to Photoshop's sample renders.
-    private static let motionScale = 0.275
-    private static let twirlScale = 0.7
+    private static let motionScale = 0.344
+    private static let twirlScale = 0.49
 
     // MARK: - Reading
 

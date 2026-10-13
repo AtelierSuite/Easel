@@ -5,7 +5,17 @@ import Synchronization
 extension LayerFilter {
     /// The filter as one step of a Core Image chain. Sizes are fractions of
     /// the image, so a filter looks the same on a small copy as at full size.
+    ///
+    /// Filters that mix neighbouring pixels do it on shades as they look
+    /// rather than in linear light, as Photoshop does: edges between light
+    /// and dark come out as they do there.
     func apply(to input: CIImage) -> CIImage {
+        guard kind.mixesShades else { return applyFilter(to: input) }
+        let shades = input.applyingFilter("CILinearToSRGBToneCurve")
+        return applyFilter(to: shades).applyingFilter("CISRGBToneCurveToLinear")
+    }
+
+    private func applyFilter(to input: CIImage) -> CIImage {
         let extent = input.extent
         let unit = max(extent.width, extent.height) / 1000
         let output: CIImage

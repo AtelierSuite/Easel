@@ -130,6 +130,13 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// also be adjustment layers changing everything beneath them.
         var isPerPixel: Bool { Self.groups[0].contains(self) || Self.groups[1].contains(self) }
 
+        /// Filters Core Image works out by mixing neighbouring pixels, which
+        /// it is given shades as they look to mix.
+        var mixesShades: Bool {
+            [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .noiseReduction, .mosaic, .unsharpMask,
+             .twirl, .pinch, .halftone, .lensCorrection].contains(self)
+        }
+
         var hasAngle: Bool { [.motionBlur, .emboss, .halftone].contains(self) }
         /// Filters set with their own controls rather than one amount.
         var hasAmount: Bool { ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor].contains(self) }
