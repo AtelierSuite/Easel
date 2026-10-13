@@ -91,6 +91,15 @@ struct PSDDescriptor: Equatable {
     // MARK: - Reading
 
     static func read(_ reader: inout BigEndianReader) throws -> PSDDescriptor {
+        try read(&reader, depth: 0)
+    }
+
+    /// Deeper than Photoshop nests anything: a damaged file, which would
+    /// otherwise run out of stack.
+    private static let maximumDepth = 64
+
+    private static func read(_ reader: inout BigEndianReader, depth: Int) throws -> PSDDescriptor {
+        guard depth < maximumDepth else { throw PSDReader.Failure.damaged }
         let name = try readUnicode(&reader)
         let classID = try readKey(&reader)
         let count = Int(try reader.uint32())
@@ -98,7 +107,7 @@ struct PSDDescriptor: Equatable {
         for _ in 0..<count {
             let key = try readKey(&reader)
             let type = try reader.ascii(4)
-            items.append((key, try readValue(&reader, type: type)))
+            items.append((key, try readValue(&reader, type: type, depth: depth + 1)))
         }
         return PSDDescriptor(classID: classID, name: name, items: items)
     }
@@ -120,16 +129,17 @@ struct PSDDescriptor: Equatable {
         Double(bitPattern: try reader.uint64())
     }
 
-    private static func readValue(_ reader: inout BigEndianReader, type: String) throws -> Value {
+    private static func readValue(_ reader: inout BigEndianReader, type: String, depth: Int) throws -> Value {
+        guard depth < maximumDepth else { throw PSDReader.Failure.damaged }
         switch type {
         case "Objc", "GlbO":
-            return .descriptor(try read(&reader))
+            return .descriptor(try read(&reader, depth: depth))
         case "VlLs":
             let count = Int(try reader.uint32())
             var values: [Value] = []
             for _ in 0..<count {
                 let itemType = try reader.ascii(4)
-                values.append(try readValue(&reader, type: itemType))
+                values.append(try readValue(&reader, type: itemType, depth: depth + 1))
             }
             return .list(values)
         case "doub":
@@ -167,7 +177,7 @@ struct PSDDescriptor: Equatable {
         case "ObAr":
             // An array of objects, kept as one descriptor of their values.
             _ = try reader.uint32()
-            return .descriptor(try read(&reader))
+            return .descriptor(try read(&reader, depth: depth))
         case "obj ":
             let count = Int(try reader.uint32())
             var reference: Value = .unsupported

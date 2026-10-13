@@ -225,6 +225,22 @@ struct PSDReaderTests {
         #expect(PSDReader.unpackBits(packed, expected: 7) == [1, 2, 3, 9, 9, 9, 9])
     }
 
+    /// Settings nested past any depth Photoshop uses are damage, not a
+    /// stack overflow.
+    @Test func deeplyNestedDescriptorsAreRefused() throws {
+        func nested(_ depth: Int) -> [UInt8] {
+            var descriptor = PSDDescriptor(classID: "null")
+            for _ in 0..<depth { descriptor = PSDDescriptor(classID: "null", items: [("Inr ", .descriptor(descriptor))]) }
+            var writer = PSDBinaryWriter()
+            descriptor.write(to: &writer)
+            return writer.data
+        }
+        var shallow = BigEndianReader(bytes: nested(10))
+        #expect(try PSDDescriptor.read(&shallow)["Inr "] != nil)
+        var deep = BigEndianReader(bytes: nested(200))
+        #expect(throws: PSDReader.Failure.self) { try PSDDescriptor.read(&deep) }
+    }
+
     /// A `.psd` has to resolve to a type Easel both opens and saves.
     @Test func psdFilesResolveToReadableTypes() throws {
         let type = try #require(UTType(filenameExtension: "psd"))
