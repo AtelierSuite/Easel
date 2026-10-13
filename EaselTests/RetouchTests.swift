@@ -100,6 +100,14 @@ struct RetouchTests {
         #expect(TestImages.isBlue(filled, x: 5, y: 5))
     }
 
+    @Test func fillingAWholeSelectionLeavesThePictureAlone() {
+        let image = TestImages.solid(RGBAColor(red: 0, green: 0, blue: 1), width: 40, height: 40)
+        let selection = Selection(shape: .rectangle(CGRect(x: -2, y: -2, width: 44, height: 44)))
+        let filled = Healer.fill(image, selection: selection)
+        #expect(TestImages.isBlue(filled, x: 20, y: 20))
+        #expect(TestImages.isBlue(filled, x: 0, y: 39))
+    }
+
     @Test func fillingFollowsAGradientAcrossTheHole() {
         let size = CGSize(width: 80, height: 40)
         let image = Bitmap.render(size: size) { context in

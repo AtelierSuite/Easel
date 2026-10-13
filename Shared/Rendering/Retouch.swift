@@ -308,6 +308,8 @@ enum Healer {
         // The mark's surroundings, averaged inward: a blur that counts only
         // pixels outside the mark, so the mark's own colour is left out.
         let known = mask.map { $0 > 0.02 ? Float(0) : 1 }
+        // With nothing unmarked round it, there is nothing to fill from.
+        guard known.contains(1) else { return image }
         let blurRadius = max(2, Int(radius))
         var weights = known
         boxBlur(&weights, width: width, height: height, radius: blurRadius, passes: 2)
