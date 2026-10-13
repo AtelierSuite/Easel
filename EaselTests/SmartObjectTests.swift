@@ -64,6 +64,26 @@ struct SmartObjectTests {
         #expect(state.paintingBlocker() == String(localized: "Error.SmartObject"))
     }
 
+    @MainActor @Test func fillingOrClearingASmartObjectIsRefusedWhateverTheTool() async throws {
+        let state = EditorState()
+        state.attach(to: picture()) { _ in }
+        state.activeLayerID = state.composition.layers[1].id
+        state.convertToSmartObject()
+        let before = state.composition
+        state.tool = .select
+        state.selectAll()
+        state.fillSelection()
+        #expect(state.errorMessage == String(localized: "Error.SmartObject"))
+        state.errorMessage = nil
+        state.clearSelection()
+        #expect(state.errorMessage == String(localized: "Error.SmartObject"))
+        state.errorMessage = nil
+        state.applyProcessing { $0 }
+        #expect(state.errorMessage == String(localized: "Error.SmartObject"))
+        for _ in 0..<100 where state.isBusy { try await Task.sleep(for: .milliseconds(20)) }
+        #expect(state.composition == before)
+    }
+
     @MainActor @Test func aGroupBecomesOneSmartObject() {
         let state = EditorState()
         var composition = picture()

@@ -647,15 +647,17 @@ final class EditorState {
         }
     }
 
-    /// Why the active layer cannot be painted on, if it cannot.
-    func paintingBlocker() -> String? {
+    /// Why the active layer cannot be painted on, if it cannot: by the tool
+    /// in hand, or, not `byTool`, by a command such as Fill that changes its
+    /// pixels whatever the tool.
+    func paintingBlocker(byTool: Bool = true) -> String? {
         guard let layer = activeLayer else { return String(localized: "Error.NoLayer") }
         if composition.isLocked(layer) { return String(localized: "Error.LayerLocked") }
         if editsAnyMask, ![Tool.brush, .eraser, .gradient].contains(tool) {
             return String(localized: "Error.MaskTool")
         }
         // Liquify bends a smart object through its Liquify filter instead.
-        if layer.isSmartObject, !editsAnyMask, tool.paintsPixels, tool != .liquify {
+        if layer.isSmartObject, byTool ? !editsAnyMask && tool.paintsPixels && tool != .liquify : true {
             return String(localized: "Error.SmartObject")
         }
         if !layer.isVisible || composition.ancestors(of: layer.groupID).contains(where: { !$0.isVisible }) {
@@ -1284,6 +1286,8 @@ final class EditorState {
                         current.image = result.image
                         current.text = nil
                         current.vector = nil
+                        // Its pixels are no longer drawn from its contents.
+                        current.smartObject = nil
                         current.transform = result.transform
                         if let mask = result.mask { current.mask?.image = mask.image }
                         if let mask = result.filterMask { current.filterMask?.image = mask.image }

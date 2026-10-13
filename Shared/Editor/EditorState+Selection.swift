@@ -69,7 +69,7 @@ extension EditorState {
     /// Paints a line in the brush colour along the selection's edge, onto
     /// the active layer.
     func strokeSelection(width: Double) {
-        if let blocker = paintingBlocker() {
+        if let blocker = paintingBlocker(byTool: false) {
             errorMessage = blocker
             return
         }

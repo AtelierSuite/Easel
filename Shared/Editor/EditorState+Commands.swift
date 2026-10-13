@@ -230,7 +230,7 @@ extension EditorState {
 
     func clearSelection() {
         guard let selection, let layerID = activeLayerID else { return }
-        if let blocker = paintingBlocker() {
+        if let blocker = paintingBlocker(byTool: false) {
             errorMessage = blocker
             return
         }
@@ -243,7 +243,7 @@ extension EditorState {
     /// disappears into its background.
     func fillSelectionFromSurroundings() {
         guard let selection, let layerID = activeLayerID else { return }
-        if let blocker = paintingBlocker() {
+        if let blocker = paintingBlocker(byTool: false) {
             errorMessage = blocker
             return
         }
@@ -254,7 +254,7 @@ extension EditorState {
 
     func fillSelection() {
         guard let selection, let layerID = activeLayerID else { return }
-        if let blocker = paintingBlocker() {
+        if let blocker = paintingBlocker(byTool: false) {
             errorMessage = blocker
             return
         }
@@ -295,7 +295,7 @@ extension EditorState {
     /// leaving a hole behind when `cut`.
     func copySelectionToNewLayer(cut: Bool) {
         guard let selection, let layer = activeLayer else { return }
-        if cut, let blocker = paintingBlocker() {
+        if cut, let blocker = paintingBlocker(byTool: false) {
             errorMessage = blocker
             return
         }
@@ -437,6 +437,12 @@ extension EditorState {
             errorMessage = String(localized: "Error.LayerLocked")
             return
         }
+        // Its contents stay whole: filters change a smart object instead.
+        if layer.isSmartObject {
+            layerPreview = nil
+            errorMessage = String(localized: "Error.SmartObject")
+            return
+        }
         let selection = selection
         let size = read().size
         enqueue({ () -> Layer? in
@@ -459,6 +465,7 @@ extension EditorState {
                 current.image = result.image
                 current.text = nil
                 current.vector = nil
+                current.smartObject = nil
                 current.transform = result.transform
                 composition[layer.id] = current
             }
