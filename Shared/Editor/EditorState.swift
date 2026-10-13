@@ -310,6 +310,9 @@ final class EditorState {
         var isMask = false
         /// Painted into the layer's filter mask.
         var isFilterMask = false
+        /// Painted in already, and kept only until the layer's filters or
+        /// effects are worked out again with it.
+        var hasLanded = false
     }
 
     struct LayerPreview {
@@ -562,6 +565,7 @@ final class EditorState {
                     FilterCache.shared.image(for: wanted.key, source: wanted.source, filterMask: wanted.filterMask)
                 }.value
                 filteredDisplay[layerID] = (wanted.key, image)
+                dropLandedStrokes()
             }
             filteringLayers.remove(layerID)
         }
@@ -583,11 +587,44 @@ final class EditorState {
                         StyleCache.shared.styled(for: wanted.key, layer: wanted.layer)
                     }.value
                     styledDisplay[layer.id] = (wanted.key, styled)
+                    dropLandedStrokes()
                 }
                 stylingLayers.remove(layer.id)
             }
         }
         return shown?.styled
+    }
+
+    /// Whether the canvas shows a layer's pixels as they are now, rather
+    /// than an older filtered or styled copy while a new one is worked out.
+    func showsCurrentPixels(of layer: Layer) -> Bool {
+        if layer.hasActiveEffects {
+            return styledDisplay[layer.id]?.key == StyleCache.Key(layer: layer, maxPixelSize: Self.filterDisplaySize)
+        }
+        if layer.hasActiveFilters {
+            return filteredDisplay[layer.id]?.key == FilterCache.Key(layer: layer, maxPixelSize: Self.filterDisplaySize)
+        }
+        return true
+    }
+
+    /// Strokes painted into their layer. Each stays drawn over the layer
+    /// until the canvas shows the layer with it painted in, so it does not
+    /// flicker away while filters or effects are worked out again.
+    func strokesLanded(_ ids: Set<PendingStroke.ID>) {
+        for index in pendingStrokes.indices where ids.contains(pendingStrokes[index].id) {
+            pendingStrokes[index].hasLanded = true
+        }
+        dropLandedStrokes()
+    }
+
+    /// Lets go of the strokes painted in that the canvas now shows.
+    private func dropLandedStrokes() {
+        guard pendingStrokes.contains(where: \.hasLanded) else { return }
+        let composition = read()
+        pendingStrokes.removeAll { pending in
+            guard pending.hasLanded else { return false }
+            return composition[pending.layerID].map(showsCurrentPixels(of:)) ?? true
+        }
     }
 
     // MARK: - Viewport
@@ -1505,7 +1542,7 @@ final class EditorState {
         // The brush hides and the eraser reveals; mirrored copies alike.
         let hides = stroke.kind == .erase
         editMask(of: layerID, hides: hides, filters: filters, finally: { [weak self] in
-            self?.pendingStrokes.removeAll { ids.contains($0.id) }
+            self?.strokesLanded(ids)
         }) { size in
             Bitmap.render(size: size) { context in
                 for var stroke in strokes {
@@ -1525,7 +1562,7 @@ final class EditorState {
             pendingStrokes.append(contentsOf: pending)
             let ids = Set(pending.map(\.id))
             editPixels(of: layerID, finally: { [weak self] in
-                self?.pendingStrokes.removeAll { ids.contains($0.id) }
+                self?.strokesLanded(ids)
             }) { image, _ in
                 strokes.reduce(image) { Painter.paint($1, onto: $0) }
             }
@@ -1537,7 +1574,7 @@ final class EditorState {
         // it is still for these pixels; otherwise it is made again.
         let prepared = retouchEffect
         editPixels(of: layerID, finally: { [weak self] in
-            self?.pendingStrokes.removeAll { $0.id == pending.id }
+            self?.strokesLanded([pending.id])
         }) { image, _ in
             switch stroke.kind {
             case .paint, .erase:

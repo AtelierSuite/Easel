@@ -430,14 +430,17 @@ struct CanvasView: View {
     }
 
     private func strokes(on layerID: Layer.ID, mask: Bool) -> [Stroke] {
-        var strokes = state.pendingStrokes.filter { $0.layerID == layerID && $0.isMask == mask && !$0.isFilterMask }.map(\.stroke)
+        // Strokes painted in show only until the layer shows them itself.
+        let landedShow = composition[layerID].map { !state.showsCurrentPixels(of: $0) } ?? false
+        let pending = state.pendingStrokes.filter { $0.layerID == layerID && (!$0.hasLanded || landedShow) }
+        var strokes = pending.filter { $0.isMask == mask && !$0.isFilterMask }.map(\.stroke)
         if let active = state.activeStroke, state.activeLayerID == layerID, !state.editsFilterMask, state.editsMask == mask {
             strokes.append(contentsOf: state.mirrored(active))
         }
         guard !mask else { return strokes }
         // Strokes into the filter mask show as a tint over the layer until
         // the filters are worked out again.
-        var onFilterMask = state.pendingStrokes.filter { $0.layerID == layerID && $0.isFilterMask }.map(\.stroke)
+        var onFilterMask = pending.filter(\.isFilterMask).map(\.stroke)
         if let active = state.activeStroke, state.activeLayerID == layerID, state.editsFilterMask {
             onFilterMask.append(contentsOf: state.mirrored(active))
         }
