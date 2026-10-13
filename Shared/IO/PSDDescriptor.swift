@@ -288,6 +288,12 @@ extension PSDDescriptor.Value {
         if let red = descriptor["Rd  "]?.number, let green = descriptor["Grn "]?.number, let blue = descriptor["Bl  "]?.number {
             return RGBAColor(red: red / 255, green: green / 255, blue: blue / 255)
         }
+        if let cyan = descriptor["Cyn "]?.number, let magenta = descriptor["Mgnt"]?.number,
+           let yellow = descriptor["Ylw "]?.number, let black = descriptor["Blck"]?.number {
+            // Plainly, without a press's profile.
+            let k = 1 - black / 100
+            return RGBAColor(red: (1 - cyan / 100) * k, green: (1 - magenta / 100) * k, blue: (1 - yellow / 100) * k)
+        }
         if let grey = descriptor["Gry "]?.number {
             let value = 1 - grey / 100
             return RGBAColor(red: value, green: value, blue: value)

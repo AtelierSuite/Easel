@@ -46,6 +46,9 @@ enum PSDSmartFilters {
             var settings = PSDDescriptor(classID: fourCC(UInt32(truncatingIfNeeded: Int64(entry["filterID"]?.number ?? 0))))
             if let found = entry["Fltr"]?.descriptor { settings = found }
             guard var filter = filter(from: settings, placement: placement) else { return nil }
+            // Filters that paint in Photoshop's foreground or background colour.
+            if filter.kind.hasColor, filter.kind.hasBackgroundColor, let colour = entry["FrgC"]?.color { filter.color = colour }
+            if filter.kind.hasBackgroundColor, let colour = entry["BckC"]?.color { filter.backgroundColor = colour }
             // Kept as Photoshop had it, to go back exactly if left alone.
             filter.photoshopFilter = PhotoshopFilterRecord(
                 id: Int32(truncatingIfNeeded: Int64(entry["filterID"]?.number ?? 0)), name: entry["Nm  "]?.text ?? "",
@@ -70,6 +73,10 @@ enum PSDSmartFilters {
     private static func filter(from settings: PSDDescriptor, placement: Placement) -> LayerFilter? {
         let unit = placement.unit
         func number(_ key: String) -> Double? { settings[key]?.number }
+        /// Which of `options` an enumerated setting is, by its place.
+        func choice(_ key: String, _ options: [String]) -> Double {
+            Double(options.firstIndex(of: settings[key]?.enumValue ?? "") ?? 0)
+        }
         switch settings.classID {
         case "GsnB":
             guard let radius = number("Rds ") else { return nil }
@@ -107,18 +114,6 @@ enum PSDSmartFilters {
         case "Pnch":
             guard let amount = number("Amnt") else { return nil }
             return make(.pinch) { $0.amount = amount / 100 }
-        case "Embs":
-            guard let amount = number("Amnt") else { return nil }
-            return make(.emboss) {
-                $0.amount = amount / 200
-                $0.angle = (number("Angl") ?? 135) + placement.turn
-                $0.setValue((number("Hght") ?? 3) / unit, at: 0)
-            }
-        case "ClrH":
-            guard let radius = number("Rds ") else { return nil }
-            return make(.halftone) { filter in
-                filter.values = [radius / unit] + ["Ang1", "Ang2", "Ang3", "Ang4"].map { (number($0) ?? 45) + placement.turn }
-            }
         case "Msc ":
             guard let size = number("ClSz") else { return nil }
             return make(.mosaic) { $0.amount = size / (60 * unit) }
@@ -178,6 +173,52 @@ enum PSDSmartFilters {
                 $0.amount = amount / 800
                 $0.radius = radius / (10 * unit)
             }
+        case "Embs":
+            guard let amount = number("Amnt") else { return nil }
+            return make(.emboss) {
+                $0.amount = amount / 200
+                $0.angle = (number("Angl") ?? 135) + placement.turn
+                $0.setValue((number("Hght") ?? 3) / unit, at: 0)
+            }
+        case "ClrH":
+            guard let radius = number("Rds ") else { return nil }
+            return make(.halftone) { filter in
+                filter.values = [radius / unit] + ["Ang1", "Ang2", "Ang3", "Ang4"].map { (number($0) ?? 45) + placement.turn }
+            }
+        case "Ofst":
+            let edges = choice("Fl  ", ["Bckg", "Rpt ", "Wrp "])
+            return make(.offset) { $0.values = [(number("Hrzn") ?? 0) / unit, (number("Vrtc") ?? 0) / unit, edges] }
+        case "Cstm":
+            let weights = settings["Mtrx"]?.list?.compactMap(\.number) ?? []
+            guard weights.count == 25 else { return nil }
+            return make(.custom) { $0.values = weights + [number("Scl ") ?? 1, number("Ofst") ?? 0] }
+        case "FndE": return LayerFilter(kind: .findEdges)
+        case "TrcC":
+            return make(.traceContour) { $0.values = [number("Lvl ") ?? 128, settings["Edg "]?.enumValue == "Upr " ? 1 : 0] }
+        case "Frgm":
+            // Photoshop's copies sit four of its pixels apart.
+            return make(.fragment) { $0.setValue(4 / unit, at: 0) }
+        case "Fct ": return LayerFilter(kind: .facet)
+        case "Wnd ":
+            let method = choice("WndM", ["Wnd ", "Blst", "Stgr"])
+            return make(.wind) { $0.values = [method, settings["Drct"]?.enumValue == "Rght" ? 1 : 0] }
+        case "Dfs ":
+            let mode = choice("Md  ", ["Nrml", "DrkO", "LghO", "anisotropic"])
+            return make(.diffuse) { $0.setValue(mode, at: 0) }
+        case "Tls ":
+            let fill = choice("FlCl", ["FlBc", "FlFr", "FlIn", "FlSm"])
+            return make(.tiles) { $0.values = [number("TlNm") ?? 10, number("TlOf") ?? 10, fill] }
+        case "Extr":
+            return make(.extrude) {
+                $0.values = [settings["ExtT"]?.enumValue == "Pyrm" ? 1 : 0, (number("ExtS") ?? 30) / unit, number("ExtD") ?? 30,
+                             settings["ExtR"]?.enumValue == "LvlB" ? 1 : 0]
+            }
+        case "Crst", "Pntl":
+            guard let size = number("ClSz") else { return nil }
+            return make(settings.classID == "Crst" ? .crystallize : .pointillize) { $0.setValue(size / unit, at: 0) }
+        case "Mztn":
+            let type = choice("MztT", ["FnDt", "MdmD", "GrnD", "CrsD", "ShrL", "MdmL", "LngL", "ShSt", "MdmS", "LnSt"])
+            return make(.mezzotint) { $0.setValue(type, at: 0) }
         case "Invr":
             return LayerFilter(kind: .invert)
         case "Slrz":
@@ -331,8 +372,8 @@ enum PSDSmartFilters {
         items.append(("blendOptions", .descriptor(blend)))
         items.append(("enab", .bool(filter.isEnabled)))
         items.append(("hasoptions", .bool(settings != nil)))
-        items.append(("FrgC", .rgb(.black)))
-        items.append(("BckC", .rgb(.white)))
+        items.append(("FrgC", .rgb(filter.kind.hasBackgroundColor ? (filter.color ?? .black) : .black)))
+        items.append(("BckC", .rgb(filter.backgroundColor ?? .white)))
         if let settings { items.append(("Fltr", .descriptor(settings))) }
         items.append(("filterID", .integer(id)))
         return items
@@ -398,6 +439,59 @@ enum PSDSmartFilters {
             return entry("Color Halftone...", "ClrH", [
                 ("Rds ", .integer(Int32(min(max((filter.value(0) * unit).rounded(), 4), 127)))),
                 ("Ang1", angle(1)), ("Ang2", angle(2)), ("Ang3", angle(3)), ("Ang4", angle(4)),
+            ])
+        case .offset:
+            return entry("Offset...", "Ofst", [
+                ("Hrzn", .integer(Int32((filter.value(0) * unit).rounded()))), ("Vrtc", .integer(Int32((filter.value(1) * unit).rounded()))),
+                ("Fl  ", .enumerated(type: "FlMd", value: ["Bckg", "Rpt ", "Wrp "][min(max(Int(filter.value(2).rounded()), 0), 2)])),
+            ])
+        case .custom:
+            return entry("Custom...", "Cstm", [
+                ("Scl ", .integer(Int32(filter.value(25).rounded()))), ("Ofst", .integer(Int32(filter.value(26).rounded()))),
+                ("Mtrx", .list((0..<25).map { .integer(Int32(filter.value($0).rounded())) })),
+            ])
+        case .findEdges: return entry("Find Edges", "FndE", noSettings)
+        case .traceContour:
+            return entry("Trace Contour...", "TrcC", [
+                ("Lvl ", .integer(Int32(filter.value(0).rounded()))),
+                ("Edg ", .enumerated(type: "CntE", value: filter.value(1) >= 0.5 ? "Upr " : "Lwr ")),
+            ])
+        case .fragment where abs(filter.value(0) * unit - 4) < 0.5:
+            // Photoshop's copies are always four pixels apart.
+            return entry("Fragment", "Frgm", noSettings)
+        case .facet: return entry("Facet", "Fct ", noSettings)
+        case .wind:
+            return entry("Wind...", "Wnd ", [
+                ("WndM", .enumerated(type: "WndM", value: ["Wnd ", "Blst", "Stgr"][min(max(Int(filter.value(0).rounded()), 0), 2)])),
+                ("Drct", .enumerated(type: "Drct", value: filter.value(1) >= 0.5 ? "Rght" : "Left")),
+            ])
+        case .diffuse:
+            return entry("Diffuse...", "Dfs ", [
+                ("Md  ", .enumerated(type: "DfsM", value: ["Nrml", "DrkO", "LghO", "anisotropic"][min(max(Int(filter.value(0).rounded()), 0), 3)])),
+                ("FlRs", .integer(1)),
+            ])
+        case .tiles:
+            return entry("Tiles...", "Tls ", [
+                ("TlNm", .integer(Int32(filter.value(0).rounded()))), ("TlOf", .integer(Int32(filter.value(1).rounded()))),
+                ("FlCl", .enumerated(type: "FlCl", value: ["FlBc", "FlFr", "FlIn", "FlSm"][min(max(Int(filter.value(2).rounded()), 0), 3)])),
+                ("FlRs", .integer(1)),
+            ])
+        case .extrude:
+            return entry("Extrude...", "Extr", [
+                ("ExtS", .integer(Int32(min(max((filter.value(1) * unit).rounded(), 2), 255)))),
+                ("ExtD", .integer(Int32(filter.value(2).rounded()))), ("ExtF", .bool(false)), ("ExtM", .bool(false)),
+                ("ExtT", .enumerated(type: "ExtT", value: filter.value(0) >= 0.5 ? "Pyrm" : "Blks")),
+                ("ExtR", .enumerated(type: "ExtR", value: filter.value(3) >= 0.5 ? "LvlB" : "Rndm")), ("FlRs", .integer(1)),
+            ])
+        case .crystallize, .pointillize:
+            let isCrystal = filter.kind == .crystallize
+            return entry(isCrystal ? "Crystallize..." : "Pointillize...", isCrystal ? "Crst" : "Pntl", [
+                ("ClSz", .integer(Int32(min(max((filter.value(0) * unit).rounded(), 3), 300)))), ("FlRs", .integer(1)),
+            ])
+        case .mezzotint:
+            let types = ["FnDt", "MdmD", "GrnD", "CrsD", "ShrL", "MdmL", "LngL", "ShSt", "MdmS", "LnSt"]
+            return entry("Mezzotint...", "Mztn", [
+                ("MztT", .enumerated(type: "MztT", value: types[min(max(Int(filter.value(0).rounded()), 0), 9)])), ("FlRs", .integer(1)),
             ])
         case .mosaic:
             return entry("Mosaic...", "Msc ", [("ClSz", .unit("#Pxl", max(2, filter.amount * 60 * unit)))])

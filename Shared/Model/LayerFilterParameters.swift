@@ -84,12 +84,6 @@ extension LayerFilter.Kind {
                 FilterParameter(labelKey: "LayerFilters.ReduceColorNoise", range: 0...100, defaultValue: 45, style: .signedPercent),
                 FilterParameter(labelKey: "LayerFilters.SharpenDetails", range: 0...100, defaultValue: 25, style: .signedPercent),
             ]
-        case .emboss:
-            return [FilterParameter(labelKey: "LayerFilters.Height", range: 0.5...30, defaultValue: 3, style: .length)]
-        case .halftone:
-            return [FilterParameter(labelKey: "LayerFilters.MaximumRadius", range: 1...130, defaultValue: 8, style: .length)]
-                + (1...4).map { FilterParameter(labelKey: "LayerFilters.Screen\($0)", range: -360...360,
-                                                defaultValue: [108.0, 162, 90, 45][$0 - 1], style: .degrees) }
         case .addNoise:
             return [
                 FilterParameter(labelKey: "LayerFilters.Amount", range: 0.1...400, defaultValue: 12.5, style: .signedPercent),
@@ -97,19 +91,90 @@ extension LayerFilter.Kind {
                                 style: .choice(["LayerFilters.Uniform", "LayerFilters.Gaussian"])),
                 FilterParameter(labelKey: "LayerFilters.Monochromatic", range: 0...1, defaultValue: 0, style: .toggle),
             ]
+        case .emboss:
+            return [FilterParameter(labelKey: "LayerFilters.Height", range: 0.5...30, defaultValue: 3, style: .length)]
+        case .halftone:
+            return [FilterParameter(labelKey: "LayerFilters.MaximumRadius", range: 1...130, defaultValue: 8, style: .length)]
+                + (1...4).map { FilterParameter(labelKey: "LayerFilters.Screen\($0)", range: -360...360,
+                                                defaultValue: [108.0, 162, 90, 45][$0 - 1], style: .degrees) }
+        case .offset:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Horizontal", range: -1000...1000, defaultValue: 50, style: .length),
+                FilterParameter(labelKey: "LayerFilters.Vertical", range: -1000...1000, defaultValue: 50, style: .length),
+                FilterParameter(labelKey: "LayerFilters.Edges", range: 0...2, defaultValue: 0,
+                                style: .choice(["LayerFilters.Transparent", "LayerFilters.RepeatEdges", "LayerFilters.WrapAround"])),
+            ]
+        case .traceContour:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Level", range: 0...255, defaultValue: 128, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.Edge", range: 0...1, defaultValue: 0,
+                                style: .choice(["LayerFilters.Lower", "LayerFilters.Upper"])),
+            ]
+        case .fragment:
+            return [FilterParameter(labelKey: "LayerFilters.Distance", range: 0.5...50, defaultValue: 4, style: .length)]
+        case .wind:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Method", range: 0...2, defaultValue: 0,
+                                style: .choice(["LayerFilters.Wind", "LayerFilters.Blast", "LayerFilters.Stagger"])),
+                FilterParameter(labelKey: "LayerFilters.Direction", range: 0...1, defaultValue: 0,
+                                style: .choice(["LayerFilters.FromRight", "LayerFilters.FromLeft"])),
+            ]
+        case .diffuse:
+            return [FilterParameter(labelKey: "LayerFilters.Mode", range: 0...3, defaultValue: 0, style: .choice([
+                "LayerFilters.Normal", "LayerFilters.DarkenOnly", "LayerFilters.LightenOnly", "LayerFilters.Anisotropic",
+            ]))]
+        case .tiles:
+            return [
+                FilterParameter(labelKey: "LayerFilters.NumberOfTiles", range: 1...99, defaultValue: 10, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.MaximumOffset", range: 1...99, defaultValue: 10, style: .signedPercent),
+                FilterParameter(labelKey: "LayerFilters.FillWith", range: 0...3, defaultValue: 0, style: .choice([
+                    "LayerFilters.BackgroundColor", "LayerFilters.ForegroundColor", "LayerFilters.InverseImage", "LayerFilters.UnalteredImage",
+                ])),
+            ]
+        case .extrude:
+            return [
+                FilterParameter(labelKey: "LayerFilters.Type", range: 0...1, defaultValue: 0,
+                                style: .choice(["LayerFilters.Blocks", "LayerFilters.Pyramids"])),
+                FilterParameter(labelKey: "LayerFilters.Size", range: 2...255, defaultValue: 30, style: .length),
+                FilterParameter(labelKey: "LayerFilters.Depth", range: 1...255, defaultValue: 30, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.LevelBased", range: 0...1, defaultValue: 0, style: .toggle),
+            ]
+        case .crystallize:
+            return [FilterParameter(labelKey: "LayerFilters.CellSize", range: 3...300, defaultValue: 10, style: .length)]
+        case .pointillize:
+            return [FilterParameter(labelKey: "LayerFilters.CellSize", range: 3...300, defaultValue: 5, style: .length)]
+        case .mezzotint:
+            return [FilterParameter(labelKey: "LayerFilters.Type", range: 0...9, defaultValue: 0, style: .choice([
+                "LayerFilters.FineDots", "LayerFilters.MediumDots", "LayerFilters.GrainyDots", "LayerFilters.CoarseDots",
+                "LayerFilters.ShortLines", "LayerFilters.MediumLines", "LayerFilters.LongLines",
+                "LayerFilters.ShortStrokes", "LayerFilters.MediumStrokes", "LayerFilters.LongStrokes",
+            ]))]
+        case .custom:
+            // Five rows of five weights, then the divisor and the offset.
+            let weights = [Double](repeating: 0, count: 12) + [1] + [Double](repeating: 0, count: 12)
+            return weights.enumerated().map { index, weight in
+                FilterParameter(labelKey: "LayerFilters.Weight", range: -999...999, defaultValue: weight, style: .integer)
+            } + [
+                FilterParameter(labelKey: "LayerFilters.Scale", range: 1...9999, defaultValue: 1, style: .integer),
+                FilterParameter(labelKey: "LayerFilters.Offset", range: -9999...9999, defaultValue: 0, style: .integer),
+            ]
         default:
             return []
         }
     }
 
     /// Filters with a colour of their own to set.
-    var hasColor: Bool { self == .photoFilter || self == .blackAndWhite }
+    var hasColor: Bool { self == .photoFilter || self == .blackAndWhite || self == .tiles }
+
+    /// Filters that show the background colour.
+    var hasBackgroundColor: Bool { self == .tiles || self == .pointillize }
 
     var defaultColor: RGBAColor? {
         switch self {
         // Photoshop's Warming Filter (85), and its sepia tint.
         case .photoFilter: return RGBAColor(red: 236 / 255, green: 138 / 255, blue: 0)
         case .blackAndWhite: return RGBAColor(red: 225 / 255, green: 211 / 255, blue: 179 / 255)
+        case .tiles: return .black
         default: return nil
         }
     }

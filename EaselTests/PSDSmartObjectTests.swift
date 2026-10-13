@@ -224,7 +224,9 @@ struct PSDSmartObjectTests {
 
     @Test(arguments: [
         "boxBlur", "blur", "blurMore", "average", "surfaceBlur", "smartBlur", "sharpen", "sharpenMore", "sharpenEdges",
-        "median", "minimum", "maximum", "dustAndScratches", "addNoise", "reduceNoise", "despeckle", "halftone", "emboss",
+        "median", "minimum", "maximum", "dustAndScratches", "addNoise", "reduceNoise", "despeckle",
+        "offset", "custom", "findEdges", "traceContour", "fragment", "facet", "wind", "diffuse", "tiles", "extrude",
+        "crystallize", "pointillize", "mezzotint", "halftone", "emboss",
     ])
     func photoshopsFiltersComeBack(_ kind: String) throws {
         var filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)
@@ -233,7 +235,11 @@ struct PSDSmartObjectTests {
         if filter.kind == .dustAndScratches { filter.values = [50, 4] }
         // These too, in whole pixels Photoshop allows.
         if filter.kind == .halftone { filter.values = [250, 108, 162, 90, 45] }
+        if filter.kind == .crystallize || filter.kind == .pointillize { filter.values = [250] }
+        if filter.kind == .offset { filter.values = [100, -75, 2] }
+        if filter.kind == .extrude { filter.values = [1, 250, 40, 1] }
         if filter.kind == .emboss { filter.values = [75] }
+        if filter.kind == .fragment { filter.values = [100] }
         var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30), scaleX: 2, scaleY: 2))
         layer.filters = [filter]
         let read = try #require(try roundTrip([layer]).layers.first)

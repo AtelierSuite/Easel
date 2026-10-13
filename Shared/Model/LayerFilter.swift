@@ -65,6 +65,33 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case reduceNoise
         /// Specks smoothed away where there are no edges.
         case despeckle
+        /// Moved across and down, the space left transparent, repeated or
+        /// wrapped round.
+        case offset
+        /// A convolution of one's own: five by five weights.
+        case custom
+        /// Edges drawn dark on white.
+        case findEdges
+        /// Thin lines where each channel crosses a level.
+        case traceContour
+        /// Four copies laid over one another, offset.
+        case fragment
+        /// Like colours gathered into flat patches.
+        case facet
+        /// Streaks blown from edges.
+        case wind
+        /// Pixels shuffled with their neighbours.
+        case diffuse
+        /// Cut into squares, each pushed a little out of place.
+        case tiles
+        /// Raised into blocks or pyramids.
+        case extrude
+        /// Gathered into crystal-like cells of one colour each.
+        case crystallize
+        /// Dots of colour on the background colour.
+        case pointillize
+        /// Dots, lines or strokes of pure colour.
+        case mezzotint
 
         var id: String { rawValue }
 
@@ -74,17 +101,21 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             [.blackAndWhite, .sepia, .saturation, .brightness, .contrast],
             [.levels, .curves, .colorBalance, .gradientMap, .hsl, .replaceColor],
             [.exposure, .vibrance, .photoFilter, .invert, .posterize, .threshold, .solarize],
-            [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur, .blur, .blurMore, .average, .mosaic],
+            [.gaussianBlur, .motionBlur, .zoomBlur, .lensBlur, .boxBlur, .surfaceBlur, .smartBlur, .blur, .blurMore, .average],
             [.noiseReduction, .reduceNoise, .despeckle, .addNoise, .median, .dustAndScratches, .minimum, .maximum],
             [.unsharpMask, .sharpen, .sharpenMore, .sharpenEdges, .highPass, .lensCorrection],
-            [.twirl, .pinch, .emboss, .halftone],
+            [.twirl, .pinch, .offset],
+            [.emboss, .findEdges, .traceContour, .wind, .diffuse, .tiles, .extrude],
+            [.mosaic, .halftone, .crystallize, .pointillize, .mezzotint, .facet, .fragment],
+            [.custom],
         ]
 
         var label: String {
             switch self {
             case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize,
                  .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
-                 .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle:
+                 .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
+                 .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -138,6 +169,19 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .addNoise: return "aqi.high"
             case .reduceNoise: return "wand.and.rays"
             case .despeckle: return "wand.and.rays.inverse"
+            case .offset: return "arrow.up.and.down.and.arrow.left.and.right"
+            case .custom: return "square.grid.3x3"
+            case .findEdges: return "square.dashed.inset.filled"
+            case .traceContour: return "point.topleft.down.to.point.bottomright.curvepath"
+            case .fragment: return "square.on.square"
+            case .facet: return "hexagon"
+            case .wind: return "wind.snow"
+            case .diffuse: return "circle.dotted.and.circle"
+            case .tiles: return "square.grid.2x2"
+            case .extrude: return "cube.transparent"
+            case .crystallize: return "diamond"
+            case .pointillize: return "circle.grid.cross"
+            case .mezzotint: return "rectangle.pattern.checkered"
             case .blackAndWhite: return "circle.righthalf.filled"
             case .sepia: return "sun.dust"
             case .saturation: return "drop.halffull"
@@ -192,7 +236,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .halftone: return 0.3
             case .invert, .posterize, .threshold, .exposure, .vibrance, .photoFilter, .solarize,
                  .boxBlur, .blur, .blurMore, .average, .surfaceBlur, .smartBlur, .sharpen, .sharpenMore, .sharpenEdges,
-                 .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle: return 1
+                 .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
+                 .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint: return 1
             }
         }
 
@@ -209,7 +254,8 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
 
         /// Filters that are simply on or off.
         var hasNoSettings: Bool {
-            [.invert, .solarize, .blur, .blurMore, .average, .sharpen, .sharpenMore, .sharpenEdges, .despeckle].contains(self)
+            [.invert, .solarize, .blur, .blurMore, .average, .sharpen, .sharpenMore, .sharpenEdges, .despeckle,
+             .findEdges, .facet].contains(self)
         }
 
         var hasAngle: Bool { [.motionBlur, .emboss].contains(self) }
@@ -291,8 +337,12 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     /// Settings for filters set by `kind.parameters`, in that order; any
     /// missing are at their defaults.
     var values: [Double]?
-    /// The colour a photo filter tints with, or black and white's tint.
+    /// The colour a photo filter tints with, black and white's tint, or
+    /// the foreground colour filters such as Tiles fill with.
     var color: RGBAColor?
+    /// The background colour filters such as Pointillize show between
+    /// their dots.
+    var backgroundColor: RGBAColor?
     /// The Photoshop smart filter this came from, kept so a file saved
     /// again gets it back exactly, until the filter is changed here.
     var photoshopFilter: PhotoshopFilterRecord?

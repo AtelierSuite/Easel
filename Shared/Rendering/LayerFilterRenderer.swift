@@ -182,7 +182,8 @@ extension LayerFilter {
             filter.radius = Float(min(extent.width, extent.height) / 2)
             filter.scale = Float(-amount)
             output = filter.outputImage ?? input
-        case .emboss, .halftone, .mosaic:
+        case .emboss, .halftone, .mosaic, .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse,
+             .tiles, .extrude, .crystallize, .pointillize, .mezzotint:
             output = applyStylize(to: input)
         }
         return output.cropped(to: extent)

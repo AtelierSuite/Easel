@@ -284,6 +284,62 @@ struct FilterRow: View {
     /// Controls for each of a filter's own settings.
     @ViewBuilder
     private var parameterControls: some View {
+        if filter.kind == .custom {
+            customControls
+        } else {
+            settingControls
+        }
+        if filter.kind.hasColor, filter.kind != .blackAndWhite || filter.value(6) >= 0.5 {
+            ColorPicker(filter.kind.hasBackgroundColor ? "LayerFilters.Foreground" : "LayerFilters.Color", selection: Binding(
+                get: { (filter.color ?? filter.kind.defaultColor ?? .white).color },
+                set: { color in state.updateFilter(filter.id) { $0.color = RGBAColor(color) } }
+            ), supportsOpacity: false)
+            .font(.subheadline)
+        }
+        if filter.kind.hasBackgroundColor {
+            ColorPicker("LayerFilters.Background", selection: Binding(
+                get: { (filter.backgroundColor ?? .white).color },
+                set: { color in state.updateFilter(filter.id) { $0.backgroundColor = RGBAColor(color) } }
+            ), supportsOpacity: false)
+            .font(.subheadline)
+        }
+    }
+
+    /// Custom's five by five weights, its divisor and its offset.
+    private var customControls: some View {
+        VStack(spacing: 6) {
+            Grid(horizontalSpacing: 6, verticalSpacing: 6) {
+                ForEach(0..<5, id: \.self) { row in
+                    GridRow {
+                        ForEach(0..<5, id: \.self) { column in
+                            numberField(index: row * 5 + column)
+                        }
+                    }
+                }
+            }
+            HStack {
+                Text("LayerFilters.Scale").font(.subheadline)
+                numberField(index: 25)
+                Text("LayerFilters.Offset").font(.subheadline)
+                numberField(index: 26)
+            }
+        }
+    }
+
+    private func numberField(index: Int) -> some View {
+        TextField("", value: Binding(
+            get: { Int(filter.value(index).rounded()) },
+            set: { newValue in state.updateFilter(filter.id) { $0.setValue(Double(newValue), at: index) } }
+        ), format: .number)
+        .multilineTextAlignment(.center)
+        .keyboardType(.numbersAndPunctuation)
+        .textFieldStyle(.roundedBorder)
+        .font(.subheadline.monospacedDigit())
+        .accessibilityIdentifier("customWeight.\(index)")
+    }
+
+    @ViewBuilder
+    private var settingControls: some View {
         let parameters = filter.kind.parameters
         ForEach(parameters.indices, id: \.self) { index in
             let parameter = parameters[index]
@@ -313,13 +369,6 @@ struct FilterRow: View {
                     valueText: valueText(value.wrappedValue, style: parameter.style)
                 )
             }
-        }
-        if filter.kind.hasColor, filter.kind != .blackAndWhite || filter.value(6) >= 0.5 {
-            ColorPicker("LayerFilters.Color", selection: Binding(
-                get: { (filter.color ?? filter.kind.defaultColor ?? .white).color },
-                set: { color in state.updateFilter(filter.id) { $0.color = RGBAColor(color) } }
-            ), supportsOpacity: false)
-            .font(.subheadline)
         }
     }
 
