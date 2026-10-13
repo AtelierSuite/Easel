@@ -133,18 +133,23 @@ enum LayerEffectRenderer {
 
         let behindImage = behind.isEmpty ? nil : behind.reduce(clear) { $1.composited(over: $0) }
         let frontImage = front.isEmpty ? nil : front.reduce(clear) { $1.composited(over: $0) }
-        var composite = content
-        if let behindImage { composite = composite.composited(over: behindImage) }
-        if let frontImage { composite = frontImage.composited(over: composite) }
 
         func make(_ image: CIImage) -> CGImage {
             ImageProcessing.context.createCGImage(image.cropped(to: frame), from: frame, format: .RGBA8, colorSpace: Bitmap.colorSpace)
                 ?? Bitmap.empty
         }
+        // Each part is worked out once; the composite is put together from
+        // them rather than running the effects over again.
+        let parts = (behind: behindImage.map(make), content: make(content), front: frontImage.map(make))
         guard fill < 1 else {
+            let size = CGSize(width: parts.content.width, height: parts.content.height)
+            let composite = parts.behind == nil && parts.front == nil ? parts.content : Bitmap.render(size: size) { context in
+                for part in [parts.behind, parts.content, parts.front].compactMap(\.self) {
+                    Bitmap.draw(part, in: CGRect(origin: .zero, size: size), context: context)
+                }
+            }
             return StyledLayer(
-                behind: behindImage.map(make), content: make(content), front: frontImage.map(make),
-                composite: make(composite), padding: padding
+                behind: parts.behind, content: parts.content, front: parts.front, composite: composite, padding: padding
             )
         }
         // The same painted over the shape in black and in white tells how
@@ -152,13 +157,12 @@ enum LayerEffectRenderer {
         // which is what the fill fades.
         let black = make(inside.reduce(recolored(image, white: false)) { $1($0) })
         let white = make(inside.reduce(recolored(image, white: true)) { $1($0) })
-        let filled = fillFaded(make(content), black: black, white: white, fill: fill)
-        let behindPart = behindImage.map(make), frontPart = frontImage.map(make)
+        let filled = fillFaded(parts.content, black: black, white: white, fill: fill)
         let together = Bitmap.render(size: CGSize(width: filled.width, height: filled.height)) { context in
             let rect = CGRect(x: 0, y: 0, width: filled.width, height: filled.height)
-            for part in [behindPart, filled, frontPart].compactMap({ $0 }) { Bitmap.draw(part, in: rect, context: context) }
+            for part in [parts.behind, filled, parts.front].compactMap({ $0 }) { Bitmap.draw(part, in: rect, context: context) }
         }
-        return StyledLayer(behind: behindPart, content: filled, front: frontPart, composite: together, padding: padding)
+        return StyledLayer(behind: parts.behind, content: filled, front: parts.front, composite: together, padding: padding)
     }
 
     /// The layer's pixels faded, for a fill with no effects to keep whole.
