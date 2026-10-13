@@ -71,6 +71,26 @@ struct LayerFilterTests {
         }
     }
 
+    @Test func changingALaterFilterGivesWhatRunningTheWholeChainDoes() throws {
+        var source = Layer(
+            name: "Halves", image: LayerImage(TestImages.halves(width: 64, height: 32)), canvasSize: CGSize(width: 64, height: 32)
+        )
+        var noise = LayerFilter(kind: .addNoise)
+        noise.values = [50, 1, 0]
+        source.filters = [noise, LayerFilter(kind: .gaussianBlur), LayerFilter(kind: .invert)]
+        _ = FilterCache.shared.image(for: FilterCache.Key(layer: source, maxPixelSize: nil), source: source.image)
+        // The noise is kept from the first time; what comes after it changes.
+        source.filters[1].amount = 0.05
+        source.filters[2].isEnabled = false
+        let again = try #require(Bitmap.pixels(of: FilterCache.shared.image(
+            for: FilterCache.Key(layer: source, maxPixelSize: nil), source: source.image
+        )))
+        let fresh = try #require(Bitmap.pixels(of: ImageProcessing.apply(
+            { LayerFilter.apply(source.activeFilters, to: $0) }, to: source.image.cgImage
+        )))
+        #expect(zip(again.bytes, fresh.bytes).allSatisfy { abs(Int($0) - Int($1)) <= 1 })
+    }
+
     @Test func mosaicMakesBlocks() {
         let source = TestImages.halves(width: 200, height: 100)
         var filter = LayerFilter(kind: .mosaic)

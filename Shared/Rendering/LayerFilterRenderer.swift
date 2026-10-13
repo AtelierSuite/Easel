@@ -393,13 +393,60 @@ final class FilterCache: Sendable {
         }
     }
 
+    /// The start of a layer's chain of filters as far as a filter worked
+    /// out on the processor, kept so that changing a later filter, as a
+    /// slider drags, does not run the earlier ones again. Core Image keeps
+    /// the processor's result as pixels, and works out the rest only when
+    /// drawn.
+    private struct Start: @unchecked Sendable {
+        var imageID: UUID
+        var maxPixelSize: Int?
+        var filters: [LayerFilter]
+        /// Immutable, as Core Image's images are.
+        var image: CIImage
+    }
+
+    /// Few, as each holds a layer's pixels.
+    private static let startCapacity = 4
+    private let starts = Mutex<[Start]>([])
+
+    /// `key`'s filters run on `input`, from the longest start of them kept.
+    private func chain(_ key: Key, on input: CIImage) -> CIImage {
+        let filters = key.filters
+        let kept = starts.withLock { starts in
+            starts.filter { start in
+                start.imageID == key.imageID && start.maxPixelSize == key.maxPixelSize
+                    && start.filters.count <= filters.count && Array(filters.prefix(start.filters.count)) == start.filters
+            }.max { $0.filters.count < $1.filters.count }
+        }
+        var image = kept?.image ?? input
+        var made: [Start] = []
+        for (index, filter) in filters.enumerated().dropFirst(kept?.filters.count ?? 0) {
+            image = filter.apply(to: image)
+            if filter.kind.usesPixelFilters {
+                made.append(Start(imageID: key.imageID, maxPixelSize: key.maxPixelSize, filters: Array(filters[...index]), image: image))
+            }
+        }
+        guard !made.isEmpty else { return image }
+        starts.withLock { starts in
+            // Starts of other chains on this picture are of no more use.
+            starts.removeAll { start in
+                start.imageID == key.imageID && start.maxPixelSize == key.maxPixelSize
+                    && !(start.filters.count <= filters.count && Array(filters.prefix(start.filters.count)) == start.filters)
+            }
+            starts.append(contentsOf: made)
+            if starts.count > Self.startCapacity { starts.removeFirst(starts.count - Self.startCapacity) }
+        }
+        return image
+    }
+
     func image(for key: Key, source: LayerImage, mask: LayerMask? = nil, filterMask: LayerMask? = nil) -> CGImage {
         if let cached = cached(key) { return cached }
         let input = key.maxPixelSize.map { source.preview(maxPixelSize: $0) } ?? source.cgImage
         let applyMask = key.maskID != nil ? mask : nil
         let applyFilterMask = key.filterMaskID != nil ? filterMask : nil
         let image = ImageProcessing.apply({ image in
-            var filtered = LayerFilter.apply(key.filters, to: image)
+            var filtered = chain(key, on: image)
             if let applyFilterMask { filtered = applyFilterMask.blend(filtered, over: image) }
             return applyMask?.apply(to: filtered) ?? filtered
         }, to: input)
