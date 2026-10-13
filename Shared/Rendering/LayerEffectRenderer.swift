@@ -464,14 +464,17 @@ final class StyleCache: Sendable {
         }
     }
 
-    func styled(for key: Key, layer: Layer) -> StyledLayer {
+    /// `keeps` false for a one-off copy, such as a thumbnail's, that
+    /// should not push out what the canvas shows.
+    func styled(for key: Key, layer: Layer, keeps: Bool = true) -> StyledLayer {
         if let cached = cached(key) { return cached }
         let source: CGImage
         if key.filterKey.filters.isEmpty, layer.activeMask == nil, key.filterKey.maxPixelSize == nil {
             source = layer.image.cgImage
         } else {
             source = FilterCache.shared.image(
-                for: key.filterKey, source: layer.image, mask: layer.activeMask, filterMask: layer.activeFilterMask
+                for: key.filterKey, source: layer.image, mask: layer.activeMask, filterMask: layer.activeFilterMask,
+                keeps: keeps
             )
         }
         let styled = LayerEffectRenderer.render(
@@ -479,6 +482,7 @@ final class StyleCache: Sendable {
             placement: CGAffineTransform(a: key.a, b: key.b, c: key.c, d: key.d, tx: 0, ty: 0),
             sourceScale: Double(source.width) / Double(layer.image.width)
         )
+        guard keeps else { return styled }
         entries.withLock { entries in
             entries.append((key, styled))
             if entries.count > Self.capacity { entries.removeFirst(entries.count - Self.capacity) }
@@ -492,5 +496,21 @@ extension Layer {
     var styledImage: StyledLayer {
         guard isStyled else { return StyledLayer(plain: renderedImage) }
         return StyleCache.shared.styled(for: StyleCache.Key(layer: self, maxPixelSize: nil), layer: self)
+    }
+
+    /// The layer as it shows, effects and all, worked out from a copy of
+    /// its pixels no longer than `maxPixelSize`, for a picture drawn small.
+    /// Not kept, so it does not push out what the canvas shows.
+    func styledImage(maxPixelSize: Int) -> StyledLayer {
+        guard maxPixelSize < max(image.width, image.height) else { return styledImage }
+        if hasActiveEffects {
+            let key = StyleCache.Key(layer: self, maxPixelSize: maxPixelSize)
+            return StyleCache.shared.styled(for: key, layer: self, keeps: false)
+        }
+        guard hasActiveFilters || activeMask != nil else { return StyledLayer(plain: image.cgImage) }
+        return StyledLayer(plain: FilterCache.shared.image(
+            for: FilterCache.Key(layer: self, maxPixelSize: maxPixelSize, includesMask: true), source: image,
+            mask: activeMask, filterMask: activeFilterMask, keeps: false
+        ))
     }
 }

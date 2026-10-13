@@ -411,7 +411,7 @@ final class FilterCache: Sendable {
     private let starts = Mutex<[Start]>([])
 
     /// `key`'s filters run on `input`, from the longest start of them kept.
-    private func chain(_ key: Key, on input: CIImage) -> CIImage {
+    private func chain(_ key: Key, on input: CIImage, keeps: Bool = true) -> CIImage {
         let filters = key.filters
         let kept = starts.withLock { starts in
             starts.filter { start in
@@ -427,7 +427,7 @@ final class FilterCache: Sendable {
                 made.append(Start(imageID: key.imageID, maxPixelSize: key.maxPixelSize, filters: Array(filters[...index]), image: image))
             }
         }
-        guard !made.isEmpty else { return image }
+        guard keeps, !made.isEmpty else { return image }
         starts.withLock { starts in
             // Starts of other chains on this picture are of no more use.
             starts.removeAll { start in
@@ -440,16 +440,21 @@ final class FilterCache: Sendable {
         return image
     }
 
-    func image(for key: Key, source: LayerImage, mask: LayerMask? = nil, filterMask: LayerMask? = nil) -> CGImage {
+    /// `keeps` false for a one-off copy, such as a thumbnail's, that
+    /// should not push out what the canvas shows.
+    func image(
+        for key: Key, source: LayerImage, mask: LayerMask? = nil, filterMask: LayerMask? = nil, keeps: Bool = true
+    ) -> CGImage {
         if let cached = cached(key) { return cached }
         let input = key.maxPixelSize.map { source.preview(maxPixelSize: $0) } ?? source.cgImage
         let applyMask = key.maskID != nil ? mask : nil
         let applyFilterMask = key.filterMaskID != nil ? filterMask : nil
         let image = ImageProcessing.apply({ image in
-            var filtered = chain(key, on: image)
+            var filtered = chain(key, on: image, keeps: keeps)
             if let applyFilterMask { filtered = applyFilterMask.blend(filtered, over: image) }
             return applyMask?.apply(to: filtered) ?? filtered
         }, to: input)
+        guard keeps else { return image }
         entries.withLock { entries in
             entries.append((key, image))
             if entries.count > Self.capacity { entries.removeFirst(entries.count - Self.capacity) }

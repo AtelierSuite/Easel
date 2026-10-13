@@ -45,7 +45,16 @@ enum CompositionRenderer {
     }
 
     /// Draws the layers into a context already set up in canvas coordinates.
-    static func draw(_ layers: [Layer], in context: CGContext) {
+    /// `scale`, how large the canvas is drawn, lets layers with filters or
+    /// effects be worked out from smaller copies when it is small.
+    static func draw(_ layers: [Layer], in context: CGContext, scale: Double? = nil) {
+        func styledImage(of layer: Layer) -> StyledLayer {
+            guard let scale else { return layer.styledImage }
+            let transform = layer.transform
+            let longest = Double(max(layer.image.width, layer.image.height))
+                * max(abs(transform.scaleX), abs(transform.scaleY)) * scale
+            return layer.styledImage(maxPixelSize: max(16, Int(longest.rounded(.up)) + 1))
+        }
         for unit in layers.clippingUnits where unit.base.isVisible && unit.base.opacity > 0 {
             let clipped = unit.clipped.filter { $0.isVisible && $0.opacity > 0 }
             let base = unit.base
@@ -54,7 +63,7 @@ enum CompositionRenderer {
                 adjust(context, with: base)
                 continue
             }
-            let styled = base.styledImage
+            let styled = styledImage(of: base)
             guard !clipped.isEmpty else {
                 draw(base, image: styled.composite, padding: styled.padding, in: context)
                 continue
@@ -80,7 +89,7 @@ enum CompositionRenderer {
                         if layer.isAdjustment {
                             adjust(group, with: layer)
                         } else {
-                            let image = layer.styledImage
+                            let image = styledImage(of: layer)
                             draw(layer, image: image.composite, padding: image.padding, in: group)
                         }
                     }
@@ -207,7 +216,7 @@ enum CompositionRenderer {
                 context.fill(CGRect(origin: .zero, size: size))
             }
             context.scaleBy(x: size.width / composition.size.width, y: size.height / composition.size.height)
-            draw(drawnLayers(composition), in: context)
+            draw(drawnLayers(composition), in: context, scale: factor)
         }
     }
 

@@ -25,6 +25,19 @@ struct LayerFilterTests {
         #expect(isGrey(CompositionRenderer.render(Composition(size: size, layers: [filtered])), x: 1, y: 1))
     }
 
+    @Test func thumbnailsFilterASmallCopyAndKeepNothing() {
+        let canvas = CGSize(width: 400, height: 200)
+        var big = Layer(name: "Big", image: LayerImage(TestImages.halves(width: 400, height: 200)), canvasSize: canvas)
+        big.filters = [LayerFilter(kind: .blackAndWhite)]
+        let thumbnail = CompositionRenderer.thumbnail(Composition(size: canvas, layers: [big]), maxPixelSize: 40)
+        #expect(thumbnail.width == 40)
+        #expect(isGrey(thumbnail, x: 5, y: 10))
+        // Neither the full-size layer nor the thumbnail's copy is kept, so
+        // what the canvas shows stays cached.
+        #expect(FilterCache.shared.cached(FilterCache.Key(layer: big, maxPixelSize: nil, includesMask: true)) == nil)
+        #expect(FilterCache.shared.cached(FilterCache.Key(layer: big, maxPixelSize: 41, includesMask: true)) == nil)
+    }
+
     @Test func turningAFilterOffRestoresTheLayer() {
         var filter = LayerFilter(kind: .blackAndWhite)
         filter.isEnabled = false
