@@ -106,6 +106,8 @@ private struct FilterMaskRow: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 40, height: 40)
                     .clipShape(.rect(cornerRadius: 6))
+                    // A mask showing everything is all white.
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.secondary.opacity(0.3)))
                     .opacity(mask.isEnabled ? 1 : 0.4)
                 Toggle("FilterMask.Paint", systemImage: "paintbrush.pointed", isOn: $state.isEditingFilterMask)
                     .toggleStyle(.button)
