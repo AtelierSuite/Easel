@@ -497,7 +497,13 @@ struct ToolOptionsBar: View {
                             valueText: "\(Int((path.gradientAngle ?? 0).rounded()))°"
                         )
                     } else {
-                        VectorColorWell(color: fill) { color in state.updateVectorStyle { $0.fill = color } }
+                        // A built-in pattern is drawn in its own colour.
+                        VectorColorWell(color: path.fillPattern.flatMap { $0.preset == nil ? nil : $0.color } ?? fill) { color in
+                            state.updateVectorStyle { path in
+                                path.fill = color
+                                path.fillPattern?.color = color
+                            }
+                        }
                     }
                     GlassMenuButton(symbol: path.fillPattern?.preset?.symbolName ?? "square.grid.3x3", label: "Options.PatternFill") {
                         Button("Options.NoPattern", systemImage: "square.fill") {
