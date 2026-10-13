@@ -76,6 +76,25 @@ struct StylizeFilterTests {
         }
     }
 
+    @Test func mezzotintMarksAreWholeCells() {
+        var pixels = PixelFilters.Pixels(width: 60, height: 60)
+        for index in stride(from: 0, to: pixels.bytes.count, by: 4) {
+            for channel in 0..<3 { pixels.bytes[index + channel] = 128 }
+            pixels.bytes[index + 3] = 255
+        }
+        // Coarse dots, six pixels square at this size.
+        LayerFilter.mezzotint(&pixels, type: 3, unit: 2, seed: 7)
+        var shades = Set<UInt8>()
+        for top in stride(from: 0, to: 60, by: 6) {
+            for left in stride(from: 0, to: 60, by: 6) {
+                let cell = Set((top..<top + 6).flatMap { y in (left..<left + 6).map { x in pixels[x, y, 0] } })
+                #expect(cell.count == 1)
+                shades.formUnion(cell)
+            }
+        }
+        #expect(shades == [0, 255])
+    }
+
     @Test func clearNeighboursDoNotCountAsBlack() {
         let half = Bitmap.render(size: CGSize(width: 200, height: 200)) { context in
             context.setFillColor(RGBAColor(red: 0.5, green: 0.5, blue: 0.5).cgColor)

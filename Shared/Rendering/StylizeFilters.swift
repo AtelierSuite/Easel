@@ -514,29 +514,31 @@ extension LayerFilter {
         let (across, down) = shapes[min(type, 9)]
         let width = max(1, Int((across * scale).rounded())), height = max(1, Int((down * scale).rounded()))
         let isStroke = type >= 7, isGrainy = type == 2
-        var thresholds: [Int: Double] = [:]
         for y in 0..<pixels.height {
             for x in 0..<pixels.width where pixels[x, y, 3] > 0 {
-                // One mark for all three channels, as Photoshop draws them.
+                // One mark for all three channels, as Photoshop draws them:
+                // fine and grainy dots each pixel's own, the rest the same
+                // over each mark's cell. Strokes lean, so each row's marks
+                // start further along.
+                let threshold: Double
+                if isGrainy || type == 0 {
+                    threshold = random.next()
+                } else {
+                    threshold = cellRandom(seed: seed, column: (isStroke ? x + y : x) / width, row: y / height)
+                }
                 for channel in 0..<3 {
-                    // Strokes lean, so each row's marks start further along.
-                    let shiftedX = isStroke ? x + y : x
-                    let key = (y / height) * 100_000 + shiftedX / width
-                    let threshold: Double
-                    if (isGrainy || type == 0), channel > 0, let known = thresholds[-1] {
-                        threshold = known
-                    } else if isGrainy || type == 0 {
-                        threshold = random.next()
-                        thresholds[-1] = threshold
-                    } else if let known = thresholds[key] {
-                        threshold = known
-                    } else {
-                        threshold = random.next()
-                        thresholds[key] = threshold
-                    }
                     pixels[x, y, channel] = Double(pixels[x, y, channel]) / 255 > threshold ? 255 : 0
                 }
             }
         }
+    }
+
+    /// A number 0..<1 for a cell of a grid, the same for the same seed and
+    /// cell however the grid is visited.
+    static func cellRandom(seed: UInt64, column: Int, row: Int) -> Double {
+        let column = UInt64(bitPattern: Int64(column)) &* 0x9E37_79B9_7F4A_7C15
+        let row = UInt64(bitPattern: Int64(row)) &* 0xC2B2_AE3D_27D4_EB4F
+        var random = Random(seed: seed ^ column ^ (row << 1 | row >> 63))
+        return random.next()
     }
 }
