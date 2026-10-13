@@ -21,6 +21,9 @@ struct LayerGroup: Identifiable, Codable, Equatable, Sendable {
     var blendMode: LayerBlendMode?
     /// What its Photoshop file had that Easel does not use, to write back.
     var photoshop: PhotoshopExtras?
+    /// The group's identifier in the Pixelmator Pro document it was read
+    /// from, so it is written back in place.
+    var pixelmatorID: String?
 }
 
 /// One thing in the stack as it is drawn: a layer, or a group whose layers

@@ -81,6 +81,8 @@ enum CompositionArchive {
         /// Whether the layer is still the plain fill a new document starts
         /// with; absent when it is not.
         var isBlank: Bool?
+        /// The layer's identifier in the Pixelmator Pro document it came from.
+        var pixelmatorID: String?
     }
 
     // MARK: - Package
@@ -191,7 +193,8 @@ enum CompositionArchive {
                 blendMode: layer.blendMode, isClipped: layer.isClipped ? true : nil,
                 isVisible: layer.isVisible, isLocked: layer.isLocked,
                 groupID: layer.groupID,
-                isBlank: layer.image.isBlank ? true : nil
+                isBlank: layer.image.isBlank ? true : nil,
+                pixelmatorID: layer.pixelmator.flatMap { $0.isPreview ? nil : $0.identifier }
             ))
         }
         var patterns: [PatternRecord] = []
@@ -247,6 +250,7 @@ enum CompositionArchive {
             layer.effects = record.effects ?? []
             layer.adjustment = record.adjustment
             layer.missingLink = record.missingLink
+            layer.pixelmator = record.pixelmatorID.map { PixelmatorSource(identifier: $0) }
             if let file = record.filterMaskFile {
                 guard let data = read(file) else { throw Failure.missingLayer(file) }
                 layer.filterMask = LayerMask(

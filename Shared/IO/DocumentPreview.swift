@@ -5,7 +5,8 @@ import Foundation
 /// showing it without opening it.
 enum DocumentPreview {
     static let candidates = [
-        "QuickLook/Thumbnail.png", "QuickLook/Thumbnail.webp", "QuickLook/Thumbnail.tiff", "QuickLook/Icon.webp",
+        "QuickLook/Thumbnail.png", "QuickLook/Thumbnail.heic", "QuickLook/Thumbnail.webp", "QuickLook/Thumbnail.tiff",
+        "QuickLook/Icon.heic", "QuickLook/Icon.webp",
     ]
 
     static func image(at url: URL) -> CGImage? {

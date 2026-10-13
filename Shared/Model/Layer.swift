@@ -49,6 +49,8 @@ struct Layer: Identifiable, Equatable, Sendable {
     var groupID: UUID?
     /// What its Photoshop file had that Easel does not use, to write back.
     var photoshop: PhotoshopExtras?
+    /// Set on a layer read from a Pixelmator Pro document; see `PixelmatorSource`.
+    var pixelmator: PixelmatorSource?
 
     init(
         id: UUID = UUID(), name: String, image: LayerImage, text: TextContent? = nil, vector: VectorContent? = nil,

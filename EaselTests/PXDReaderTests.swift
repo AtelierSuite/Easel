@@ -1,3 +1,4 @@
+import Compression
 import CoreGraphics
 import Foundation
 import SQLite3
@@ -6,47 +7,45 @@ import UniformTypeIdentifiers
 import zlib
 @testable import Easel
 
-/// Builds small Pixelmator Pro packages the way Pixelmator lays them out.
-private struct PXDBuilder {
-    struct LayerSpec {
-        var identifier = UUID().uuidString
-        var parent: String?
-        var index: Int
-        var type: Int
-        var name: String
-        var position: CGPoint
-        var size: CGSize
-        var angle = 0.0
-        var backingScale: Double?
-        var opacity = 100
-        var visible = true
-        var blend = "norm"
-        /// BGRA pixels for a painted layer, or nil.
-        var pixels: (bgra: [UInt8], width: Int, height: Int)?
-        /// An original image file for a placed layer, or nil.
-        var original: Data?
+/// Pixels for a test layer or mask, as Pixelmator saves them.
+struct PXDPixels {
+    /// BGRA, or grey for a mask; sixteen-bit values are little-endian.
+    var bytes: [UInt8]
+    var width: Int
+    var height: Int
+    var channels = 4
+    var bits = 8
+    var compression = 1
+
+    /// A solid BGRA buffer.
+    static func bgra(_ b: UInt8, _ g: UInt8, _ r: UInt8, width: Int, height: Int) -> PXDPixels {
+        PXDPixels(bytes: Array((0..<(width * height)).map { _ in [b, g, r, 255] }.joined()), width: width, height: height)
     }
 
-    var canvas: (Int, Int)
-    var layers: [LayerSpec]
-
-    private static func blob(_ type: String, _ payload: [UInt8]) -> Data {
-        var data = Data("4-tP".utf8) + Data(type.utf8.reversed())
-        var length = UInt32(payload.count).littleEndian
-        data += Data(bytes: &length, count: 4)
-        return data + Data(payload)
+    /// A grey mask, one value a pixel.
+    static func grey(_ values: [UInt8], width: Int, height: Int) -> PXDPixels {
+        PXDPixels(bytes: values, width: width, height: height, channels: 1)
     }
 
-    private static func bigDouble(_ value: Double) -> [UInt8] {
-        let bits = value.bitPattern
-        return (0..<8).reversed().map { UInt8(bits >> (UInt64($0) * 8) & 0xFF) }
+    /// The format blob: version, bits, layout, channels, then an empty
+    /// colour space.
+    var format: [UInt8] {
+        let code: UInt8 = channels == 1 ? 0x52 : (bits == 16 ? 0x22 : 0x12)
+        return PXDFormat.Value.make("Frmt", [1, 0, UInt8(bits), code, UInt8(channels), 0])
     }
 
-    private static func littleInt(_ value: Int, bytes count: Int) -> [UInt8] {
-        (0..<count).map { UInt8(value >> ($0 * 8) & 0xFF) }
+    var stride: Int { width * channels * bits / 8 }
+
+    func buffer(timestamp: Double = 0) -> Data {
+        func little(_ value: Int) -> [UInt8] { PXDFormat.Value.littleEndian(UInt32(value)) }
+        var data = PXDFormat.BitmapBuffer.magic + little(2) + PXDFormat.Value.bigEndian(timestamp)
+        data += little(width) + little(height) + little(stride) + little(compression) + little(format.count)
+        data += [UInt8](repeating: 0xFF, count: 8) + format
+        data += compression == 4 ? Self.lz4(bytes) : Self.rawDeflate(bytes)
+        return Data(data)
     }
 
-    private static func rawDeflate(_ bytes: [UInt8]) -> [UInt8] {
+    static func rawDeflate(_ bytes: [UInt8]) -> [UInt8] {
         var stream = z_stream()
         deflateInit2_(&stream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size))
         var input = bytes
@@ -65,24 +64,57 @@ private struct PXDBuilder {
         return Array(output.prefix(produced))
     }
 
-    private static func bitmapBuffer(_ pixels: (bgra: [UInt8], width: Int, height: Int)) -> Data {
-        let format = [UInt8](repeating: 0, count: 20)
-        var data = Array("PTBitmapBuffer__".utf8) + littleInt(2, bytes: 4) + [UInt8](repeating: 0, count: 8)
-        data += littleInt(pixels.width, bytes: 4) + littleInt(pixels.height, bytes: 4) + littleInt(pixels.width * 4, bytes: 4)
-        data += littleInt(1, bytes: 4) + littleInt(format.count, bytes: 4) + format
-        data += [0xFF, 0x6D, 0xFF, 0xFF, 0, 0, 0, 0] + rawDeflate(pixels.bgra)
-        return Data(data)
+    static func lz4(_ bytes: [UInt8]) -> [UInt8] {
+        var output = [UInt8](repeating: 0, count: bytes.count + 1024)
+        let written = compression_encode_buffer(&output, output.count, bytes, bytes.count, nil, COMPRESSION_LZ4)
+        return Array(output.prefix(written))
     }
+}
+
+/// Builds small Pixelmator Pro packages the way Pixelmator lays them out.
+struct PXDBuilder {
+    struct LayerSpec {
+        var identifier = UUID().uuidString
+        var parent: String?
+        var index: Int
+        var type: Int
+        var name: String
+        var position: CGPoint
+        var size: CGSize
+        var angle = 0.0
+        var backingScale: Double?
+        var opacity = 100
+        var visible = true
+        var blend = "norm"
+        /// Set on a layer listed under another as its mask.
+        var isMask = false
+        var maskBackground: Double?
+        /// Pixels for a painted layer or mask, or nil.
+        var pixels: PXDPixels?
+        /// An original image file for a placed layer, or nil.
+        var original: Data?
+    }
+
+    var canvas: (Int, Int)
+    var layers: [LayerSpec]
+    /// Writes a single ZIP file, as Pixelmator does by default, rather than
+    /// a package folder.
+    var zipped = false
 
     func build() throws -> FileWrapper {
         let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).sqlite")
         var db: OpaquePointer?
         sqlite3_open(url.path, &db)
         defer { try? FileManager.default.removeItem(at: url) }
+        // The tables as Pixelmator declares them.
         for sql in [
-            "create table document_info (key text, value blob)",
-            "create table document_layers (id integer, identifier text, parent_identifier text, index_at_parent integer, type integer)",
-            "create table layer_info (layer_id integer, key text, value blob)",
+            "CREATE TABLE document_info (key TEXT NOT NULL ON CONFLICT IGNORE UNIQUE ON CONFLICT REPLACE DEFAULT NULL, value BLOB NOT NULL ON CONFLICT IGNORE DEFAULT NULL)",
+            "CREATE TABLE document_layers (id INTEGER PRIMARY KEY ON CONFLICT FAIL AUTOINCREMENT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT FAIL DEFAULT 0, identifier TEXT UNIQUE ON CONFLICT FAIL NOT NULL ON CONFLICT FAIL DEFAULT NULL, parent_identifier TEXT DEFAULT NULL, index_at_parent INTEGER NOT NULL ON CONFLICT FAIL DEFAULT 0, type INTEGER NOT NULL ON CONFLICT FAIL DEFAULT 0)",
+            "CREATE TABLE document_meta (key TEXT NOT NULL ON CONFLICT IGNORE UNIQUE ON CONFLICT REPLACE DEFAULT NULL, value BLOB NOT NULL ON CONFLICT IGNORE DEFAULT NULL)",
+            "CREATE TABLE layer_info (layer_id INTEGER NOT NULL ON CONFLICT IGNORE REFERENCES document_layers(id) ON UPDATE RESTRICT ON DELETE RESTRICT, key TEXT NOT NULL ON CONFLICT IGNORE DEFAULT NULL, value BLOB NOT NULL ON CONFLICT IGNORE DEFAULT NULL, UNIQUE (layer_id, key) ON CONFLICT REPLACE)",
+            "CREATE TABLE layer_tiles (layer_id INTEGER NOT NULL ON CONFLICT FAIL DEFAULT 0 REFERENCES document_layers(id) ON UPDATE RESTRICT ON DELETE RESTRICT, identifier BLOB NOT NULL ON CONFLICT FAIL DEFAULT NULL, timestamp BLOB NOT NULL ON CONFLICT FAIL DEFAULT NULL, size BLOB NOT NULL ON CONFLICT FAIL DEFAULT NULL, format BLOB NOT NULL ON CONFLICT FAIL DEFAULT NULL, metadata BLOB DEFAULT NULL, UNIQUE (layer_id, identifier) ON CONFLICT FAIL)",
+            "CREATE TABLE storable_info (identifier TEXT NOT NULL ON CONFLICT FAIL DEFAULT NULL, timestamp BLOB NOT NULL ON CONFLICT FAIL DEFAULT NULL, content_uti TEXT DEFAULT NULL, layer_identifier TEXT DEFAULT NULL, user_data BLOB DEFAULT NULL, options INTEGER DEFAULT 0, UNIQUE (identifier, layer_identifier) ON CONFLICT FAIL)",
+            "CREATE TABLE ql_info (key TEXT NOT NULL ON CONFLICT IGNORE UNIQUE ON CONFLICT REPLACE DEFAULT NULL, value TEXT NOT NULL ON CONFLICT IGNORE DEFAULT NULL)",
         ] { sqlite3_exec(db, sql, nil, nil, nil) }
 
         func insert(_ sql: String, _ values: [Any?]) {
@@ -94,7 +126,7 @@ private struct PXDBuilder {
                 switch value {
                 case let text as String: sqlite3_bind_text(statement, position, text, -1, transient)
                 case let number as Int: sqlite3_bind_int64(statement, position, Int64(number))
-                case let data as Data: _ = data.withUnsafeBytes { sqlite3_bind_blob(statement, position, $0.baseAddress, Int32(data.count), transient) }
+                case let bytes as [UInt8]: sqlite3_bind_blob(statement, position, bytes, Int32(bytes.count), transient)
                 default: sqlite3_bind_null(statement, position)
                 }
             }
@@ -102,48 +134,75 @@ private struct PXDBuilder {
             sqlite3_finalize(statement)
         }
 
-        insert("insert into document_info values (?, ?)", ["size", Self.blob("BDSz", Self.littleInt(canvas.0, bytes: 8) + Self.littleInt(canvas.1, bytes: 8))])
+        typealias Value = PXDFormat.Value
+        insert("insert into document_info values (?, ?)", [
+            "size", Value.make("BDSz", Value.littleEndian(UInt64(canvas.0)) + Value.littleEndian(UInt64(canvas.1))),
+        ])
+        insert("insert into ql_info values (?, ?)", ["thumbnail-filename", "Thumbnail.png"])
         var files: [String: FileWrapper] = [:]
         for (number, layer) in layers.enumerated() {
             let id = number + 1
             insert("insert into document_layers values (?, ?, ?, ?, ?)", [id, layer.identifier, layer.parent, layer.index, layer.type])
-            let name = Array(layer.name.utf8)
-            var info: [(String, Data)] = [
-                ("name", Self.blob("Strn", Self.littleInt(name.count, bytes: 4) + name)),
-                ("position", Self.blob("PTPt", Self.bigDouble(layer.position.x) + Self.bigDouble(layer.position.y))),
-                ("size", Self.blob("PTSz", Self.bigDouble(layer.size.width) + Self.bigDouble(layer.size.height))),
-                ("scale", Self.blob("PTPt", Self.bigDouble(1) + Self.bigDouble(1))),
-                ("angle", Self.blob("PTFl", Self.bigDouble(layer.angle))),
-                ("opacity", Self.blob("LOpc", [UInt8(layer.opacity >> 8), UInt8(layer.opacity & 0xFF)])),
-                ("flags", Self.blob("UI64", Self.littleInt((layer.visible ? 1 : 0) | 0x40, bytes: 8))),
-                ("blendMode", Self.blob("Blnd", Array(layer.blend.utf8.reversed()))),
+            var flags: UInt64 = (layer.visible ? 1 : 0) | 0x40
+            if layer.isMask { flags |= 0x110 }
+            if layers.contains(where: { $0.isMask && $0.parent == layer.identifier }) { flags |= 0x80 }
+            var info: [(String, [UInt8])] = [
+                ("name", Value.makeString(layer.name)),
+                ("position", Value.makePoint("PTPt", layer.position)),
+                ("size", Value.makePoint("PTSz", CGPoint(x: layer.size.width, y: layer.size.height))),
+                ("scale", Value.makePoint("PTPt", CGPoint(x: 1, y: 1))),
+                ("anchorPoint", Value.makePoint("PTPt", CGPoint(x: 0.5, y: 0.5))),
+                ("angle", Value.makeDouble("PTFl", layer.angle)),
+                ("opacity", Value.makePercent(layer.opacity)),
+                ("opct-nrm", Value.makeDouble("LDOp", Double(layer.opacity) / 100)),
+                ("flags", Value.makeUInt64(flags)),
+                ("blendMode", Value.makeTag("Blnd", layer.blend)),
             ]
             if let backingScale = layer.backingScale {
-                info.append(("backingScale", Self.blob("PTFl", Self.bigDouble(backingScale))))
+                info.append(("backingScale", Value.makeDouble("PTFl", backingScale)))
+            }
+            if let background = layer.maskBackground {
+                info.append(("maskBackgroundValue", Value.makeDouble("Bckd", background)))
             }
             for (key, value) in info { insert("insert into layer_info values (?, ?, ?)", [id, key, value]) }
             if let pixels = layer.pixels {
-                files[layer.identifier] = FileWrapper(regularFileWithContents: Self.bitmapBuffer(pixels))
+                files[layer.identifier] = FileWrapper(regularFileWithContents: pixels.buffer())
+                insert("insert into layer_tiles values (?, ?, ?, ?, ?, ?)", [
+                    id, Value.makeString(layer.identifier), Value.bigEndian(0),
+                    Value.make("BDSz", Value.littleEndian(UInt64(pixels.width)) + Value.littleEndian(UInt64(pixels.height))),
+                    pixels.format, nil,
+                ])
             }
             if let original = layer.original {
                 files["\(layer.identifier)-OriginalContentSource"] = FileWrapper(regularFileWithContents: original)
+                insert("insert into storable_info values (?, ?, ?, ?, ?, ?)", [
+                    "OriginalContentSource", Value.bigEndian(0), "public.png", layer.identifier, nil, 0,
+                ])
             }
         }
         sqlite3_close(db)
         let preview = try ImageCodec.encode(TestImages.solid(.white, width: 4, height: 4), as: .png)
-        return FileWrapper(directoryWithFileWrappers: [
-            "metadata.info": FileWrapper(regularFileWithContents: try Data(contentsOf: url)),
-            "data": FileWrapper(directoryWithFileWrappers: files),
-            "QuickLook": FileWrapper(directoryWithFileWrappers: ["Thumbnail.png": FileWrapper(regularFileWithContents: preview)]),
-        ])
+        let metadata = try Data(contentsOf: url)
+        guard zipped else {
+            return FileWrapper(directoryWithFileWrappers: [
+                "metadata.info": FileWrapper(regularFileWithContents: metadata),
+                "data": FileWrapper(directoryWithFileWrappers: files),
+                "QuickLook": FileWrapper(directoryWithFileWrappers: ["Thumbnail.png": FileWrapper(regularFileWithContents: preview)]),
+            ])
+        }
+        var entries = [ZipArchive.Entry(name: "metadata.info", contents: metadata)]
+        for (name, file) in files.sorted(by: { $0.key < $1.key }) {
+            entries.append(ZipArchive.Entry(name: "data/\(name)", contents: file.regularFileContents ?? Data()))
+        }
+        entries.append(ZipArchive.Entry(name: "QuickLook/Thumbnail.png", contents: preview))
+        return FileWrapper(regularFileWithContents: ZipArchive.archive(entries))
     }
 }
 
 @Suite("Pixelmator Pro documents")
 struct PXDReaderTests {
-    /// A solid BGRA buffer.
-    private func bgra(_ b: UInt8, _ g: UInt8, _ r: UInt8, width: Int, height: Int) -> (bgra: [UInt8], width: Int, height: Int) {
-        (Array((0..<(width * height)).map { _ in [b, g, r, 255] }.joined()), width, height)
+    private func bgra(_ b: UInt8, _ g: UInt8, _ r: UInt8, width: Int, height: Int) -> PXDPixels {
+        .bgra(b, g, r, width: width, height: height)
     }
 
     @Test func paintedAndPlacedLayersComeInPlaced() throws {
@@ -183,6 +242,74 @@ struct PXDReaderTests {
         #expect(child.transform.position == CGPoint(x: 15, y: 10))
         #expect(abs(child.transform.rotation + .pi / 2) < 0.001)
         #expect(layers.first { $0.name == "Hidden" }?.isVisible == false)
+    }
+
+    /// Groups come in faded and hidden as they were, and every layer and
+    /// group remembers its identifier in the document.
+    @Test func groupsAndLayersKeepTheirSettingsAndIdentifiers() throws {
+        let group = UUID().uuidString
+        let child = UUID().uuidString
+        let wrapper = try PXDBuilder(canvas: (4, 4), layers: [
+            .init(identifier: group, index: 0, type: 4, name: "Group", position: CGPoint(x: 2, y: 2),
+                  size: CGSize(width: 4, height: 4), opacity: 40, visible: false, blend: "pass"),
+            .init(identifier: child, parent: group, index: 0, type: 1, name: "Child", position: CGPoint(x: 2, y: 2),
+                  size: CGSize(width: 4, height: 4), pixels: bgra(0, 0, 255, width: 4, height: 4)),
+        ], zipped: true).build()
+        let composition = try PXDReader.composition(from: wrapper)
+        let folder = try #require(composition.groups.first)
+        #expect(folder.pixelmatorID == group)
+        // Pass-through, which is no blend mode of the group's own.
+        #expect(folder.blendMode == nil)
+        #expect(folder.opacity == 0.4)
+        #expect(!folder.isVisible)
+        let layer = try #require(composition.layers.first)
+        #expect(layer.pixelmator?.identifier == child)
+        #expect(layer.pixelmator?.image === layer.image)
+        #expect(layer.groupID == folder.id)
+    }
+
+    /// A mask is placed on the canvas by itself; it comes in redrawn over
+    /// its layer, hiding past its own pixels when its background says so.
+    @Test func masksComeInOverTheirLayers() throws {
+        let layer = UUID().uuidString
+        let mask = UUID().uuidString
+        // The mask covers the left half of the 4×2 layer: white over black.
+        let wrapper = try PXDBuilder(canvas: (4, 2), layers: [
+            .init(identifier: layer, index: 0, type: 1, name: "Masked", position: CGPoint(x: 2, y: 1),
+                  size: CGSize(width: 4, height: 2), pixels: bgra(0, 0, 255, width: 4, height: 2)),
+            .init(identifier: mask, parent: layer, index: PXDFormat.maskIndex, type: 1, name: "Mask",
+                  position: CGPoint(x: 1, y: 1), size: CGSize(width: 2, height: 2), blend: "scrn", isMask: true,
+                  maskBackground: 0, pixels: .grey([255, 0, 255, 0], width: 2, height: 2)),
+        ]).build()
+        let composition = try PXDReader.composition(from: wrapper)
+        #expect(composition.layers.count == 1)
+        let read = try #require(composition.layers.first)
+        let readMask = try #require(read.mask)
+        let pixels = try #require(Bitmap.pixels(of: readMask.image.cgImage))
+        #expect(pixels.width == 4)
+        #expect(pixels.color(x: 0, y: 0).alpha > 250)
+        #expect(pixels.color(x: 1, y: 1).alpha < 5)
+        // Past the mask's own pixels: hidden.
+        #expect(pixels.color(x: 3, y: 0).alpha < 5)
+        #expect(read.mask?.isEnabled == true)
+        #expect(read.pixelmator?.maskIdentifier == mask)
+        #expect(read.pixelmator?.mask === read.mask?.image)
+    }
+
+    /// Sixteen-bit layers saved with LZ4, red first, come down to eight bits.
+    @Test func sixteenBitLZ4LayersComeIn() throws {
+        let pixel: [UInt8] = [0xFF, 0xFF, 0, 0, 0, 0, 0xFF, 0xFF]
+        var pixels = PXDPixels(
+            bytes: Array(Array(repeating: pixel, count: 6).joined()), width: 3, height: 2, bits: 16, compression: 4
+        )
+        pixels.channels = 4
+        let wrapper = try PXDBuilder(canvas: (3, 2), layers: [
+            .init(index: 0, type: 1, name: "Deep", position: CGPoint(x: 1.5, y: 1), size: CGSize(width: 3, height: 2),
+                  pixels: pixels),
+        ]).build()
+        let layer = try #require(try PXDReader.composition(from: wrapper).layers.first)
+        #expect(layer.name == "Deep")
+        #expect(TestImages.isRed(layer.image.cgImage, x: 1, y: 1))
     }
 
     /// Retina documents keep places and sizes in points, two pixels each.
@@ -231,6 +358,7 @@ struct PXDReaderTests {
         #expect(layers.count == 2)
         #expect(layers.last?.isVisible == false)
         #expect(layers.last?.transform.scaleX == 2)
+        #expect(layers.last?.pixelmator?.isPreview == true)
     }
 
     @Test func otherFoldersAreRefused() {
