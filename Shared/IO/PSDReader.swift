@@ -147,8 +147,17 @@ enum PSDReader {
         _ reader: inout BigEndianReader, isLarge: Bool, format: PixelFormat, canvas: CGSize, sectionEnd: Int
     ) throws -> (layers: [Layer], groups: [LayerGroup], patterns: [PatternSwatch], recordCount: Int) {
         let infoLength = isLarge ? Int(try reader.uint64()) : Int(try reader.uint32())
-        guard infoLength > 0 else { return ([], [], [], 0) }
-        let infoEnd = reader.offset + infoLength
+        let infoStart = reader.offset
+        let infoEnd = infoStart + infoLength
+        // Smart objects' contents and pattern tiles come after all the
+        // layers' pixels.
+        let shared = (try? globalBlocks(&reader, from: infoEnd, to: sectionEnd, isLarge: isLarge)) ?? GlobalBlocks()
+        let embedded = shared.files
+        // 16- and 32-bit documents keep their layers in a block of their
+        // own after the global mask, laid out the same, and leave this empty.
+        guard let layerInfo = infoLength > 0 ? infoStart..<infoEnd : shared.deepLayers,
+              reader.seek(to: layerInfo.lowerBound), layerInfo.count >= 2
+        else { return ([], [], [], 0) }
         // Negative: the first alpha channel is the merged result's
         // transparency. The count is what matters.
         let count = abs(Int(try reader.int16()))
@@ -156,12 +165,6 @@ enum PSDReader {
         for _ in 0..<count {
             records.append(try readRecord(&reader, isLarge: isLarge))
         }
-        // Smart objects' contents and pattern tiles come after all the
-        // layers' pixels.
-        let pixelsStart = reader.offset
-        let shared = (try? globalBlocks(&reader, from: infoEnd, to: sectionEnd, isLarge: isLarge)) ?? GlobalBlocks()
-        let embedded = shared.files
-        guard reader.seek(to: pixelsStart) else { throw Failure.damaged }
         // Tiles become the picture's own patterns, those overlays use.
         let swatches = shared.tiles.map { PatternSwatch(name: $0.name, image: LayerImage($0.image)) }
         var patterns: [String: PatternChoice] = [:]
@@ -312,6 +315,8 @@ enum PSDReader {
         /// Smart filters' masks, by the `placed` id of their smart object.
         var filterMasks: [String: PSDFilterEffects.Mask] = [:]
         var tiles: [PSDPatterns.Tile] = []
+        /// Where `Lr16` or `Lr32` holds a deep document's layers.
+        var deepLayers: Range<Int>?
     }
 
     private static func globalBlocks(
@@ -332,6 +337,8 @@ enum PSDReader {
                 blocks.links.merge(found.links) { first, _ in first }
             } else if key == "FEid" || key == "FXid" {
                 blocks.filterMasks.merge(PSDFilterEffects.masks(from: try reader.bytes(length))) { first, _ in first }
+            } else if key == "Lr16" || key == "Lr32" {
+                blocks.deepLayers = start..<(start + length)
             } else if ["Patt", "Pat2", "Pat3"].contains(key) {
                 blocks.tiles += PSDPatterns.tiles(from: try reader.bytes(length))
             }

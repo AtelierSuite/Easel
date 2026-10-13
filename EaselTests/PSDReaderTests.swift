@@ -27,12 +27,15 @@ private struct PSDBuilder {
     var width: Int
     var height: Int
     var layers: [LayerSpec]
+    /// 16 and 32 bits keep their layers in an `Lr16` or `Lr32` block.
+    var depth = 8
 
     private var data = Data()
 
-    init(width: Int, height: Int, layers: [LayerSpec]) {
+    init(width: Int, height: Int, depth: Int = 8, layers: [LayerSpec]) {
         self.width = width
         self.height = height
+        self.depth = depth
         self.layers = layers
     }
 
@@ -53,16 +56,25 @@ private struct PSDBuilder {
         return out
     }
 
+    /// One sample at the document's depth: 32-bit values are linear.
+    private func sample(_ value: UInt8) -> [UInt8] {
+        switch depth {
+        case 16: return Self.u16(Int(value) * 257)
+        case 32: return Self.u32(Int(Float(pow(Double(value) / 255, 2.2)).bitPattern))
+        default: return [value]
+        }
+    }
+
     private func channelData(_ value: UInt8, width: Int, height: Int, rle: Bool) -> [UInt8] {
-        let row = [UInt8](repeating: value, count: width)
-        if !rle { return Self.u16(0) + [UInt8](repeating: value, count: width * height) }
+        let row = (0..<width).flatMap { _ in sample(value) }
+        if !rle { return Self.u16(0) + (0..<height).flatMap { _ in row } }
         let packed = Self.packBits(row)
         return Self.u16(1) + (0..<height).flatMap { _ in Self.u16(packed.count) } + (0..<height).flatMap { _ in packed }
     }
 
     func build() -> Data {
         var out: [UInt8] = Array("8BPS".utf8) + Self.u16(1) + [UInt8](repeating: 0, count: 6)
-        out += Self.u16(4) + Self.u32(height) + Self.u32(width) + Self.u16(8) + Self.u16(3)
+        out += Self.u16(4) + Self.u32(height) + Self.u32(width) + Self.u16(depth) + Self.u16(3)
         out += Self.u32(0) + Self.u32(0)
 
         var records: [UInt8] = []
@@ -79,7 +91,7 @@ private struct PSDBuilder {
             if w == 0 || h == 0 { channels = channels.map { ($0.0, Self.u16(0)) } }
             if layer.leftHalfMask {
                 var mask: [UInt8] = []
-                for _ in 0..<h { mask += [UInt8](repeating: 255, count: w / 2) + [UInt8](repeating: 0, count: w - w / 2) }
+                for _ in 0..<h { mask += (0..<w).flatMap { sample($0 < w / 2 ? 255 : 0) } }
                 channels.append((-2, Self.u16(0) + mask))
             }
             var record = Self.u32(layer.rect.top) + Self.u32(layer.rect.left) + Self.u32(layer.rect.bottom) + Self.u32(layer.rect.right)
@@ -114,10 +126,14 @@ private struct PSDBuilder {
         }
         var layerInfo = Self.u16(layers.count) + records + imageData
         if layerInfo.count % 2 != 0 { layerInfo.append(0) }
-        let section = Self.u32(layerInfo.count) + layerInfo + Self.u32(0)
+        var section = Self.u32(layerInfo.count) + layerInfo + Self.u32(0)
+        if depth != 8 {
+            while layerInfo.count % 4 != 0 { layerInfo.append(0) }
+            section = Self.u32(0) + Self.u32(0) + Array("8BIM\(depth == 16 ? "Lr16" : "Lr32")".utf8) + Self.u32(layerInfo.count) + layerInfo
+        }
         out += Self.u32(section.count) + section
         // Merged image: raw, white.
-        out += Self.u16(0) + [UInt8](repeating: 255, count: width * height * 4)
+        out += Self.u16(0) + (0..<(width * height * 4)).flatMap { _ in sample(255) }
         return Data(out)
     }
 }
@@ -176,6 +192,27 @@ struct PSDReaderTests {
         let flat = CompositionRenderer.render(composition)
         #expect(TestImages.isRed(flat, x: 2, y: 4))
         #expect(TestImages.isBlue(flat, x: 13, y: 4))
+    }
+
+    @Test(arguments: [16, 32])
+    func deepDocumentsKeepTheirLayers(depth: Int) throws {
+        let data = PSDBuilder(width: 12, height: 6, depth: depth, layers: [
+            .init(name: "Back", rect: (0, 0, 6, 12), color: (255, 0, 0, 255)),
+            .init(name: "Blue", rect: (1, 6, 5, 10), color: (0, 0, 255, 255), opacity: 128, blend: "scrn", rle: true),
+            .init(name: "Masked", rect: (0, 0, 2, 4), color: (0, 255, 0, 255), leftHalfMask: true),
+        ]).build()
+        let composition = try PSDReader.composition(from: data)
+        #expect(composition.layers.map(\.name) == ["Back", "Blue", "Masked"])
+        let blue = composition.layers[1]
+        #expect(blue.image.size == CGSize(width: 4, height: 4))
+        #expect(blue.transform.position == CGPoint(x: 8, y: 3))
+        #expect(blue.blendMode == .screen)
+        #expect(abs(blue.opacity - 128.0 / 255) < 0.001)
+        #expect(TestImages.isBlue(blue.image.cgImage, x: 1, y: 1))
+        #expect(TestImages.isRed(composition.layers[0].image.cgImage, x: 1, y: 1))
+        let mask = try #require(composition.layers[2].mask)
+        #expect(TestImages.pixel(mask.image.cgImage, x: 0, y: 0).alpha > 250)
+        #expect(TestImages.pixel(mask.image.cgImage, x: 3, y: 0).alpha == 0)
     }
 
     @Test func otherFilesAreRefused() {
