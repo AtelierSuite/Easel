@@ -57,7 +57,7 @@ extension EditorState {
     func penBegan(at point: CGPoint) {
         if let target = penPath, let layer = composition[target.layerID], let content = layer.vector,
            content.paths.indices.contains(target.path) {
-            guard !layer.isLocked else { return }
+            guard !composition.isLocked(layer) else { return }
             let local = layer.localPoint(point)
             let nodes = content.paths[target.path].nodes
             // Back on the first point: the shape is closed and finished.
@@ -126,7 +126,7 @@ extension EditorState {
     /// What a touch at a canvas point grabs on the active vector layer:
     /// the picked point's handles first, then any point.
     private func vectorHit(at point: CGPoint) -> VectorDrag? {
-        guard let layer = activeLayer, let content = layer.vector, !layer.isLocked else { return nil }
+        guard let layer = activeLayer, let content = layer.vector, !composition.isLocked(layer) else { return nil }
         let toCanvas = layer.affineTransform
         let reach = vectorReachInCanvas
         func near(_ local: CGPoint) -> Bool {
@@ -336,7 +336,7 @@ extension EditorState {
     /// Changes the picked point's path, or every path in the active vector
     /// layer when no point is picked.
     func updateVectorStyle(_ change: (inout VectorPath) -> Void) {
-        guard let layer = activeLayer, layer.isVector, !layer.isLocked else { return }
+        guard let layer = activeLayer, layer.isVector, !composition.isLocked(layer) else { return }
         let only = selectedNode?.layerID == layer.id ? selectedNode?.path : nil
         updateVector(layer.id) { content in
             for index in content.paths.indices where only == nil || only == index {

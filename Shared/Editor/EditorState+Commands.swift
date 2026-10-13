@@ -50,6 +50,7 @@ extension EditorState {
     }
 
     func rasterizeLayer(_ id: Layer.ID) {
+        guard let layer = read()[id], !read().isLocked(layer) else { return }
         update { $0.rasterize(id) }
     }
 
@@ -74,7 +75,7 @@ extension EditorState {
 
     /// Clips the layer to the one beneath it, or lets it go.
     func setClipped(_ isClipped: Bool, of id: Layer.ID) {
-        guard !isClipped || read().canClip(id) else { return }
+        guard let layer = read()[id], !read().isLocked(layer), !isClipped || read().canClip(id) else { return }
         update { $0[id]?.isClipped = isClipped }
     }
 
@@ -118,10 +119,16 @@ extension EditorState {
         activeLayerID = layer.id
     }
 
+    /// Whether the active layer, or a group it is in, is locked, or there
+    /// is no active layer.
+    var isActiveLayerLocked: Bool {
+        activeLayer.map { read().isLocked($0) } ?? true
+    }
+
     // MARK: Placement
 
     func updateTransform(_ change: (inout LayerTransform) -> Void) {
-        guard let layer = activeLayer, !layer.isLocked else { return }
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { change(&$0.transform) }
     }
 
@@ -432,7 +439,7 @@ extension EditorState {
             layerPreview = nil
             return
         }
-        if layer.isLocked {
+        if composition.isLocked(layer) {
             layerPreview = nil
             errorMessage = String(localized: "Error.LayerLocked")
             return
@@ -511,6 +518,7 @@ extension Painter {
 extension EditorState {
     /// Adds a filter to the end of the active layer's chain.
     func addFilter(_ kind: LayerFilter.Kind) {
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { $0.filters.append(LayerFilter(kind: kind)) }
     }
 
@@ -524,6 +532,7 @@ extension EditorState {
             compared.isEnabled = filter.isEnabled
             return compared == filter ? edited : edited.withoutPhotoshopSettings
         }
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { layer in
             if let adjustment = layer.adjustment, adjustment.id == id {
                 layer.adjustment = changed(adjustment)
@@ -535,16 +544,18 @@ extension EditorState {
     }
 
     func removeFilter(_ id: LayerFilter.ID) {
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { $0.filters.removeAll { $0.id == id } }
     }
 
     func moveFilters(from source: IndexSet, to destination: Int) {
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { $0.filters.move(fromOffsets: source, toOffset: destination) }
     }
 
     /// Paints the active layer's filters into its pixels and lets them go.
     func applyFilters(of id: Layer.ID) {
-        update { $0.rasterize(id) }
+        rasterizeLayer(id)
     }
 }
 
@@ -554,6 +565,7 @@ extension EditorState {
     /// Gives the active layer an effect of this kind, or turns its own back
     /// on: a layer has one of each.
     func addEffect(_ kind: LayerEffect.Kind) {
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { layer in
             if let index = layer.effects.firstIndex(where: { $0.kind == kind }) {
                 layer.effects[index].isEnabled = true
@@ -570,6 +582,7 @@ extension EditorState {
     }
 
     func updateEffect(_ id: LayerEffect.ID, _ change: (inout LayerEffect) -> Void) {
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { layer in
             guard let index = layer.effects.firstIndex(where: { $0.id == id }) else { return }
             change(&layer.effects[index])
@@ -577,6 +590,7 @@ extension EditorState {
     }
 
     func removeEffect(_ id: LayerEffect.ID) {
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { $0.effects.removeAll { $0.id == id } }
     }
 }
@@ -630,7 +644,7 @@ extension EditorState {
 
     /// Paints the mask into the layer's pixels for good.
     func applyMask() {
-        guard let layer = activeLayer, layer.mask != nil else { return }
+        guard let layer = activeLayer, layer.mask != nil, !composition.isLocked(layer) else { return }
         let size = composition.size
         update { composition in
             // Filters stay filters: only the mask is painted in.
@@ -650,6 +664,7 @@ extension EditorState {
     }
 
     func invertMask() {
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { layer in
             layer.mask = layer.mask?.inverted()
         }
@@ -658,7 +673,7 @@ extension EditorState {
     /// Hides, or shows, the selected part of the active layer through its
     /// mask.
     func maskSelection(reveal: Bool) {
-        guard let layer = activeLayer, let mask = layer.mask, let selection else { return }
+        guard let layer = activeLayer, let mask = layer.mask, let selection, !composition.isLocked(layer) else { return }
         let size = composition.size
         let transform = layer.affineTransform.inverted()
         let image = Bitmap.render(size: mask.image.size) { context in
@@ -697,6 +712,7 @@ extension EditorState {
     }
 
     func invertFilterMask() {
+        guard !isActiveLayerLocked else { return }
         updateActiveLayer { $0.filterMask = $0.filterMask?.inverted() }
     }
 }

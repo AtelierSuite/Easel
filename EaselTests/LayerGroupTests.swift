@@ -200,6 +200,26 @@ struct GroupCommandTests {
         #expect(state.paintingBlocker() != nil)
     }
 
+    @Test func aLockedGroupKeepsItsLayersFromEveryEdit() throws {
+        let state = editor()
+        let layerID = try #require(state.activeLayerID)
+        state.addMask()
+        state.groupActiveLayer()
+        state.updateGroup(state.activeGroupID!) { $0.isLocked = true }
+        state.activeGroupID = nil
+        state.activeLayerID = layerID
+        let before = state.composition
+        state.updateTransform { $0.rotation = 1 }
+        state.addFilter(.sepia)
+        state.addEffect(.dropShadow)
+        state.invertMask()
+        state.applyMask()
+        state.setClipped(true, of: layerID)
+        state.rasterizeLayer(layerID)
+        #expect(state.composition == before)
+        #expect(state.isActiveLayerLocked)
+    }
+
     @Test func movingAGroupMovesItsLayers() throws {
         let state = editor()
         state.addEmptyLayer()

@@ -172,7 +172,7 @@ struct ToolOptionsBar: View {
     // MARK: - Arranging
 
     private var moveOptions: some View {
-        let isLocked = state.activeLayer?.isLocked ?? true
+        let isLocked = state.isActiveLayerLocked
         return Group {
             GlassGroup(scrollsHorizontally: true) {
                 GlassIconButton(symbol: "arrow.left.and.right.righttriangle.left.righttriangle.right", label: "Options.FlipHorizontal") {
