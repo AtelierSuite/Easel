@@ -258,6 +258,31 @@ struct RetouchToolTests {
         #expect(TestImages.pixel(published.layers[0].image.cgImage, x: 25, y: 10).red > 60)
     }
 
+    @Test func smudgingAScaledLayerKeepsItsMaskWhereItWas() throws {
+        let state = EditorState()
+        var composition = Composition.blank(size: CGSize(width: 40, height: 20))
+        // Half the canvas's size, doubled to cover it; its mask hides its
+        // left half.
+        composition.layers[0].image = LayerImage(TestImages.halves(width: 20, height: 10))
+        composition.layers[0].transform = LayerTransform(position: CGPoint(x: 20, y: 10), scaleX: 2, scaleY: 2)
+        composition.layers[0].mask = LayerMask(image: LayerImage(Bitmap.render(size: CGSize(width: 20, height: 10)) { context in
+            context.setFillColor(RGBAColor.white.cgColor)
+            context.fill(CGRect(x: 10, y: 0, width: 10, height: 10))
+        }))
+        var published = composition
+        state.attach(to: published) { published = $0 }
+        state.tool = .censor
+        state.censorKind = .smudge
+        state.toolBegan(at: CGPoint(x: 10, y: 10), pressure: 1)
+        state.toolMoved(to: [StrokePoint(location: CGPoint(x: 30, y: 10))])
+        state.toolEnded(isTap: false, at: CGPoint(x: 30, y: 10))
+        let layer = published.layers[0]
+        let mask = try #require(layer.mask?.image)
+        #expect(mask.size == layer.image.size)
+        #expect(TestImages.isClear(mask.cgImage, x: 5, y: 10))
+        #expect(!TestImages.isClear(mask.cgImage, x: 35, y: 10))
+    }
+
     @Test func cloneStampPicksASourceThenKeepsItsOffset() async throws {
         let state = EditorState()
         var composition = Composition.blank(size: CGSize(width: 40, height: 20))

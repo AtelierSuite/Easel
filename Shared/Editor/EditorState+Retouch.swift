@@ -27,6 +27,10 @@ struct SmudgeSession {
     /// Canvas-aligned pieces of the smeared pixels, oldest first; later ones
     /// are newer and are drawn over earlier ones.
     var patches: [(rect: CGRect, image: CGImage)] = []
+    /// The layer's masks lined up with the canvas, as its pixels are, so
+    /// they go back where they were.
+    var mask: LayerMask?
+    var filterMask: LayerMask?
 }
 
 extension EditorState {
@@ -78,7 +82,7 @@ extension EditorState {
         let pusher: any PixelPusher = tool == .liquify
             ? Liquifier(pixels: pixels, settings: currentBrush, selection: selection, start: point)
             : Smudger(pixels: pixels, settings: currentBrush, selection: selection, start: point)
-        smudge = SmudgeSession(layerID: layer.id, smudger: pusher)
+        smudge = SmudgeSession(layerID: layer.id, smudger: pusher, mask: aligned.mask, filterMask: aligned.filterMask)
     }
 
     func continueSmudge(to points: [CGPoint]) {
@@ -112,6 +116,8 @@ extension EditorState {
             layer.text = nil
             layer.vector = nil
             layer.transform = LayerTransform(position: CGPoint(x: size.width / 2, y: size.height / 2))
+            if let mask = session.mask { layer.mask?.image = mask.image }
+            if let mask = session.filterMask { layer.filterMask?.image = mask.image }
             composition[session.layerID] = layer
         }
     }
