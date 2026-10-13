@@ -11,6 +11,14 @@ struct SmartObject: Equatable, Sendable {
     var warp: SmartObjectWarp?
 }
 
+/// A Photoshop smart object's link to a file of its own: the file's name,
+/// and where its contents go, as Photoshop wrote it (the layer's `SoLd`
+/// block), so the layer can become the smart object once the file is found.
+struct SmartObjectLink: Codable, Equatable, Sendable {
+    var fileName: String
+    var placement: Data
+}
+
 /// Where a smart object's contents are bent to, in the layer's own pixels:
 /// four corners in perspective, or a grid of sixteen points.
 struct SmartObjectWarp: Codable, Equatable, Sendable {

@@ -108,31 +108,55 @@ enum PSDSmartObjects {
 
     // MARK: - Reading
 
-    /// The files embedded in a `lnk2` (or `lnk3`) block, by id.
-    static func embeddedFiles(from data: [UInt8]) -> [String: [UInt8]] {
+    /// The files in a `lnk2`, `lnk3` or `lnkE` block, by id: those kept in
+    /// the document, or linked with a copy kept too, in `files`; those only
+    /// linked, by their file's name, in `links`.
+    static func embeddedFiles(from data: [UInt8]) -> (files: [String: [UInt8]], links: [String: String]) {
         var reader = BigEndianReader(bytes: data)
         var files: [String: [UInt8]] = [:]
+        var links: [String: String] = [:]
         while reader.remaining >= 8, let length = try? Int(reader.uint64()), length > 0 {
             let end = reader.offset + length
-            if let (id, contents) = try? embeddedFile(&reader) { files[id] = contents }
+            switch try? entry(&reader) {
+            case .file(let id, let contents): files[id] = contents
+            case .link(let id, let name): links[id] = name
+            case nil: break
+            }
             guard reader.seek(to: end + (4 - length % 4) % 4) || reader.seek(to: end) else { break }
         }
-        return files
+        return (files, links)
     }
 
-    private static func embeddedFile(_ reader: inout BigEndianReader) throws -> (String, [UInt8])? {
-        // Only files kept inside the document; linked ones live elsewhere.
-        guard try reader.ascii(4) == "liFD" else { return nil }
-        _ = try reader.uint32()
+    private enum Entry {
+        case file(id: String, contents: [UInt8])
+        case link(id: String, name: String)
+    }
+
+    private static func entry(_ reader: inout BigEndianReader) throws -> Entry? {
+        let kind = try reader.ascii(4)
+        guard kind == "liFD" || kind == "liFE" else { return nil }
+        let version = try reader.uint32()
         let id = try reader.ascii(Int(try reader.uint8()))
-        try reader.skip(Int(try reader.uint32()) * 2)
-        try reader.skip(8)
+        let nameLength = Int(try reader.uint32())
+        var units: [UInt16] = []
+        for _ in 0..<nameLength { units.append(try reader.uint16()) }
+        while units.last == 0 { units.removeLast() }
+        let name = String(decoding: units, as: UTF16.self)
+        try reader.skip(8) // Type and creator.
         let size = Int(try reader.uint64())
         if try reader.uint8() != 0 {
             _ = try reader.uint32()
             _ = try PSDDescriptor.read(&reader)
         }
-        return (id, try reader.bytes(size))
+        if kind == "liFD" { return .file(id: id, contents: try reader.bytes(size)) }
+        // Linked: where the file was, when it was changed, and its size,
+        // then perhaps a copy of it.
+        _ = try reader.uint32()
+        _ = try PSDDescriptor.read(&reader)
+        if version > 3 { try reader.skip(16) }
+        try reader.skip(8)
+        if version > 2, size > 0, let contents = try? reader.bytes(size) { return .file(id: id, contents: contents) }
+        return .link(id: id, name: name)
     }
 
     /// Which embedded file a layer shows, where its corners sit on the
@@ -196,6 +220,60 @@ enum PSDSmartObjects {
                   abs(point.y - (top + (bottom - top) * row)) < 0.5 else { return false }
         }
         return true
+    }
+
+    /// Makes `layer` the smart object `placed` describes, showing
+    /// `contents`, with its smart filters. False, leaving it as it was, if
+    /// it is placed or filtered in a way Easel cannot.
+    static func place(_ layer: inout Layer, _ placed: Placement, contents: Composition) -> Bool {
+        let shape: WarpShape?
+        var transform = LayerTransform(position: .zero)
+        if let mesh = placed.mesh {
+            shape = .warp(mesh)
+        } else if let moved = self.transform(corners: placed.corners, size: contents.size) {
+            shape = nil
+            transform = moved
+        } else {
+            shape = .perspective(placed.corners)
+        }
+        var filters: [LayerFilter] = []
+        if let style = placed.filters {
+            // Filters run on the layer's pixels, bent ones on the canvas.
+            let placement: PSDSmartFilters.Placement = shape.map { .init(LayerTransform(position: .zero), size: $0.bounds.size) }
+                ?? .init(transform, size: contents.size)
+            guard let found = PSDSmartFilters.filters(from: style, placement: placement) else { return false }
+            filters = found
+        }
+        layer.setSmartObjectContents(contents)
+        layer.transform = transform
+        if let shape { layer.setSmartObjectWarp(shape) }
+        layer.filters = filters
+        layer.missingLink = nil
+        return true
+    }
+
+    /// The layer its linked file was missing from, made the smart object
+    /// with `file` as its contents, its mask kept where it was on the
+    /// canvas; nil if the file cannot be read or placed.
+    static func relinked(_ layer: Layer, file: [UInt8]) -> Layer? {
+        guard let link = layer.missingLink, let placed = placement(from: [UInt8](link.placement)),
+              let contents = contents(from: file) else { return nil }
+        var result = layer
+        guard place(&result, placed, contents: contents) else { return nil }
+        if let mask = layer.mask {
+            let old = layer.affineTransform, new = result.affineTransform
+            let oldSize = layer.image.size, size = result.image.size
+            result.mask = LayerMask(image: LayerImage(Bitmap.render(size: size) { context in
+                // Off the old pixels the mask showed everything.
+                context.setFillColor(RGBAColor.white.cgColor)
+                context.fill(CGRect(origin: .zero, size: size))
+                context.concatenate(new.inverted())
+                context.concatenate(old)
+                context.clear(CGRect(origin: .zero, size: oldSize))
+                Bitmap.draw(mask.image.cgImage, in: CGRect(origin: .zero, size: oldSize), context: context)
+            }), isEnabled: mask.isEnabled)
+        }
+        return result
     }
 
     /// The move, scale and turn that put contents of this size at these

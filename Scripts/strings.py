@@ -719,6 +719,12 @@ S = {
 "LayerEffect.Satin": ("Satin", "サテン", "새틴", "光泽", "緞面"),
 "LayerEffect.PatternOverlay": ("Pattern Overlay", "パターンオーバーレイ", "패턴 오버레이", "图案叠加", "圖樣覆蓋"),
 "LayerEffects.Invert": ("Invert", "反転", "반전", "反相", "反轉"),
+"LinkedFile.Missing %@": ("“%@” isn’t in this file", "「%@」がこのファイルにありません", "‘%@’ 파일이 이 파일에 없습니다", "此文件中没有“%@”", "此檔案中沒有「%@」"),
+"LinkedFile.Detail": ("A smart object links to it. Choose it to edit the smart object.", "スマートオブジェクトがリンクしています。選択するとスマートオブジェクトを編集できます。", "고급 개체가 이 파일에 연결되어 있습니다. 파일을 선택하면 고급 개체를 편집할 수 있습니다.", "有智能对象链接到它。选择该文件即可编辑智能对象。", "有智慧型物件連結到它。選擇該檔案即可編輯智慧型物件。"),
+"LinkedFile.Detail.More %lld": ("A smart object links to it. Still missing after this one: %lld", "スマートオブジェクトがリンクしています。このほかに見つからないファイル：%lld", "고급 개체가 이 파일에 연결되어 있습니다. 이 외에 없는 파일: %lld", "有智能对象链接到它。此外还缺少的文件：%lld", "有智慧型物件連結到它。此外還缺少的檔案：%lld"),
+"LinkedFile.Choose": ("Choose…", "選択…", "선택…", "选择…", "選擇…"),
+"LinkedFile.Dismiss": ("Dismiss", "閉じる", "닫기", "关闭", "關閉"),
+"Error.LinkedFileUnreadable": ("That file can’t be used for this smart object.", "このファイルはこのスマートオブジェクトに使用できません。", "이 파일은 이 고급 개체에 사용할 수 없습니다.", "此文件无法用于此智能对象。", "此檔案無法用於此智慧型物件。"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

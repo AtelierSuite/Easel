@@ -249,28 +249,25 @@ enum PSDReader {
             if let effects = record.blocks["lfx2"] ?? record.blocks["lmfx"] {
                 layer.effects = PSDEffects.effects(from: effects, patterns: patterns)
             }
-            if let placed = record.blocks["SoLd"].flatMap(PSDSmartObjects.placement(from:)),
-               let file = embedded[placed.id], let contents = PSDSmartObjects.contents(from: file),
-               let (transform, warp) = smartPlacement(placed, size: contents.size),
-               let filters = placed.filters.map({
-                   // Filters run on the layer's pixels, bent ones on the canvas.
-                   PSDSmartFilters.filters(from: $0, placement: warp.map { .init(LayerTransform(position: .zero), size: $0.bounds.size) }
-                                           ?? .init(transform, size: contents.size))
-               }) ?? [] {
-                // A smart object: its contents whole, drawn where its
-                // corners sit. Ones Easel cannot place stay as pixels.
-                let canvasMask = record.mask.flatMap { mask -> LayerMask? in
-                    var whole = record
-                    (whole.left, whole.top, whole.right, whole.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
-                    return makeMask(mask, plane: planes[-2], layer: whole)
-                }
-                layer.setSmartObjectContents(contents)
-                layer.transform = transform
-                if let warp { layer.setSmartObjectWarp(warp) }
-                layer.filters = filters
-                layer.mask = canvasMask.map { mask in
-                    LayerMask(image: LayerImage(inLayerSpace(mask.image.cgImage, of: layer, outside: record.mask?.defaultColor ?? 255)),
-                              isEnabled: mask.isEnabled)
+            // Linked smart objects keep the same as `SoLE`.
+            if let block = record.blocks["SoLd"] ?? record.blocks["SoLE"], let placed = PSDSmartObjects.placement(from: block) {
+                if let file = embedded[placed.id], let contents = PSDSmartObjects.contents(from: file) {
+                    // A smart object: its contents whole, drawn where its
+                    // corners sit. Ones Easel cannot place stay as pixels.
+                    let canvasMask = record.mask.flatMap { mask -> LayerMask? in
+                        var whole = record
+                        (whole.left, whole.top, whole.right, whole.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
+                        return makeMask(mask, plane: planes[-2], layer: whole)
+                    }
+                    if PSDSmartObjects.place(&layer, placed, contents: contents) {
+                        layer.mask = canvasMask.map { mask in
+                            LayerMask(image: LayerImage(inLayerSpace(mask.image.cgImage, of: layer, outside: record.mask?.defaultColor ?? 255)),
+                                      isEnabled: mask.isEnabled)
+                        }
+                    }
+                } else if let name = shared.links[placed.id] {
+                    // Its contents are a file of their own, to be chosen.
+                    layer.missingLink = SmartObjectLink(fileName: name, placement: Data(block))
                 }
             }
             // Patterns start from a point on the canvas that moves with the
@@ -283,15 +280,6 @@ enum PSDReader {
         }
         let used = Set(layers.flatMap(\.effects).compactMap(\.pattern.swatchID))
         return (layers, groups, swatches.filter { used.contains($0.id) }, records.count)
-    }
-
-    /// Where a smart object's contents go: moved, scaled and turned, or bent
-    /// on the canvas when its corners are skewed or in perspective, or it is
-    /// warped.
-    private static func smartPlacement(_ placed: PSDSmartObjects.Placement, size: CGSize) -> (LayerTransform, WarpShape?)? {
-        if let mesh = placed.mesh { return (LayerTransform(position: .zero), .warp(mesh)) }
-        if let transform = PSDSmartObjects.transform(corners: placed.corners, size: size) { return (transform, nil) }
-        return (LayerTransform(position: .zero), .perspective(placed.corners))
     }
 
     /// The `fxrp` block: two doubles, a point on the canvas.
@@ -318,6 +306,8 @@ enum PSDReader {
     private struct GlobalBlocks {
         /// Smart objects' contents, by id.
         var files: [String: [UInt8]] = [:]
+        /// The names of files smart objects link to and do not keep, by id.
+        var links: [String: String] = [:]
         var tiles: [PSDPatterns.Tile] = []
     }
 
@@ -333,8 +323,10 @@ enum PSDReader {
             let key = try reader.ascii(4)
             let length = isLarge && longKeys.contains(key) ? Int(try reader.uint64()) : Int(try reader.uint32())
             let start = reader.offset
-            if ["lnk2", "lnk3", "lnkD"].contains(key) {
-                blocks.files.merge(PSDSmartObjects.embeddedFiles(from: try reader.bytes(length))) { first, _ in first }
+            if ["lnk2", "lnk3", "lnkD", "lnkE"].contains(key) {
+                let found = PSDSmartObjects.embeddedFiles(from: try reader.bytes(length))
+                blocks.files.merge(found.files) { first, _ in first }
+                blocks.links.merge(found.links) { first, _ in first }
             } else if ["Patt", "Pat2", "Pat3"].contains(key) {
                 blocks.tiles += PSDPatterns.tiles(from: try reader.bytes(length))
             }
@@ -349,7 +341,7 @@ enum PSDReader {
         "PxSD", "pths", "extd", "extn", "cinf", "artd",
     ]
 
-    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "fxrp"])
+    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "fxrp"])
 
     private static func readRecord(_ reader: inout BigEndianReader, isLarge: Bool) throws -> LayerRecord {
         var record = LayerRecord()

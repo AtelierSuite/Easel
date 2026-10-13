@@ -138,4 +138,46 @@ struct PSDSmartObjectTests {
         #expect(layer.image.size == size)
         #expect(layer.smartObject?.warp != nil)
     }
+
+    /// A pixel layer waiting for the file `smart`'s contents were in.
+    private func waiting(for smart: Layer) throws -> Layer {
+        let block = try #require(PSDSmartObjects.blocks(for: smart, id: "linked").first { $0.key == "SoLd" }?.data)
+        var layer = Layer(name: "Linked", image: LayerImage(Bitmap.solid(size: CGSize(width: 20, height: 20), color: .white)),
+                          transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        layer.missingLink = SmartObjectLink(fileName: "picture.png", placement: Data(block))
+        return layer
+    }
+
+    @Test func aChosenFileMakesTheLayerItsSmartObject() throws {
+        let smart = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30), scaleX: 2, scaleY: 2))
+        var layer = try waiting(for: smart)
+        // Hide the right half of the layer as it was.
+        layer.mask = LayerMask(image: LayerImage(Bitmap.render(size: CGSize(width: 20, height: 20)) { context in
+            context.setFillColor(RGBAColor.white.cgColor)
+            context.fill(CGRect(x: 0, y: 0, width: 10, height: 20))
+        }))
+        let file = try ImageCodec.encode(TestImages.solid(RGBAColor(red: 0, green: 1, blue: 0), width: 20, height: 20), as: .png)
+        let relinked = try #require(PSDSmartObjects.relinked(layer, file: [UInt8](file)))
+        #expect(relinked.isSmartObject)
+        #expect(relinked.missingLink == nil)
+        #expect(abs(relinked.transform.scaleX - 2) < 0.001)
+        let image = CompositionRenderer.render(Composition(size: size, layers: [relinked]))
+        // Shown where the mask showed, on the canvas as before.
+        #expect(TestImages.pixel(image, x: 35, y: 30).green > 240)
+        #expect(TestImages.pixel(image, x: 45, y: 30).alpha < 10)
+        // Out past the old layer, the mask shows the larger contents.
+        #expect(TestImages.pixel(image, x: 25, y: 30).green > 240)
+    }
+
+    @Test func aFileThatIsNotAPictureLeavesTheLayer() throws {
+        let layer = try waiting(for: smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30))))
+        #expect(PSDSmartObjects.relinked(layer, file: Array("not a picture".utf8)) == nil)
+    }
+
+    @Test func aMissingLinkIsSavedWithThePicture() throws {
+        let layer = try waiting(for: smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30))))
+        let data = try CompositionArchive.data(for: Composition(size: size, layers: [layer]), original: nil)
+        let read = try CompositionArchive.composition(from: data, original: nil)
+        #expect(read.layers.first?.missingLink == layer.missingLink)
+    }
 }

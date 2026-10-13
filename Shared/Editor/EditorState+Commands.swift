@@ -899,6 +899,41 @@ extension EditorState {
         }
     }
 
+    /// The files linked smart objects from a Photoshop file need and the
+    /// picture does not have, by name, in the order their layers stack.
+    var missingLinkNames: [String] {
+        var names: [String] = []
+        for layer in composition.layers {
+            if let name = layer.missingLink?.fileName, !names.contains(name) { names.append(name) }
+        }
+        return names
+    }
+
+    /// Makes every layer waiting for the linked file `name` the smart object
+    /// it was, with the file at `url` as its contents.
+    func relink(named name: String, to url: URL) {
+        let isScoped = url.startAccessingSecurityScopedResource()
+        defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            errorMessage = String(localized: "Error.LinkedFileUnreadable")
+            return
+        }
+        let ids = composition.layers.filter { $0.missingLink?.fileName == name }.map(\.id)
+        let layers = composition.layers
+        enqueue({ () -> [Layer]? in
+            let bytes = [UInt8](data)
+            let relinked = ids.compactMap { id in layers.first { $0.id == id }.flatMap { PSDSmartObjects.relinked($0, file: bytes) } }
+            return relinked.count == ids.count ? relinked : nil
+        }, apply: { [weak self] relinked in
+            self?.update { composition in
+                for layer in relinked where composition[layer.id] != nil { composition[layer.id] = layer }
+            }
+        }, finally: { [weak self] in
+            guard let self, missingLinkNames.contains(name) else { return }
+            errorMessage = String(localized: "Error.LinkedFileUnreadable")
+        })
+    }
+
     /// Takes in a smart object's edited contents and draws them out again.
     func updateSmartObject(_ layerID: Layer.ID, contents: Composition) {
         update { composition in

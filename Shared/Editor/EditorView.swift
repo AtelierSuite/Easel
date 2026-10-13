@@ -43,6 +43,7 @@ struct EditorView<Actions: View>: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if isCompact {
                     VStack(spacing: 8) {
+                        LinkedFilesBanner(state: state)
                         HStack(spacing: 0) {
                             ToolOptionsBar(state: state)
                             layersButton
@@ -52,9 +53,12 @@ struct EditorView<Actions: View>: View {
                     }
                     .padding(.bottom, 8 + bottomToolbarInset)
                 } else {
-                    ToolOptionsBar(state: state)
-                        .padding(.leading, 72)
-                        .padding(.bottom, 12 + bottomToolbarInset)
+                    VStack(spacing: 8) {
+                        LinkedFilesBanner(state: state)
+                        ToolOptionsBar(state: state)
+                    }
+                    .padding(.leading, 72)
+                    .padding(.bottom, 12 + bottomToolbarInset)
                 }
             }
             .background {
@@ -74,6 +78,7 @@ struct EditorView<Actions: View>: View {
                 if !isCompact, panel != nil { state.isInspectorPresented = true }
             }
             .animation(.snappy(duration: 0.3), value: state.canvasInsets)
+            .animation(.snappy(duration: 0.3), value: state.missingLinkNames)
             .modifier(InspectorPresentation(isEnabled: !isCompact, isPresented: $state.isInspectorPresented) {
                 let panel = state.presentedPanel ?? .layers
                 panelContent(panel)

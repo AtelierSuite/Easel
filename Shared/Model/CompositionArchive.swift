@@ -61,6 +61,8 @@ enum CompositionArchive {
         var smartFile: String?
         /// How a smart object's contents are bent.
         var smartWarp: SmartObjectWarp?
+        /// A linked file a Photoshop smart object is waiting for.
+        var missingLink: SmartObjectLink?
         var maskFile: String?
         var maskEnabled: Bool?
         var transform: LayerTransform
@@ -170,7 +172,7 @@ enum CompositionArchive {
                 filters: layer.filters.isEmpty ? nil : layer.filters,
                 effects: layer.effects.isEmpty ? nil : layer.effects,
                 adjustment: layer.adjustment,
-                smartFile: smartFile, smartWarp: layer.smartObject?.warp,
+                smartFile: smartFile, smartWarp: layer.smartObject?.warp, missingLink: layer.missingLink,
                 maskFile: maskFile, maskEnabled: layer.mask.map(\.isEnabled), transform: layer.transform,
                 opacity: layer.opacity, blendMode: layer.blendMode, isClipped: layer.isClipped ? true : nil,
                 isVisible: layer.isVisible, isLocked: layer.isLocked,
@@ -228,6 +230,7 @@ enum CompositionArchive {
             layer.isClipped = record.isClipped ?? false
             layer.effects = record.effects ?? []
             layer.adjustment = record.adjustment
+            layer.missingLink = record.missingLink
             if let smartFile = record.smartFile {
                 guard let data = read(smartFile) else { throw Failure.missingLayer(smartFile) }
                 layer.smartObject = SmartObject(contents: try composition(from: data, original: nil), warp: record.smartWarp)

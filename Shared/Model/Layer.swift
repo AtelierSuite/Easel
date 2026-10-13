@@ -20,6 +20,10 @@ struct Layer: Identifiable, Equatable, Sendable {
     /// Set on a smart object layer: the picture it keeps whole inside it,
     /// which its `image` is drawn from.
     var smartObject: SmartObject?
+    /// Set on a layer from a Photoshop smart object whose contents are a
+    /// file of their own that was not found: it shows the pixels Photoshop
+    /// saved until the file is chosen.
+    var missingLink: SmartObjectLink?
     /// Run over `image` whenever the layer is drawn, in order; the pixels
     /// themselves are never changed by them.
     var filters: [LayerFilter] = []
