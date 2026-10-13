@@ -46,6 +46,11 @@ enum PSDSmartFilters {
             var settings = PSDDescriptor(classID: fourCC(UInt32(truncatingIfNeeded: Int64(entry["filterID"]?.number ?? 0))))
             if let found = entry["Fltr"]?.descriptor { settings = found }
             guard var filter = filter(from: settings, placement: placement) else { return nil }
+            // Kept as Photoshop had it, to go back exactly if left alone.
+            filter.photoshopFilter = PhotoshopFilterRecord(
+                id: Int32(truncatingIfNeeded: Int64(entry["filterID"]?.number ?? 0)), name: entry["Nm  "]?.text ?? "",
+                settings: entry["Fltr"]?.descriptor.map { Data($0.versionedBytes) }
+            )
             if let blend = entry["blendOptions"]?.descriptor {
                 let opacity = (blend["Opct"]?.number ?? 100) / 100
                 guard (blend["Md  "]?.enumValue ?? "Nrml") == "Nrml" else { return nil }
@@ -283,6 +288,16 @@ enum PSDSmartFilters {
 
     /// Photoshop's name, id and settings for one filter.
     private static func settings(for filter: LayerFilter, placement: Placement) -> (String, Int32, PSDDescriptor)? {
+        if let record = filter.photoshopFilter {
+            // As Photoshop had it, unchanged here.
+            var descriptor = PSDDescriptor(classID: "null")
+            if let data = record.settings {
+                var reader = BigEndianReader(bytes: [UInt8](data))
+                _ = try? reader.uint32()
+                if let read = try? PSDDescriptor.read(&reader) { descriptor = read }
+            }
+            return (record.name, record.id, descriptor)
+        }
         let unit = placement.unit
         func entry(_ name: String, _ classID: String, _ items: [(key: String, value: PSDDescriptor.Value)]) -> (String, Int32, PSDDescriptor) {
             // Photoshop's id for a filter is its class's four letters.

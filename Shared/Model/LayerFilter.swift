@@ -217,6 +217,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         copy.photoshopBrightness = nil
         copy.photoshopContrast = nil
         copy.photoshopHueSaturation = nil
+        copy.photoshopFilter = nil
         return copy
     }
     /// Colour balance: how far the midtones lean to red, green and blue,
@@ -243,6 +244,9 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     var values: [Double]?
     /// The colour a photo filter tints with, or black and white's tint.
     var color: RGBAColor?
+    /// The Photoshop smart filter this came from, kept so a file saved
+    /// again gets it back exactly, until the filter is changed here.
+    var photoshopFilter: PhotoshopFilterRecord?
 
     /// The middle of each HSL band, as fractions of a turn: red, orange,
     /// yellow, green, aqua, blue, purple and magenta.

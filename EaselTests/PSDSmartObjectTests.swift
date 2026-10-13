@@ -222,6 +222,15 @@ struct PSDSmartObjectTests {
         #expect(read.layers.first?.filterMask?.image.size == CGSize(width: 20, height: 20))
     }
 
+    @Test func aFilterLeftAloneGoesBackAsPhotoshopHadIt() throws {
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30)))
+        layer.filters = [LayerFilter(kind: .gaussianBlur)]
+        let first = try #require(try roundTrip([layer]).layers.first)
+        let record = try #require(first.filters.first?.photoshopFilter)
+        let second = try #require(try roundTrip([first]).layers.first)
+        #expect(second.filters.first?.photoshopFilter == record)
+    }
+
     @Test(arguments: ["invert", "solarize", "posterize", "threshold", "blackAndWhite"])
     func newerAdjustmentsComeBackAsSmartFilters(_ kind: String) throws {
         let filter = LayerFilter(kind: LayerFilter.Kind(rawValue: kind)!)

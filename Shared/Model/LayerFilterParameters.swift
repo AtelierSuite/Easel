@@ -76,6 +76,14 @@ extension LayerFilter.Kind {
     }
 }
 
+/// A Photoshop smart filter as its file had it: its id, its name, and its
+/// settings as a descriptor.
+struct PhotoshopFilterRecord: Codable, Hashable, Sendable {
+    var id: Int32
+    var name: String
+    var settings: Data?
+}
+
 extension LayerFilter {
     /// Setting `index` of `kind.parameters`, or its default.
     func value(_ index: Int) -> Double {
