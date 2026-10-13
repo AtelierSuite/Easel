@@ -405,6 +405,27 @@ struct CanvasView: View {
         )
     }
 
+    /// Strokes split where the way they mix with the layer changes, each
+    /// run with where it starts and the blend mode it is shown in, so they
+    /// show in the order they were drawn.
+    static func strokeRuns(_ strokes: [Stroke]) -> [(start: Int, mode: CGBlendMode, strokes: [Stroke])] {
+        var runs: [(start: Int, mode: CGBlendMode, strokes: [Stroke])] = []
+        for (index, stroke) in strokes.enumerated() {
+            // Erasers cut within their run; only paint blends.
+            let mode: CGBlendMode = switch stroke.isEraser ? .normal : stroke.blendMode {
+            case .multiply: .multiply
+            case .plusLighter: .plusLighter
+            default: .normal
+            }
+            if let last = runs.last, last.mode == mode {
+                runs[runs.count - 1].strokes.append(stroke)
+            } else {
+                runs.append((index, mode, [stroke]))
+            }
+        }
+        return runs
+    }
+
     private func strokes(on layerID: Layer.ID, mask: Bool) -> [Stroke] {
         var strokes = state.pendingStrokes.filter { $0.layerID == layerID && $0.isMask == mask && !$0.isFilterMask }.map(\.stroke)
         if let active = state.activeStroke, state.activeLayerID == layerID, !state.editsFilterMask, state.editsMask == mask {
@@ -475,21 +496,12 @@ private struct LayerView: View {
                 ZStack(alignment: .topLeading) {
                     content
                     if let retouch { RetouchPreview(retouch: retouch, canvasSize: canvasSize, viewport: viewport) }
-                    StrokePreview(
-                        strokes: paintStrokes.filter { $0.blendMode == .normal || $0.isEraser },
-                        canvasSize: canvasSize, viewport: viewport
-                    )
                     // Strokes that blend with the layer under them can only
-                    // do so as views of their own.
-                    let multiplied = paintStrokes.filter { $0.blendMode == .multiply }
-                    if !multiplied.isEmpty {
-                        StrokePreview(strokes: multiplied, canvasSize: canvasSize, viewport: viewport)
-                            .blendMode(.multiply)
-                    }
-                    let lit = paintStrokes.filter { $0.blendMode == .plusLighter }
-                    if !lit.isEmpty {
-                        StrokePreview(strokes: lit, canvasSize: canvasSize, viewport: viewport)
-                            .blendMode(.plusLighter)
+                    // do so as views of their own: each run of strokes in
+                    // one mode is a view, in the order they were drawn.
+                    ForEach(CanvasView.strokeRuns(paintStrokes), id: \.start) { run in
+                        StrokePreview(strokes: run.strokes, canvasSize: canvasSize, viewport: viewport)
+                            .blendMode(run.mode == .multiply ? .multiply : run.mode == .plusLighter ? .plusLighter : .normal)
                     }
                 }
                 // The strokes and the layer become one before the layer's
