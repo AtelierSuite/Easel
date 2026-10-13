@@ -181,9 +181,15 @@ extension LayerFilter {
             output = (filter.outputImage ?? input)
                 .applyingFilter("CISourceInCompositing", parameters: [kCIInputBackgroundImageKey: input])
         case .mosaic:
+            // Each cell the average of what it covers, transparency too:
+            // blurred across a cell, then read at the cell's middle.
+            let cell = max(1, amount * 60 * unit)
+            let average = CIFilter.boxBlur()
+            average.inputImage = input
+            average.radius = Float(cell / 2)
             let filter = CIFilter.pixellate()
-            filter.inputImage = input.clampedToExtent()
-            filter.scale = Float(max(1, amount * 60 * unit))
+            filter.inputImage = average.outputImage ?? input
+            filter.scale = Float(cell)
             filter.center = CGPoint(x: extent.minX, y: extent.maxY)
             output = filter.outputImage ?? input
         }
