@@ -816,6 +816,10 @@ struct BigEndianReader {
         self.data = [UInt8](data)
     }
 
+    init(bytes: [UInt8]) {
+        data = bytes
+    }
+
     var remaining: Int { data.count - offset }
 
     mutating func seek(to position: Int) -> Bool {
@@ -840,25 +844,24 @@ struct BigEndianReader {
         return Array(data[offset..<(offset + count)])
     }
 
-    mutating func uint8() throws -> UInt8 { try bytes(1)[0] }
-
-    mutating func uint16() throws -> UInt16 {
-        let b = try bytes(2)
-        return UInt16(b[0]) << 8 | UInt16(b[1])
+    /// `count` bytes as one big-endian number, read in place.
+    private mutating func number(_ count: Int) throws -> UInt64 {
+        guard count <= data.count - offset else { throw PSDReader.Failure.damaged }
+        defer { offset += count }
+        return data[offset..<(offset + count)].reduce(0) { $0 << 8 | UInt64($1) }
     }
+
+    mutating func uint8() throws -> UInt8 { UInt8(try number(1)) }
+
+    mutating func uint16() throws -> UInt16 { UInt16(try number(2)) }
 
     mutating func int16() throws -> Int16 { Int16(bitPattern: try uint16()) }
 
-    mutating func uint32() throws -> UInt32 {
-        let b = try bytes(4)
-        return UInt32(b[0]) << 24 | UInt32(b[1]) << 16 | UInt32(b[2]) << 8 | UInt32(b[3])
-    }
+    mutating func uint32() throws -> UInt32 { UInt32(try number(4)) }
 
     mutating func int32() throws -> Int32 { Int32(bitPattern: try uint32()) }
 
-    mutating func uint64() throws -> UInt64 {
-        UInt64(try uint32()) << 32 | UInt64(try uint32())
-    }
+    mutating func uint64() throws -> UInt64 { try number(8) }
 
     /// A length in eight bytes, or four when not `long`, that fits in
     /// what is left, so it can be added to the offset.

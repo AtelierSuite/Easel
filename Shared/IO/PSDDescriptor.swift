@@ -319,12 +319,6 @@ struct PSDDescriptor: Equatable {
     }
 }
 
-extension BigEndianReader {
-    init(bytes: [UInt8]) {
-        self.init(Data(bytes))
-    }
-}
-
 extension PSDDescriptor.Value {
     /// An RGB colour as Photoshop keeps one, channels 0...255.
     static func rgb(_ color: RGBAColor) -> PSDDescriptor.Value {
