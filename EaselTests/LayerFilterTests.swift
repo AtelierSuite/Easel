@@ -325,4 +325,18 @@ struct ColorFilterTests {
         #expect(lifted[2, 8, 0] > 40)
         #expect(lifted[13, 8, 0] < 225)
     }
+
+    @Test func displaceMovesByItsMap() throws {
+        // A white map moves every pixel as far as the scale, here four
+        // pixels across, taking each from further right.
+        var filter = LayerFilter(kind: .displace)
+        filter.values = [500, 0, 0, 1]
+        filter.displacementMap = try ImageCodec.encode(Bitmap.solid(size: CGSize(width: 4, height: 4), color: .white), as: .png)
+        var layer = Layer(name: "Halves", image: LayerImage(TestImages.halves()), canvasSize: CGSize(width: 8, height: 4))
+        layer.filters = [filter]
+        #expect(TestImages.isBlue(layer.renderedImage, x: 1, y: 1))
+        // With no map, it changes nothing.
+        layer.filters[0].displacementMap = nil
+        #expect(TestImages.isRed(layer.renderedImage, x: 1, y: 1))
+    }
 }

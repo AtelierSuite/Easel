@@ -26,6 +26,17 @@ extension LayerFilter {
                     return centre + SIMD2(offset.x * cos(angle) - offset.y * sin(angle), offset.x * sin(angle) + offset.y * cos(angle))
                 }
             }
+        case .displace:
+            // Photoshop's: 128 moves nothing, 255 as far as the scale, 0 as
+            // far the other way. The map's first channel moves across, its
+            // second down.
+            guard let data = displacementMap, let image = try? ImageCodec.decode(data),
+                  let map = PixelFilters.pixels(of: CIImage(cgImage: image)) else { return input }
+            let reach = SIMD2(value(0), value(1)) * Double(unit), tiled = value(2) >= 0.5, wraps = value(3) < 0.5
+            let size = SIMD2(Double(extent.width), Double(extent.height))
+            return PixelFilters.process(input) { pixels in
+                Self.displace(&pixels, map: map, reach: reach, tiled: tiled, wraps: wraps, size: size)
+            }
         case .liquify:
             // Each pixel taken from as far off as the mesh says there, as
             // Photoshop's Liquify does.
@@ -229,6 +240,36 @@ extension LayerFilter {
             for x in 0..<pixels.width {
                 let from = source(SIMD2(Double(x) + 0.5, Double(y) + 0.5)) - 0.5
                 let colour = sample(original, from.x, from.y, clamped: clamped)
+                for channel in 0..<4 { pixels[x, y, channel] = PixelFilters.byte(colour[channel]) }
+            }
+        }
+    }
+
+    /// Each pixel taken from as far off as the map's shade there says.
+    static func displace(
+        _ pixels: inout PixelFilters.Pixels, map: PixelFilters.Pixels, reach: SIMD2<Double>, tiled: Bool, wraps: Bool, size: SIMD2<Double>
+    ) {
+        let original = pixels
+        let width = Double(original.width), height = Double(original.height)
+        for y in 0..<pixels.height {
+            for x in 0..<pixels.width {
+                let mx: Int, my: Int
+                if tiled {
+                    mx = x % map.width
+                    my = y % map.height
+                } else {
+                    mx = min(Int((Double(x) + 0.5) / size.x * Double(map.width)), map.width - 1)
+                    my = min(Int((Double(y) + 0.5) / size.y * Double(map.height)), map.height - 1)
+                }
+                let shift = SIMD2((Double(map[mx, my, 0]) - 128) / 128, (Double(map[mx, my, 1]) - 128) / 128) * reach
+                var sx = Double(x) + shift.x, sy = Double(y) + shift.y
+                if wraps {
+                    sx = sx.truncatingRemainder(dividingBy: width)
+                    sy = sy.truncatingRemainder(dividingBy: height)
+                    if sx < 0 { sx += width }
+                    if sy < 0 { sy += height }
+                }
+                let colour = sample(original, sx, sy, clamped: true)
                 for channel in 0..<4 { pixels[x, y, channel] = PixelFilters.byte(colour[channel]) }
             }
         }

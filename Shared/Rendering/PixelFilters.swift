@@ -38,6 +38,13 @@ enum PixelFilters {
 
     static let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
 
+    /// `image` as pixels, or nil if it is empty or too big.
+    static func pixels(of image: CIImage) -> Pixels? {
+        var result: Pixels?
+        _ = process(image) { result = $0 }
+        return result
+    }
+
     /// `input` as pixels, `body` run over them, and the result back.
     static func process(_ input: CIImage, _ body: (inout Pixels) -> Void) -> CIImage {
         let extent = input.extent.integral

@@ -16,6 +16,8 @@ struct PSDDescriptor: Equatable {
         case largeInteger(Int64)
         case bool(Bool)
         case rawData([UInt8])
+        /// Where a file is, as Photoshop names one a filter reads.
+        case path([UInt8])
         case unitFloats(String, [Double])
         /// A reference to one thing named by an enumerated value, as curves
         /// and levels name their channel: class, type and value.
@@ -31,6 +33,27 @@ struct PSDDescriptor: Equatable {
         var text: String? { if case .text(let value) = self { value } else { nil } }
         var bool: Bool? { if case .bool(let value) = self { value } else { nil } }
         var enumValue: String? { if case .enumerated(_, let value) = self { value } else { nil } }
+
+        /// A path's file name: after "txtu", the length and the number of
+        /// characters, little-endian, then the characters in UTF-16.
+        var fileName: String? {
+            guard case .path(let bytes) = self, bytes.count >= 12, bytes[0..<4].elementsEqual("txtu".utf8) else { return nil }
+            let count = Int(bytes[8]) | Int(bytes[9]) << 8 | Int(bytes[10]) << 16 | Int(bytes[11]) << 24
+            let units = stride(from: 12, to: min(12 + count * 2, bytes.count - 1), by: 2).map { UInt16(bytes[$0]) | UInt16(bytes[$0 + 1]) << 8 }
+            let path = String(decoding: units, as: UTF16.self).trimmingCharacters(in: CharacterSet(charactersIn: "\0"))
+            return path.split(whereSeparator: { $0 == "/" || $0 == "\\" || $0 == ":" }).last.map(String.init)
+        }
+
+        /// A path to a file by its name alone.
+        static func path(named name: String) -> Value {
+            let units = Array((name + "\0").utf16)
+            var bytes = Array("txtu".utf8)
+            for value in [8 + units.count * 2, units.count] {
+                bytes += [UInt8(value & 0xFF), UInt8(value >> 8 & 0xFF), UInt8(value >> 16 & 0xFF), UInt8(value >> 24 & 0xFF)]
+            }
+            for unit in units { bytes += [UInt8(unit & 0xFF), UInt8(unit >> 8)] }
+            return .path(bytes)
+        }
 
         /// Any number, whatever its unit.
         var number: Double? {
@@ -132,6 +155,9 @@ struct PSDDescriptor: Equatable {
         case "tdta", "alis":
             let length = Int(try reader.uint32())
             return .rawData(try reader.bytes(length))
+        case "Pth ":
+            let length = Int(try reader.uint32())
+            return .path(try reader.bytes(length))
         case "UnFl":
             let unit = try reader.ascii(4)
             let count = Int(try reader.uint32())
@@ -233,6 +259,10 @@ struct PSDDescriptor: Equatable {
             writer.uint8(value ? 1 : 0)
         case .rawData(let bytes):
             writer.ascii("tdta")
+            writer.uint32(bytes.count)
+            writer.bytes(bytes)
+        case .path(let bytes):
+            writer.ascii("Pth ")
             writer.uint32(bytes.count)
             writer.bytes(bytes)
         case .unitFloats(let unit, let values):

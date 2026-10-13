@@ -78,7 +78,7 @@ struct EditorView<Actions: View>: View {
                 if !isCompact, panel != nil { state.isInspectorPresented = true }
             }
             .animation(.snappy(duration: 0.3), value: state.canvasInsets)
-            .animation(.snappy(duration: 0.3), value: state.missingLinkNames)
+            .animation(.snappy(duration: 0.3), value: state.missingLinkNames + state.missingMapNames)
             .modifier(InspectorPresentation(isEnabled: !isCompact, isPresented: $state.isInspectorPresented) {
                 let panel = state.presentedPanel ?? .layers
                 panelContent(panel)

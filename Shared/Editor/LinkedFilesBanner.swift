@@ -2,8 +2,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Shown while smart objects from a Photoshop file wait for files they
-/// link to: the first file's name, and a way to choose it. Each layer
-/// shows the pixels Photoshop saved until then.
+/// link to, or Displace filters for their maps: the first file's name, and
+/// a way to choose it. Each layer shows the pixels Photoshop saved, or its
+/// filters without the map, until then.
 struct LinkedFilesBanner: View {
     let state: EditorState
     @State private var isDismissed = false
@@ -12,7 +13,8 @@ struct LinkedFilesBanner: View {
     @State private var choosingName = ""
 
     var body: some View {
-        let names = state.missingLinkNames
+        let links = state.missingLinkNames
+        let names = links + state.missingMapNames.filter { !links.contains($0) }
         if let name = names.first, !isDismissed {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "link.badge.plus")
@@ -23,7 +25,13 @@ struct LinkedFilesBanner: View {
                     Text("LinkedFile.Missing \(name)")
                         .font(.subheadline.weight(.semibold))
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(names.count > 1 ? "LinkedFile.Detail.More \(names.count - 1)" : "LinkedFile.Detail")
+                    Group {
+                        if !links.contains(name) {
+                            Text(names.count > 1 ? "LinkedFile.MapDetail.More \(names.count - 1)" : "LinkedFile.MapDetail")
+                        } else {
+                            Text(names.count > 1 ? "LinkedFile.Detail.More \(names.count - 1)" : "LinkedFile.Detail")
+                        }
+                    }
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -59,7 +67,12 @@ struct LinkedFilesBanner: View {
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .fileImporter(isPresented: $isChoosing, allowedContentTypes: Self.contentTypes) { result in
                 guard case .success(let url) = result else { return }
-                state.relink(named: choosingName, to: url)
+                let name = choosingName
+                if state.missingLinkNames.contains(name) {
+                    state.relink(named: name, to: url)
+                } else {
+                    state.setDisplacementMap(from: url) { $0.displacementMap == nil && $0.displacementMapName == name }
+                }
             }
         }
     }

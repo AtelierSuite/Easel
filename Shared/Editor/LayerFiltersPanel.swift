@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The active layer's filters: a chain run top to bottom over its pixels,
 /// every link of which stays editable. Filters can be turned off, dragged
@@ -160,6 +161,7 @@ struct FilterRow: View {
     @State private var mixerOutput = 0
     /// Which colour or tone a filter set range by range is showing.
     @State private var rangeShown = 0
+    @State private var isChoosingMap = false
     @State private var histogram: [Double] = []
 
     var body: some View {
@@ -303,6 +305,7 @@ struct FilterRow: View {
             settingControls
         }
         if filter.kind == .shear { shearControls }
+        if filter.kind == .displace { mapControls }
         if filter.kind.hasColor, filter.kind != .blackAndWhite || filter.value(6) >= 0.5 {
             ColorPicker(filter.kind.hasBackgroundColor ? "LayerFilters.Foreground" : "LayerFilters.Color", selection: Binding(
                 get: { (filter.color ?? filter.kind.defaultColor ?? .white).color },
@@ -376,6 +379,32 @@ struct FilterRow: View {
             )
         }
         settingControls(from: extra)
+    }
+
+    /// Displace's map: which file it is, and a way to choose another.
+    private var mapControls: some View {
+        HStack {
+            Image(systemName: filter.displacementMap == nil ? "exclamationmark.triangle" : "photo")
+                .foregroundStyle(filter.displacementMap == nil ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+            if let name = filter.displacementMapName {
+                Text(name).lineLimit(1).truncationMode(.middle)
+            } else {
+                Text("LayerFilters.NoMap")
+            }
+            Spacer(minLength: 8)
+            Button("LayerFilters.ChooseMap") { isChoosingMap = true }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("chooseDisplacementMap")
+        }
+        .font(.subheadline)
+        .fileImporter(isPresented: $isChoosingMap, allowedContentTypes: [
+            .image, UTType("com.adobe.photoshop-image") ?? UTType(importedAs: "com.adobe.photoshop-image"),
+        ]) { result in
+            guard case .success(let url) = result else { return }
+            let id = filter.id
+            state.setDisplacementMap(from: url) { $0.id == id }
+        }
     }
 
     /// How far each of Shear's points pushes its row across, top first.

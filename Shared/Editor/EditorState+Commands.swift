@@ -961,6 +961,52 @@ extension EditorState {
         })
     }
 
+    /// The pictures Displace filters from a Photoshop file use as maps and
+    /// the file does not hold, by name, in the order their layers stack.
+    var missingMapNames: [String] {
+        var names: [String] = []
+        for layer in composition.layers {
+            for filter in layer.filters where filter.kind == .displace && filter.displacementMap == nil {
+                if let name = filter.displacementMapName, !names.contains(name) { names.append(name) }
+            }
+        }
+        return names
+    }
+
+    /// Gives the file at `url` as the map of every Displace filter `picks`
+    /// chooses. Photoshop's settings for the filters stay, since the map is
+    /// not one of them.
+    func setDisplacementMap(from url: URL, picking picks: @escaping @Sendable (LayerFilter) -> Bool) {
+        let isScoped = url.startAccessingSecurityScopedResource()
+        defer { if isScoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            errorMessage = String(localized: "Error.LinkedFileUnreadable")
+            return
+        }
+        let name = url.lastPathComponent
+        enqueue({ () -> Data?? in
+            // Documents as they look, flattened, and pictures as they are.
+            let contents = PSDSmartObjects.contents(from: [UInt8](data))
+            return .some(contents.flatMap { try? ImageCodec.encode(CompositionRenderer.render($0), as: .png) })
+        }, apply: { [weak self] map in
+            guard let self else { return }
+            guard let map else {
+                errorMessage = String(localized: "Error.LinkedFileUnreadable")
+                return
+            }
+            update { composition in
+                for index in composition.layers.indices {
+                    for filterIndex in composition.layers[index].filters.indices {
+                        let filter = composition.layers[index].filters[filterIndex]
+                        guard filter.kind == .displace, picks(filter) else { continue }
+                        composition.layers[index].filters[filterIndex].displacementMap = map
+                        composition.layers[index].filters[filterIndex].displacementMapName = name
+                    }
+                }
+            }
+        })
+    }
+
     /// Takes in a smart object's edited contents and draws them out again.
     func updateSmartObject(_ layerID: Layer.ID, contents: Composition) {
         update { composition in

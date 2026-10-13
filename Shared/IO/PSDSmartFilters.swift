@@ -304,6 +304,17 @@ enum PSDSmartFilters {
             return curves(settings)
         case "Lvls":
             return levels(settings)
+        case "Dspl":
+            // The map is a file of its own, named here but not kept; until
+            // it is chosen the filter changes nothing.
+            return make(.displace) { filter in
+                // Photoshop's scale is a percentage of 128 canvas pixels.
+                filter.setValue((number("HrzS") ?? 10) * 1.28 / unit, at: 0)
+                filter.setValue((number("VrtS") ?? 10) * 1.28 / unit, at: 1)
+                filter.setValue(settings["DspM"]?.enumValue == "Tile" ? 1 : 0, at: 2)
+                filter.setValue(settings["UndA"]?.enumValue == "WrpA" ? 0 : 1, at: 3)
+                filter.displacementMapName = settings["DspF"]?.fileName
+            }
         case "LqFy":
             guard case .rawData(let bytes) = settings["LqMe"], let mesh = PSDLiquifyMesh.mesh(from: bytes, placement: placement) else { return nil }
             return make(.liquify) { $0.mesh = mesh }
@@ -484,6 +495,14 @@ enum PSDSmartFilters {
             (name, id, PSDDescriptor(classID: classID, items: items))
         }
         switch filter.kind {
+        case .displace:
+            func scale(_ index: Int) -> PSDDescriptor.Value { .integer(Int32(min(max(filter.value(index) * unit / 1.28, -999), 999).rounded())) }
+            return entry("Displace...", "Dspl", [
+                ("HrzS", scale(0)), ("VrtS", scale(1)),
+                ("DspM", .enumerated(type: "DspM", value: filter.value(2) >= 0.5 ? "Tile" : "StrF")),
+                ("UndA", .enumerated(type: "UndA", value: filter.value(3) >= 0.5 ? "RptE" : "WrpA")),
+                ("DspF", .path(named: filter.displacementMapName ?? "Displacement Map.psd")),
+            ])
         case .liquify:
             guard let mesh = filter.mesh else { return nil }
             return entry("Liquify...", "LqFy", [("LqMe", .rawData(PSDLiquifyMesh.bytes(for: mesh, amount: filter.amount, placement: placement)))])

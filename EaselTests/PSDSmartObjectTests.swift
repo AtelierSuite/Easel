@@ -272,6 +272,28 @@ struct PSDSmartObjectTests {
         }
     }
 
+    @Test func displaceComesBackWithItsMapsName() throws {
+        var filter = LayerFilter(kind: .displace)
+        filter.values = [640, -320, 1, 0]
+        filter.displacementMapName = "Ripples.psd"
+        var layer = smartLayer(transform: LayerTransform(position: CGPoint(x: 40, y: 30), scaleX: 2, scaleY: 2))
+        layer.filters = [filter]
+        let read = try #require(try roundTrip([layer]).layers.first?.filters.first)
+        #expect(read.kind == .displace)
+        for index in 0..<4 { #expect(abs(read.value(index) - filter.value(index)) < 0.01) }
+        #expect(read.displacementMapName == "Ripples.psd")
+        // Photoshop keeps the map apart, so it has to be chosen again.
+        #expect(read.displacementMap == nil)
+    }
+
+    @Test func aWindowsPathGivesItsFileName() {
+        let units = Array("D:\\Downloads\\tt.psd\0".utf16)
+        var bytes = Array("txtu".utf8) + [UInt8(8 + units.count * 2), 0, 0, 0, UInt8(units.count), 0, 0, 0]
+        for unit in units { bytes += [UInt8(unit & 0xFF), UInt8(unit >> 8)] }
+        #expect(PSDDescriptor.Value.path(bytes).fileName == "tt.psd")
+        #expect(PSDDescriptor.Value.path(named: "Map.png").fileName == "Map.png")
+    }
+
     @Test func liquifyComesBackWithItsMesh() throws {
         var filter = LayerFilter(kind: .liquify)
         let mesh = FilterMesh.sampling(columns: 64, rows: 64) { x, y in SIMD2(0.1 * sin(y * 3), -0.05 * x) }

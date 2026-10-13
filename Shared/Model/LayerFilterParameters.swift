@@ -239,6 +239,18 @@ extension LayerFilter.Kind {
                 FilterParameter(labelKey: "LayerFilters.BlackClip", range: 0...50, defaultValue: 0.01, style: .decimal),
                 FilterParameter(labelKey: "LayerFilters.WhiteClip", range: 0...50, defaultValue: 0.01, style: .decimal),
             ]
+        case .displace:
+            // How far white moves a pixel across and down, black as far the
+            // other way; whether the map is stretched over the layer or
+            // tiled; and what shows where a pixel comes from off the layer.
+            return [
+                FilterParameter(labelKey: "LayerFilters.HorizontalScale", range: -2000...2000, defaultValue: 12.8, style: .length),
+                FilterParameter(labelKey: "LayerFilters.VerticalScale", range: -2000...2000, defaultValue: 12.8, style: .length),
+                FilterParameter(labelKey: "LayerFilters.DisplacementMap", range: 0...1, defaultValue: 0,
+                                style: .choice(["LayerFilters.StretchToFit", "LayerFilters.Tile"])),
+                FilterParameter(labelKey: "LayerFilters.UndefinedAreas", range: 0...1, defaultValue: 1,
+                                style: .choice(["LayerFilters.WrapAround", "LayerFilters.RepeatEdges"])),
+            ]
         case .custom:
             // Five rows of five weights, then the divisor and the offset.
             let weights = [Double](repeating: 0, count: 12) + [1] + [Double](repeating: 0, count: 12)

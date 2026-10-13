@@ -131,6 +131,9 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         case shadowsHighlights
         /// Pushed and pulled like something soft, by a mesh of offsets.
         case liquify
+        /// Each pixel moved by a picture of its own: across by its first
+        /// channel, down by its second, mid-grey moving nothing.
+        case displace
 
         var id: String { rawValue }
 
@@ -149,7 +152,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                                      .blur, .blurMore, .average]),
             ("FilterCategory.Noise", [.noiseReduction, .reduceNoise, .despeckle, .addNoise, .median, .dustAndScratches]),
             ("FilterCategory.Sharpen", [.unsharpMask, .sharpen, .sharpenMore, .sharpenEdges]),
-            ("FilterCategory.Distort", [.twirl, .pinch, .spherize, .zigzag, .ripple, .wave, .shear, .polarCoordinates, .liquify, .lensCorrection]),
+            ("FilterCategory.Distort", [.twirl, .pinch, .spherize, .zigzag, .ripple, .wave, .shear, .polarCoordinates, .displace, .liquify, .lensCorrection]),
             ("FilterCategory.Stylize", [.emboss, .findEdges, .traceContour, .wind, .diffuse, .tiles, .extrude]),
             ("FilterCategory.Pixelate", [.mosaic, .halftone, .crystallize, .pointillize, .mezzotint, .facet, .fragment]),
             ("FilterCategory.Render", [.clouds, .differenceClouds, .fibers, .lensFlare]),
@@ -164,7 +167,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .liquify, .shadowsHighlights, .selectiveColor:
+                 .channelMixer, .desaturate, .equalize, .displace, .liquify, .shadowsHighlights, .selectiveColor:
                 return String(localized: String.LocalizationValue("LayerFilter." + rawValue.prefix(1).uppercased() + rawValue.dropFirst()))
             case .blackAndWhite: return String(localized: "LayerFilter.BlackAndWhite")
             case .sepia: return String(localized: "LayerFilter.Sepia")
@@ -247,6 +250,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .channelMixer: return "slider.horizontal.3"
             case .desaturate: return "drop.degreesign.slash"
             case .equalize: return "chart.bar.xaxis"
+            case .displace: return "square.3.layers.3d.down.right"
             case .liquify: return "hand.draw"
             case .shadowsHighlights: return "circle.lefthalf.filled.righthalf.striped.horizontal"
             case .selectiveColor: return "eyedropper.halffull"
@@ -307,7 +311,7 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .liquify, .shadowsHighlights, .selectiveColor: return 1
+                 .channelMixer, .desaturate, .equalize, .displace, .liquify, .shadowsHighlights, .selectiveColor: return 1
             }
         }
 
@@ -420,6 +424,10 @@ struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
     var photoshopFilter: PhotoshopFilterRecord?
     /// Liquify's offsets.
     var mesh: FilterMesh?
+    /// Displace's picture, and the name of the file it came from, which a
+    /// Photoshop file names without holding the picture.
+    var displacementMap: Data?
+    var displacementMapName: String?
 
     /// The middle of each HSL band, as fractions of a turn: red, orange,
     /// yellow, green, aqua, blue, purple and magenta.
