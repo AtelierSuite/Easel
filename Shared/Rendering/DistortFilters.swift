@@ -1,5 +1,6 @@
 import CoreImage
 import Foundation
+import Synchronization
 
 /// Photoshop's distortions and motion blur, worked out its way: each
 /// output pixel taken from where the filter says it came from, blended
@@ -30,8 +31,7 @@ extension LayerFilter {
             // Photoshop's: 128 moves nothing, 255 as far as the scale, 0 as
             // far the other way. The map's first channel moves across, its
             // second down.
-            guard let data = displacementMap, let image = try? ImageCodec.decode(data),
-                  let map = PixelFilters.pixels(of: CIImage(cgImage: image)) else { return input }
+            guard let data = displacementMap, let map = Self.displacementPixels(data) else { return input }
             let reach = SIMD2(value(0), value(1)) * Double(unit), tiled = value(2) >= 0.5, wraps = value(3) < 0.5
             let size = SIMD2(Double(extent.width), Double(extent.height))
             return PixelFilters.process(input) { pixels in
@@ -208,6 +208,22 @@ extension LayerFilter {
     }
 
     // MARK: - Pieces
+
+    /// Displacement maps lately read, so one is not decoded again each time
+    /// the filter runs.
+    private static let displacementMaps = Mutex<[(data: Data, pixels: PixelFilters.Pixels)]>([])
+
+    /// A displacement map's file as pixels.
+    static func displacementPixels(_ data: Data) -> PixelFilters.Pixels? {
+        if let cached = displacementMaps.withLock({ maps in maps.first { $0.data == data }?.pixels }) { return cached }
+        guard let image = try? ImageCodec.decode(data), let map = PixelFilters.pixels(of: CIImage(cgImage: image)) else { return nil }
+        displacementMaps.withLock { maps in
+            maps.removeAll { $0.data == data }
+            maps.append((data, map))
+            if maps.count > 2 { maps.removeFirst(maps.count - 2) }
+        }
+        return map
+    }
 
     /// Photoshop's Radial Blur in its spin mode: the even average round an
     /// arc about the centre, `arc` radians in all.
