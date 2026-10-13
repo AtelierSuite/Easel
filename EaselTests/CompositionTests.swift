@@ -187,4 +187,15 @@ struct CompositionTests {
         #expect(right.blue > 0.9 && right.red < 0.1)
         #expect(CompositionRenderer.color(at: CGPoint(x: 20, y: 1), in: composition) == nil)
     }
+
+    @Test func aSamplerDrawnOnceFindsTheSameColours() throws {
+        let size = CGSize(width: 8, height: 4)
+        let composition = Composition(size: size, layers: [
+            Layer(name: "Halves", image: LayerImage(TestImages.halves()), canvasSize: size),
+        ])
+        let sampler = ColorSampler(composition)
+        for point in [CGPoint(x: 1, y: 1), CGPoint(x: 6.5, y: 2.9), CGPoint(x: 20, y: 1), CGPoint(x: -1, y: 1)] {
+            #expect(sampler.color(at: point) == CompositionRenderer.color(at: point, in: composition))
+        }
+    }
 }

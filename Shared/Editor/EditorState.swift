@@ -130,6 +130,8 @@ final class EditorState {
     /// when a magnetic drag starts.
     @ObservationIgnored var edgeMap: EdgeMap?
     @ObservationIgnored private var edgeMapSource: Composition?
+    /// The picture drawn out for the eyedropper, let go when it lifts.
+    @ObservationIgnored private var colorSampler: ColorSampler?
     var cropAspect: CropAspect = .free {
         didSet { constrainCropRect() }
     }
@@ -1087,7 +1089,7 @@ final class EditorState {
             guard isTap else { return }
             placeText(at: point)
         case .eyedropper:
-            break
+            colorSampler = nil
         }
     }
 
@@ -1095,6 +1097,7 @@ final class EditorState {
     /// gesture had started is kept.
     func toolCancelled() {
         activeStroke = nil
+        colorSampler = nil
         dockedEdge = nil
         smudge = nil
         draftSelection = nil
@@ -1173,7 +1176,11 @@ final class EditorState {
     // MARK: - Simple tool actions
 
     func sampleColor(at point: CGPoint) {
-        guard let sampled = CompositionRenderer.color(at: point, in: read()) else { return }
+        // Drawn out once and kept while the picture stays the same, so a
+        // drag samples without drawing every layer again.
+        let composition = read()
+        if colorSampler?.composition != composition { colorSampler = ColorSampler(composition) }
+        guard let sampled = colorSampler?.color(at: point) else { return }
         color = sampled
     }
 

@@ -243,7 +243,12 @@ enum CompositionRenderer {
             draw(drawnLayers(composition), in: context)
         }
         guard let pixels = Bitmap.pixels(of: image) else { return nil }
-        let sample = pixels.color(x: 0, y: 0)
+        return color(of: pixels, x: 0, y: 0)
+    }
+
+    /// A pixel's colour, nil where it is clear.
+    fileprivate static func color(of pixels: PixelBuffer, x: Int, y: Int) -> RGBAColor? {
+        let sample = pixels.color(x: x, y: y)
         guard sample.alpha > 0 else { return nil }
         // The bytes are Display P3; colours are kept in extended sRGB.
         let p3 = CGColor(
@@ -251,5 +256,28 @@ enum CompositionRenderer {
             components: [sample.red / 255, sample.green / 255, sample.blue / 255, sample.alpha / 255]
         )
         return p3.flatMap(RGBAColor.init)
+    }
+}
+
+/// The whole picture drawn out once, for picking colour after colour from
+/// it, as an eyedropper dragged over the canvas does, without drawing every
+/// layer again for each.
+struct ColorSampler: Sendable {
+    /// The picture it was drawn from, to tell when it is out of date.
+    let composition: Composition
+    private let pixels: PixelBuffer?
+
+    init(_ composition: Composition) {
+        self.composition = composition
+        pixels = Bitmap.pixels(of: CompositionRenderer.render(composition))
+    }
+
+    /// The colour the picture shows at a canvas point, as
+    /// `CompositionRenderer.color(at:in:)` finds it.
+    func color(at point: CGPoint) -> RGBAColor? {
+        guard let pixels, composition.canvasRect.contains(point) else { return nil }
+        let x = Int(point.x.rounded(.down)), y = Int(point.y.rounded(.down))
+        guard (0..<pixels.width).contains(x), (0..<pixels.height).contains(y) else { return nil }
+        return CompositionRenderer.color(of: pixels, x: x, y: y)
     }
 }
