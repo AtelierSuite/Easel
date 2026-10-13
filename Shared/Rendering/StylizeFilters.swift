@@ -91,10 +91,13 @@ extension LayerFilter {
             for x in 0..<pixels.width where source[x, y, 3] > 0 {
                 for channel in 0..<3 {
                     let value = Double(source[x, y, channel])
-                    let neighbours = [(1, 0), (-1, 0), (0, 1), (0, -1)].map { Double(source.clamped(x + $0.0, y + $0.1, channel)) }
+                    let right = Double(source.clamped(x + 1, y, channel))
+                    let left = Double(source.clamped(x - 1, y, channel))
+                    let below = Double(source.clamped(x, y + 1, channel))
+                    let above = Double(source.clamped(x, y - 1, channel))
                     let crosses = upper
-                        ? value < level && neighbours.contains { $0 >= level }
-                        : value >= level && neighbours.contains { $0 < level }
+                        ? value < level && max(right, left, below, above) >= level
+                        : value >= level && min(right, left, below, above) < level
                     pixels[x, y, channel] = crosses ? 0 : 255
                 }
             }
@@ -104,12 +107,16 @@ extension LayerFilter {
     /// The average of four copies moved `distance` along each diagonal.
     static func fragment(_ pixels: inout PixelFilters.Pixels, distance: Int) {
         let source = pixels
+        let offsets = [(distance, distance), (-distance, distance), (distance, -distance), (-distance, -distance)]
         for y in 0..<pixels.height {
             for x in 0..<pixels.width {
                 var sum = SIMD4<Double>(repeating: 0)
-                for (dx, dy) in [(distance, distance), (-distance, distance), (distance, -distance), (-distance, -distance)] {
+                for (dx, dy) in offsets {
                     let alpha = Double(source.clamped(x - dx, y - dy, 3))
-                    sum += SIMD4((0..<3).map { Double(source.clamped(x - dx, y - dy, $0)) * alpha / 255 } + [alpha])
+                    sum += SIMD4(
+                        Double(source.clamped(x - dx, y - dy, 0)) * alpha / 255, Double(source.clamped(x - dx, y - dy, 1)) * alpha / 255,
+                        Double(source.clamped(x - dx, y - dy, 2)) * alpha / 255, alpha
+                    )
                 }
                 sum /= 4
                 pixels[x, y, 3] = PixelFilters.byte(sum.w)
@@ -282,14 +289,19 @@ extension LayerFilter {
     /// calmest of the four squares it is a corner of.
     static func facet(_ pixels: inout PixelFilters.Pixels) {
         let source = pixels, radius = 2
+        let corners = [(-1, -1), (1, -1), (-1, 1), (1, 1)]
         for y in 0..<pixels.height {
             for x in 0..<pixels.width where source[x, y, 3] > 0 {
                 var best = SIMD3<Double>(repeating: 0), bestSpread = Double.infinity
-                for (sx, sy) in [(-1, -1), (1, -1), (-1, 1), (1, 1)] {
+                for (sx, sy) in corners {
                     var sum = SIMD3<Double>(repeating: 0), squares = 0.0
                     for dy in 0...radius {
                         for dx in 0...radius {
-                            let colour = SIMD3((0..<3).map { Double(source.clamped(x + dx * sx, y + dy * sy, $0)) })
+                            let nx = x + dx * sx, ny = y + dy * sy
+                            let colour = SIMD3(
+                                Double(source.clamped(nx, ny, 0)), Double(source.clamped(nx, ny, 1)),
+                                Double(source.clamped(nx, ny, 2))
+                            )
                             sum += colour
                             squares += (colour * colour).sum()
                         }
@@ -339,7 +351,10 @@ extension LayerFilter {
             for x in xs where source[x, y, 3] > 0 {
                 let next = x - step
                 guard next >= 0, next < width else { continue }
-                let change = (0..<3).map { abs(Int(source[x, y, $0]) - Int(source[next, y, $0])) }.max() ?? 0
+                let change = max(
+                    abs(Int(source[x, y, 0]) - Int(source[next, y, 0])), abs(Int(source[x, y, 1]) - Int(source[next, y, 1])),
+                    abs(Int(source[x, y, 2]) - Int(source[next, y, 2]))
+                )
                 guard change > 12, random.next() < 0.9 else { continue }
                 let length = Int(reach * (0.3 + random.next() * 0.7))
                 var position = x + step
@@ -398,14 +413,16 @@ extension LayerFilter {
         var random = Random(seed: seed)
         let source = pixels
         let size = max(1, min(pixels.width, pixels.height) / count)
+        let backgroundValues = SIMD3(background.red, background.green, background.blue) * 255
+        let foregroundValues = SIMD3(foreground.red, foreground.green, foreground.blue) * 255
         // The gaps first.
         for y in 0..<pixels.height {
             for x in 0..<pixels.width where source[x, y, 3] > 0 {
                 for channel in 0..<3 {
                     let value: Double
                     switch fill {
-                    case 0: value = [background.red, background.green, background.blue][channel] * 255
-                    case 1: value = [foreground.red, foreground.green, foreground.blue][channel] * 255
+                    case 0: value = backgroundValues[channel]
+                    case 1: value = foregroundValues[channel]
                     case 2: value = 255 - Double(source[x, y, channel])
                     default: value = Double(source[x, y, channel])
                     }

@@ -280,17 +280,22 @@ extension LayerFilter {
     static func sample(_ pixels: PixelFilters.Pixels, _ x: Double, _ y: Double, clamped: Bool = false) -> SIMD4<Double> {
         let x0 = Int(x.rounded(.down)), y0 = Int(y.rounded(.down)), fx = x - Double(x0), fy = y - Double(y0)
         var sum = SIMD4<Double>(repeating: 0)
-        for (dx, dy, weight) in [(0, 0, (1 - fx) * (1 - fy)), (1, 0, fx * (1 - fy)), (0, 1, (1 - fx) * fy), (1, 1, fx * fy)] where weight > 0 {
+        func add(_ dx: Int, _ dy: Int, _ weight: Double) {
+            guard weight > 0 else { return }
             var px = x0 + dx, py = y0 + dy
             if clamped {
                 px = min(max(px, 0), pixels.width - 1)
                 py = min(max(py, 0), pixels.height - 1)
             } else if px < 0 || py < 0 || px >= pixels.width || py >= pixels.height {
-                continue
+                return
             }
             let alpha = Double(pixels[px, py, 3])
             sum += SIMD4(Double(pixels[px, py, 0]) * alpha, Double(pixels[px, py, 1]) * alpha, Double(pixels[px, py, 2]) * alpha, alpha) * weight
         }
+        add(0, 0, (1 - fx) * (1 - fy))
+        add(1, 0, fx * (1 - fy))
+        add(0, 1, (1 - fx) * fy)
+        add(1, 1, fx * fy)
         guard sum.w > 0 else { return .zero }
         return SIMD4(sum.x / sum.w, sum.y / sum.w, sum.z / sum.w, sum.w)
     }

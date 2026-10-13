@@ -27,7 +27,11 @@ extension LayerFilter {
             return PixelFilters.process(input) { pixels in
                 guard let sharp, sharp.bytes.count == pixels.bytes.count else { return }
                 for index in stride(from: 0, to: pixels.bytes.count, by: 4) {
-                    let change = (0..<3).map { abs(Int(sharp.bytes[index + $0]) - Int(pixels.bytes[index + $0])) }.max() ?? 0
+                    let change = max(
+                        abs(Int(sharp.bytes[index]) - Int(pixels.bytes[index])),
+                        abs(Int(sharp.bytes[index + 1]) - Int(pixels.bytes[index + 1])),
+                        abs(Int(sharp.bytes[index + 2]) - Int(pixels.bytes[index + 2]))
+                    )
                     if change > 10 { for channel in 0..<3 { pixels.bytes[index + channel] = sharp.bytes[index + channel] } }
                 }
             }
