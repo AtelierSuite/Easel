@@ -69,6 +69,42 @@ struct PSDWriterTests {
         #expect(TestImages.pixel(mask.image.cgImage, x: 6, y: 3).alpha == 0)
     }
 
+    @Test func documentSettingsSurviveTheRoundTrip() throws {
+        var composition = sample()
+        composition.resolution = 300
+        composition.guides = [Guide(axis: .vertical, position: 4.5), Guide(axis: .horizontal, position: 7)]
+        composition.layers[0].isLocked = true
+        composition.groups[0].isLocked = true
+        composition.artboards = [Artboard(name: "Board", rect: CGRect(x: 2, y: 1, width: 12, height: 8), groupID: composition.groups[0].id)]
+        // A comp with the blue layer moved, faded, multiplied and hidden.
+        var comp = composition.layerComp(named: "Moved")
+        let blueID = composition.layers[1].id
+        comp.states[blueID]?.transform.position.x += 3
+        comp.states[blueID]?.opacity = 0.3
+        comp.states[blueID]?.blendMode = .multiply
+        comp.states[blueID]?.isVisible = false
+        composition.layerComps = [comp, composition.layerComp(named: "As is")]
+
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: composition))
+        #expect(read.resolution == 300)
+        #expect(read.guides.map(\.axis) == [.vertical, .horizontal])
+        #expect(read.guides.map(\.position) == [4.5, 7])
+        #expect(read.layers.map(\.isLocked) == [true, false, false])
+        #expect(read.groups.map(\.isLocked) == [true])
+        #expect(read.artboards.map(\.name) == ["Folder"])
+        #expect(read.artboards.first?.rect == CGRect(x: 2, y: 1, width: 12, height: 8))
+        #expect(read.artboards.first?.groupID == read.groups.first?.id)
+        #expect(read.layerComps.map(\.name) == ["Moved", "As is"])
+        let blue = read.layers[1]
+        let moved = try #require(read.layerComps[0].states[blue.id])
+        #expect(moved.transform.position == CGPoint(x: blue.transform.position.x + 3, y: blue.transform.position.y))
+        #expect(abs(moved.opacity - 0.3) < 0.01)
+        #expect(moved.blendMode == .multiply)
+        #expect(!moved.isVisible)
+        let asIs = try #require(read.layerComps[1].states[blue.id])
+        #expect(asIs.transform.position == blue.transform.position && asIs.isVisible && asIs.blendMode == .screen)
+    }
+
     @Test func otherAppsSeeTheFlattenedPicture() throws {
         let data = try PSDWriter.data(for: sample())
         let image = try ImageCodec.decode(data)

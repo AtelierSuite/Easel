@@ -40,6 +40,7 @@ enum CompositionArchive {
         var patterns: [PatternRecord]?
         var layerComps: [LayerComp]?
         var artboards: [Artboard]?
+        var resolution: Double?
     }
 
     struct PatternRecord: Codable {
@@ -206,7 +207,8 @@ enum CompositionArchive {
             swatches: composition.swatches.isEmpty ? nil : composition.swatches,
             patterns: patterns.isEmpty ? nil : patterns,
             layerComps: composition.layerComps.isEmpty ? nil : composition.layerComps,
-            artboards: composition.artboards.isEmpty ? nil : composition.artboards
+            artboards: composition.artboards.isEmpty ? nil : composition.artboards,
+            resolution: composition.resolution
         )
     }
 
@@ -264,6 +266,7 @@ enum CompositionArchive {
         composition.swatches = manifest.swatches ?? []
         composition.layerComps = manifest.layerComps ?? []
         composition.artboards = manifest.artboards ?? []
+        composition.resolution = manifest.resolution
         composition.patterns = try (manifest.patterns ?? []).map { record in
             guard let data = read(record.file) else { throw Failure.missingLayer(record.file) }
             return PatternSwatch(id: record.id, name: record.name, image: LayerImage(try ImageCodec.decode(data), encoded: data))

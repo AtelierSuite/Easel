@@ -23,6 +23,8 @@ struct Composition: Equatable, Sendable {
     var layerComps: [LayerComp] = []
     /// Parts of the canvas exported as pictures of their own.
     var artboards: [Artboard] = []
+    /// Pixels per inch, when the file it came from said.
+    var resolution: Double?
 
     static let defaultSize = CGSize(width: 2048, height: 1536)
 

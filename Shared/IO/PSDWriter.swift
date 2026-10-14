@@ -26,7 +26,8 @@ enum PSDWriter {
         out.uint16(3)
         out.uint32(0)
 
-        // Image resources: the colour profile the pixels are in.
+        // Image resources: the colour profile the pixels are in, then the
+        // resolution, guides and layer comps.
         var resources = PSDBinaryWriter()
         if let icc = Bitmap.colorSpace.copyICCData() as Data? {
             resources.ascii("8BIM")
@@ -36,6 +37,7 @@ enum PSDWriter {
             resources.bytes([UInt8](icc))
             if icc.count % 2 != 0 { resources.zeros(1) }
         }
+        resources.bytes(PSDDocumentInfo.resources(for: composition))
         out.uint32(resources.data.count)
         out.bytes(resources.data)
 
@@ -99,8 +101,14 @@ enum PSDWriter {
         var open: [UUID] = []
         func close(down to: Int) {
             while open.count > to, let id = open.popLast(), let group = composition.group(id) {
+                var blocks: [(key: String, data: [UInt8])] = []
+                if group.isLocked { blocks.append(("lspf", PSDDocumentInfo.lockBlock)) }
+                if let artboard = composition.artboards.first(where: { $0.groupID == id }) {
+                    blocks.append(("artb", PSDDocumentInfo.artboardBlock(artboard.rect)))
+                }
                 records.append(folderRecord(name: group.name, opacity: group.opacity, isVisible: group.isVisible,
-                                            type: group.isExpanded ? 1 : 2, blendKey: group.blendMode.map(blendKey) ?? "pass"))
+                                            type: group.isExpanded ? 1 : 2, blendKey: group.blendMode.map(blendKey) ?? "pass",
+                                            blocks: blocks))
             }
         }
         for layer in composition.layers {
@@ -112,13 +120,24 @@ enum PSDWriter {
                 records.append(folderRecord(name: "</Layer group>", opacity: 1, isVisible: true, type: 3, blendKey: "norm"))
                 open.append(id)
             }
-            records.append(layerRecord(layer, canvasSize: composition.size, swatches: composition.patterns))
+            var extra: [(key: String, data: [UInt8])] = []
+            if !composition.layerComps.isEmpty {
+                // Each layer says how each comp shows it, by a number of its own.
+                let number = records.count + 1
+                var layerID = PSDBinaryWriter()
+                layerID.uint32(number)
+                extra = [("lyid", layerID.data),
+                         ("shmd", PSDDocumentInfo.metadataBlock(for: layer, comps: composition.layerComps, layerID: number))]
+            }
+            records.append(layerRecord(layer, canvasSize: composition.size, swatches: composition.patterns, extraBlocks: extra))
         }
         close(down: 0)
         return records
     }
 
-    private static func layerRecord(_ layer: Layer, canvasSize: CGSize, swatches: [PatternSwatch]) -> Record {
+    private static func layerRecord(
+        _ layer: Layer, canvasSize: CGSize, swatches: [PatternSwatch], extraBlocks: [(key: String, data: [UInt8])] = []
+    ) -> Record {
         // An adjustment Photoshop has a record for is written as one, with
         // no pixels; it may take some of its strength from the opacity.
         let adjustment = layer.adjustment.flatMap(PSDAdjustments.blocks(for:))
@@ -224,6 +243,8 @@ enum PSDWriter {
         header.uint8(layer.isVisible ? 0 : 2)
         header.uint8(0)
 
+        if layer.isLocked { blocks.append(("lspf", PSDDocumentInfo.lockBlock)) }
+        blocks += extraBlocks
         var extra = PSDBinaryWriter()
         if let mask {
             extra.uint32(20)
@@ -249,7 +270,9 @@ enum PSDWriter {
 
     /// `blendKey` is the group's; Photoshop's `pass` lets its layers mix
     /// one by one.
-    private static func folderRecord(name: String, opacity: Double, isVisible: Bool, type: Int, blendKey: String) -> Record {
+    private static func folderRecord(
+        name: String, opacity: Double, isVisible: Bool, type: Int, blendKey: String, blocks: [(key: String, data: [UInt8])] = []
+    ) -> Record {
         var header = PSDBinaryWriter()
         header.zeros(16)
         header.uint16(4)
@@ -276,6 +299,7 @@ enum PSDWriter {
             extra.ascii("8BIM")
             extra.ascii(blendKey)
         }
+        for block in blocks { extra.taggedBlock(block.key, block.data) }
         header.uint32(extra.data.count)
         header.bytes(extra.data)
         // Four empty raw channels.

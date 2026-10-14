@@ -8,6 +8,9 @@ struct Artboard: Identifiable, Codable, Equatable, Sendable {
     var name: String
     /// In canvas pixels.
     var rect: CGRect
+    /// The group holding its layers, for an artboard from Photoshop, where
+    /// artboards are groups.
+    var groupID: UUID?
 }
 
 extension Composition {

@@ -50,7 +50,8 @@ enum PSDReader {
         try reader.skip(Int(try reader.uint32()))
         let resourcesLength = Int(try reader.uint32())
         let resourcesEnd = reader.offset + resourcesLength
-        if mode == .rgb, let profile = try? colorProfile(&reader, end: resourcesEnd) {
+        let resources = (try? self.resources(&reader, end: resourcesEnd)) ?? PSDDocumentInfo.Resources()
+        if mode == .rgb, let profile = resources.colorSpace {
             format.colorSpace = profile
         }
         guard reader.seek(to: resourcesEnd) else { throw Failure.damaged }
@@ -61,8 +62,9 @@ enum PSDReader {
         var groups: [LayerGroup] = []
         var patterns: [PatternSwatch] = []
         var recordCount = 0
+        var extras = LayerExtras()
         if layerSectionLength > 0, let read = try? readLayers(&reader, isLarge: isLarge, format: format, canvas: canvas, sectionEnd: layerSectionEnd) {
-            (layers, groups, patterns, recordCount) = read
+            (layers, groups, patterns, recordCount, extras) = read
         }
         guard reader.seek(to: layerSectionEnd) else { throw Failure.damaged }
 
@@ -73,32 +75,49 @@ enum PSDReader {
                                         format: format, isLarge: isLarge)
                 ?? fallbackImage(data)
             guard let merged else { throw Failure.damaged }
-            return Composition(image: merged, name: String(localized: "Layer.DefaultName.Background"))
+            var composition = Composition(image: merged, name: String(localized: "Layer.DefaultName.Background"))
+            composition.resolution = resources.resolution
+            composition.guides = resources.guides
+            return composition
         }
         // Layers that cannot be scaled down are bounded by the canvas cap.
         guard width <= Bitmap.maximumDimension, height <= Bitmap.maximumDimension else { throw Failure.unsupported }
         var composition = Composition(size: canvas, layers: layers, groups: groups)
         composition.patterns = patterns
+        composition.resolution = resources.resolution
+        composition.guides = resources.guides
+        composition.artboards = extras.artboards
+        if let comps = resources.comps {
+            composition.layerComps = PSDDocumentInfo.layerComps(comps, layers: layers, settings: extras.compSettings)
+        }
         composition.normalizeGroups()
         return composition
     }
 
-    /// The embedded ICC profile (resource 1039), which says what the RGB
-    /// numbers mean; without one they are taken as sRGB.
-    private static func colorProfile(_ reader: inout BigEndianReader, end: Int) throws -> CGColorSpace? {
+    /// The image resources Easel reads: the embedded ICC profile (1039),
+    /// which says what the RGB numbers mean — without one they are taken
+    /// as sRGB — and the resolution, guides and layer comps.
+    private static func resources(_ reader: inout BigEndianReader, end: Int) throws -> PSDDocumentInfo.Resources {
+        var resources = PSDDocumentInfo.Resources()
         while reader.offset + 12 <= end {
-            guard try reader.ascii(4) == "8BIM" else { return nil }
-            let id = try reader.uint16()
+            guard try reader.ascii(4) == "8BIM" else { break }
+            let id = Int(try reader.uint16())
             let nameLength = Int(try reader.uint8())
             // The Pascal name, with its length byte, padded to even.
             try reader.skip(nameLength + ((nameLength + 1) % 2))
             let size = Int(try reader.uint32())
-            if id == 1039 {
-                return CGColorSpace(iccData: Data(try reader.bytes(size)) as CFData)
-            }
-            try reader.skip(size + size % 2)
+            PSDDocumentInfo.readResource(id: id, data: try reader.bytes(size), into: &resources)
+            try reader.skip(size % 2)
         }
-        return nil
+        return resources
+    }
+
+    /// What layer records say beyond the layers themselves.
+    private struct LayerExtras {
+        /// Each layer's `cmls` settings, for its layer comps.
+        var compSettings: [UUID: PSDDescriptor] = [:]
+        /// Groups that are artboards.
+        var artboards: [Artboard] = []
     }
 
     /// ImageIO reads the flattened picture of most Photoshop files.
@@ -121,6 +140,7 @@ enum PSDReader {
         /// `iOpa`: how much of the layer's own pixels show, apart from its
         /// effects.
         var fillOpacity = 255
+        var isLocked = false
         var isHidden = false
         var isClipped = false
         var name = ""
@@ -150,7 +170,7 @@ enum PSDReader {
 
     private static func readLayers(
         _ reader: inout BigEndianReader, isLarge: Bool, format: PixelFormat, canvas: CGSize, sectionEnd: Int
-    ) throws -> (layers: [Layer], groups: [LayerGroup], patterns: [PatternSwatch], recordCount: Int) {
+    ) throws -> (layers: [Layer], groups: [LayerGroup], patterns: [PatternSwatch], recordCount: Int, extras: LayerExtras) {
         let infoLength = isLarge ? Int(try reader.uint64()) : Int(try reader.uint32())
         let infoStart = reader.offset
         let infoEnd = infoStart + infoLength
@@ -162,7 +182,7 @@ enum PSDReader {
         // own after the global mask, laid out the same, and leave this empty.
         guard let layerInfo = infoLength > 0 ? infoStart..<infoEnd : shared.deepLayers,
               reader.seek(to: layerInfo.lowerBound), layerInfo.count >= 2
-        else { return ([], [], [], 0) }
+        else { return ([], [], [], 0, LayerExtras()) }
         // Negative: the first alpha channel is the merged result's
         // transparency. The count is what matters.
         let count = abs(Int(try reader.int16()))
@@ -179,6 +199,7 @@ enum PSDReader {
 
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
+        var extras = LayerExtras()
         // Records run bottom first: a group's divider, its layers, then the
         // group's own record with its name and settings.
         var open: [UUID] = []
@@ -210,6 +231,10 @@ enum PSDReader {
                 groups[index].isExpanded = record.sectionType == 1
                 let key = record.sectionBlendKey ?? record.blendKey
                 groups[index].blendMode = key == "pass" ? nil : blendMode(key)
+                groups[index].isLocked = record.isLocked
+                if let rect = record.blocks["artb"].flatMap(PSDDocumentInfo.artboardRect) {
+                    extras.artboards.append(Artboard(name: groups[index].name, rect: rect, groupID: id))
+                }
                 continue
             }
             if record.blocks.keys.contains(where: PSDAdjustments.adjustmentKeys.contains) {
@@ -227,7 +252,9 @@ enum PSDReader {
                     layer.blendMode = blendMode(record.blendKey)
                     layer.isVisible = !record.isHidden
                     layer.isClipped = record.isClipped
+                    layer.isLocked = record.isLocked
                     layer.groupID = open.last
+                    if let settings = record.blocks["shmd"].flatMap(PSDDocumentInfo.compSettings) { extras.compSettings[layer.id] = settings }
                     layer.mask = record.mask.flatMap { makeMask($0, plane: planes[-2], layer: whole) }
                         ?? .revealingAll(size: canvas)
                     layers.append(layer)
@@ -254,6 +281,8 @@ enum PSDReader {
             layer.groupID = open.last
             layer.isClipped = record.isClipped
             layer.fillOpacity = Double(record.fillOpacity) / 255
+            layer.isLocked = record.isLocked
+            if let settings = record.blocks["shmd"].flatMap(PSDDocumentInfo.compSettings) { extras.compSettings[layer.id] = settings }
             // Photoshop keeps a layer's own pixels and its styles apart, as
             // Easel does. Files with several of one effect may keep them as
             // `lmfx` instead, laid out the same way.
@@ -291,7 +320,7 @@ enum PSDReader {
             layers.append(layer)
         }
         let used = Set(layers.flatMap(\.effects).compactMap(\.pattern.swatchID))
-        return (layers, groups, swatches.filter { used.contains($0.id) }, records.count)
+        return (layers, groups, swatches.filter { used.contains($0.id) }, records.count, extras)
     }
 
     /// The `fxrp` block: two doubles, a point on the canvas.
@@ -361,7 +390,7 @@ enum PSDReader {
         "PxSD", "pths", "extd", "extn", "cinf", "artd",
     ]
 
-    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "fxrp"])
+    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "fxrp", "shmd", "artb"])
 
     private static func readRecord(_ reader: inout BigEndianReader, isLarge: Bool) throws -> LayerRecord {
         var record = LayerRecord()
@@ -422,6 +451,8 @@ enum PSDReader {
                 let utf16 = try reader.bytes(characters * 2)
                 let units = stride(from: 0, to: utf16.count - 1, by: 2).map { UInt16(utf16[$0]) << 8 | UInt16(utf16[$0 + 1]) }
                 record.name = String(decoding: units, as: UTF16.self)
+            case "lspf":
+                record.isLocked = PSDDocumentInfo.isLocked(try reader.bytes(length))
             case "iOpa":
                 record.fillOpacity = Int(try reader.uint8())
             case "lsct", "lsdk":
