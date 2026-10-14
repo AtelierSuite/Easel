@@ -10,14 +10,15 @@ import Foundation
 /// are written as those pixels only, so the file looks the same in
 /// Photoshop; they are not editable there.
 enum PSDWriter {
-    static func data(for composition: Composition) throws -> Data {
+    /// `large` writes a `.psb`, whose lengths and row counts run longer.
+    static func data(for composition: Composition, large: Bool = false) throws -> Data {
         let width = Int(composition.size.width.rounded())
         let height = Int(composition.size.height.rounded())
-        var out = PSDBinaryWriter()
+        var out = PSDBinaryWriter(isLarge: large)
 
         // Header: RGB, 8 bits, colour and transparency.
         out.ascii("8BPS")
-        out.uint16(1)
+        out.uint16(large ? 2 : 1)
         out.zeros(6)
         out.uint16(4)
         out.uint32(height)
@@ -63,14 +64,14 @@ enum PSDWriter {
         out.bytes(resources.data)
 
         // Layers.
-        var info = PSDBinaryWriter()
-        let records = Self.records(for: composition, space: space)
+        var info = PSDBinaryWriter(isLarge: large)
+        let records = Self.records(for: composition, space: space, large: large)
         info.int16(records.count)
         for record in records { info.bytes(record.header) }
         for record in records { info.bytes(record.channels) }
         if info.data.count % 2 != 0 { info.zeros(1) }
-        var section = PSDBinaryWriter()
-        section.uint32(info.data.count)
+        var section = PSDBinaryWriter(isLarge: large)
+        section.length(info.data.count)
         section.bytes(info.data)
         section.uint32(0) // No global mask.
         // The tiles pattern overlays name, once each.
@@ -97,7 +98,7 @@ enum PSDWriter {
         for block in composition.photoshop?.blocks ?? [] {
             section.taggedBlock(block.key, [UInt8](block.data), padding: 4)
         }
-        out.uint32(section.data.count)
+        out.length(section.data.count)
         out.bytes(section.data)
 
         // The flattened picture.
@@ -106,7 +107,7 @@ enum PSDWriter {
         let planes = Self.planes(pixels, rect: CGRect(x: 0, y: 0, width: width, height: height))
         out.uint16(1)
         let packed = planes.map { Self.packRows($0, width: width, height: height) }
-        for plane in packed { for row in plane { out.uint16(row.count) } }
+        for plane in packed { for row in plane { out.rowLength(row.count) } }
         for plane in packed { for row in plane { out.bytes(row) } }
         return Data(out.data)
     }
@@ -128,7 +129,7 @@ enum PSDWriter {
 
     /// Records bottom first, with group folders around their layers: a
     /// divider below them and the folder's own record above.
-    private static func records(for composition: Composition, space: CGColorSpace) -> [Record] {
+    private static func records(for composition: Composition, space: CGColorSpace, large: Bool) -> [Record] {
         var records: [Record] = []
         var open: [UUID] = []
         func close(down to: Int) {
@@ -141,7 +142,7 @@ enum PSDWriter {
                 blocks += kept(group.photoshop?.blocks.filter { !PhotoshopExtras.contentKeys.contains($0.key) } ?? [], besides: blocks)
                 records.append(folderRecord(name: group.name, opacity: group.opacity, isVisible: group.isVisible,
                                             type: group.isExpanded ? 1 : 2, blendKey: group.blendMode.map(blendKey) ?? "pass",
-                                            blocks: blocks))
+                                            blocks: blocks, large: large))
             }
         }
         let shown = composition.displayLayers
@@ -164,7 +165,7 @@ enum PSDWriter {
             while common < min(open.count, chain.count), open[common] == chain[common] { common += 1 }
             close(down: common)
             for id in chain[common...] {
-                records.append(folderRecord(name: "</Layer group>", opacity: 1, isVisible: true, type: 3, blendKey: "norm"))
+                records.append(folderRecord(name: "</Layer group>", opacity: 1, isVisible: true, type: 3, blendKey: "norm", large: large))
                 open.append(id)
             }
             var extra: [(key: String, data: [UInt8])] = []
@@ -176,14 +177,14 @@ enum PSDWriter {
                 extra = [("lyid", layerID.data),
                          ("shmd", PSDDocumentInfo.metadataBlock(for: layer, comps: composition.layerComps, layerID: number))]
             }
-            records.append(layerRecord(layer, canvasSize: composition.size, swatches: composition.patterns, space: space, extraBlocks: extra))
+            records.append(layerRecord(layer, canvasSize: composition.size, swatches: composition.patterns, space: space, large: large, extraBlocks: extra))
         }
         close(down: 0)
         return records
     }
 
     private static func layerRecord(
-        _ layer: Layer, canvasSize: CGSize, swatches: [PatternSwatch], space: CGColorSpace,
+        _ layer: Layer, canvasSize: CGSize, swatches: [PatternSwatch], space: CGColorSpace, large: Bool,
         extraBlocks: [(key: String, data: [UInt8])] = []
     ) -> Record {
         // An adjustment Photoshop has a record for is written as one, with
@@ -268,7 +269,7 @@ enum PSDWriter {
         if let pixels, rect.width > 0 {
             let planes = Self.planes(pixels, rect: rect.offsetBy(dx: -frame.minX, dy: -frame.minY))
             channels = [(-1, planes[3]), (0, planes[0]), (1, planes[1]), (2, planes[2])].map { id, plane in
-                (id, channelData(plane, width: Int(rect.width), height: Int(rect.height)))
+                (id, channelData(plane, width: Int(rect.width), height: Int(rect.height), large: large))
             }
         } else {
             channels = [-1, 0, 1, 2].map { ($0, [0, 0]) }
@@ -289,12 +290,12 @@ enum PSDWriter {
             }
             if let maskPixels = Bitmap.pixels(of: maskImage), maskRect.width > 0 {
                 let alpha = planes(maskPixels, rect: maskRect.offsetBy(dx: -maskFrame.minX, dy: -maskFrame.minY))[3]
-                mask = (maskRect, channelData(alpha, width: Int(maskRect.width), height: Int(maskRect.height)), !layerMask.isEnabled)
+                mask = (maskRect, channelData(alpha, width: Int(maskRect.width), height: Int(maskRect.height), large: large), !layerMask.isEnabled)
                 channels.append((-2, mask!.data))
             }
         }
 
-        var header = PSDBinaryWriter()
+        var header = PSDBinaryWriter(isLarge: large)
         header.int32(Int(rect.minY))
         header.int32(Int(rect.minX))
         header.int32(Int(rect.maxY))
@@ -302,7 +303,7 @@ enum PSDWriter {
         header.uint16(channels.count)
         for channel in channels {
             header.int16(channel.id)
-            header.uint32(channel.data.count)
+            header.length(channel.data.count)
         }
         header.ascii("8BIM")
         header.ascii(blendKey(layer.blendMode))
@@ -314,7 +315,7 @@ enum PSDWriter {
         if layer.isLocked { blocks.append(("lspf", PSDDocumentInfo.lockBlock)) }
         blocks += extraBlocks
         blocks += kept(layer.photoshop?.blocks(for: layer) ?? [], besides: blocks)
-        var extra = PSDBinaryWriter()
+        var extra = PSDBinaryWriter(isLarge: large)
         if let mask {
             let parameters = layer.photoshop?.maskParameters.map { [UInt8]($0) } ?? []
             var body = PSDBinaryWriter()
@@ -359,14 +360,15 @@ enum PSDWriter {
     /// `blendKey` is the group's; Photoshop's `pass` lets its layers mix
     /// one by one.
     private static func folderRecord(
-        name: String, opacity: Double, isVisible: Bool, type: Int, blendKey: String, blocks: [(key: String, data: [UInt8])] = []
+        name: String, opacity: Double, isVisible: Bool, type: Int, blendKey: String, blocks: [(key: String, data: [UInt8])] = [],
+        large: Bool
     ) -> Record {
-        var header = PSDBinaryWriter()
+        var header = PSDBinaryWriter(isLarge: large)
         header.zeros(16)
         header.uint16(4)
         for id in [-1, 0, 1, 2] {
             header.int16(id)
-            header.uint32(2)
+            header.length(2)
         }
         header.ascii("8BIM")
         header.ascii(blendKey)
@@ -374,7 +376,7 @@ enum PSDWriter {
         header.uint8(0)
         header.uint8(isVisible ? 0 : 2)
         header.uint8(0)
-        var extra = PSDBinaryWriter()
+        var extra = PSDBinaryWriter(isLarge: large)
         extra.uint32(0)
         extra.uint32(0)
         extra.pascalName(name)
@@ -479,11 +481,11 @@ enum PSDWriter {
     }
 
     /// One channel, PackBits-compressed row by row.
-    private static func channelData(_ plane: [UInt8], width: Int, height: Int) -> [UInt8] {
+    private static func channelData(_ plane: [UInt8], width: Int, height: Int, large: Bool) -> [UInt8] {
         let rows = packRows(plane, width: width, height: height)
-        var out = PSDBinaryWriter()
+        var out = PSDBinaryWriter(isLarge: large)
         out.uint16(1)
-        for row in rows { out.uint16(row.count) }
+        for row in rows { out.rowLength(row.count) }
         for row in rows { out.bytes(row) }
         return out.data
     }
@@ -560,6 +562,13 @@ enum PSDWriter {
 /// Big-endian bytes, as Photoshop files are written.
 struct PSDBinaryWriter {
     var data: [UInt8] = []
+    /// Writing a large document (`.psb`), where lengths run longer.
+    var isLarge = false
+
+    /// A section's or channel's length: eight bytes in a large document.
+    mutating func length(_ value: Int) { if isLarge { uint64(value) } else { uint32(value) } }
+    /// A compressed row's length: four bytes in a large document.
+    mutating func rowLength(_ value: Int) { if isLarge { uint32(value) } else { uint16(value) } }
 
     mutating func bytes(_ bytes: [UInt8]) { data += bytes }
     mutating func zeros(_ count: Int) { data += [UInt8](repeating: 0, count: count) }
@@ -617,11 +626,12 @@ extension PSDBinaryWriter {
     }
 
     /// A tagged block: signature, key, length and data, padded to `padding`.
+    /// Some keys take a longer length in a large document.
     mutating func taggedBlock(_ key: String, _ body: [UInt8], padding: Int = 2) {
         ascii("8BIM")
         ascii(key)
         let padded = (body.count + padding - 1) / padding * padding
-        uint32(padded)
+        if isLarge && PSDReader.longKeys.contains(key) { uint64(padded) } else { uint32(padded) }
         bytes(body)
         zeros(padded - body.count)
     }

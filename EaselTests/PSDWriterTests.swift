@@ -200,6 +200,23 @@ struct PSDWriterTests {
         #expect(written.alpha > 250 && abs(written.red - expected.red) < 4 && abs(written.green - expected.green) < 4)
     }
 
+    @Test func largeDocumentsSurviveTheRoundTrip() throws {
+        var composition = sample()
+        composition.photoshop = PhotoshopDocumentExtras(blocks: [.init(key: "cinf", data: Data([1, 2, 3, 4]))])
+        let data = try PSDWriter.data(for: composition, large: true)
+        #expect(data[4] == 0 && data[5] == 2)
+        let read = try PSDReader.composition(from: data)
+        #expect(read.layers.map(\.name) == ["Back", "青い", "Hidden"])
+        #expect(read.layers[1].transform.position == CGPoint(x: 13, y: 5))
+        #expect(TestImages.isBlue(read.layers[1].image.cgImage, x: 4, y: 2))
+        #expect(TestImages.pixel(try #require(read.layers[1].mask).image.cgImage, x: 5, y: 1).alpha == 0)
+        #expect(read.groups.map(\.name) == ["Folder"])
+        #expect(read.photoshop?.blocks.contains(.init(key: "cinf", data: Data([1, 2, 3, 4]))) == true)
+        // Its flattened picture too.
+        let flat = try PSDReader.composition(from: try PSDWriter.data(for: Composition(size: size, layers: []), large: true))
+        #expect(flat.size == size)
+    }
+
     @Test func otherAppsSeeTheFlattenedPicture() throws {
         let data = try PSDWriter.data(for: sample())
         let image = try ImageCodec.decode(data)

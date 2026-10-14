@@ -20,13 +20,13 @@ extension UTType {
 /// and so is flattened when it is saved.
 struct EaselDocument: FileDocument {
     /// Photoshop and Pixelmator Pro files open, but are saved as an Easel
-    /// copy before they are edited. Photoshop files can still be written,
-    /// for exporting; large Photoshop and Pixelmator Pro files cannot.
+    /// copy before they are edited. Photoshop files, large ones too, can
+    /// still be written; Pixelmator Pro files cannot.
     static let readableContentTypes: [UTType] = [
         .easelImage, .png, .jpeg, .heic, .photoshopImage, .photoshopLargeImage,
         .pixelmatorProImage, .pixelmatorProPackage,
     ]
-    static let writableContentTypes: [UTType] = [.easelImage, .png, .jpeg, .heic, .photoshopImage]
+    static let writableContentTypes: [UTType] = [.easelImage, .png, .jpeg, .heic, .photoshopImage, .photoshopLargeImage]
 
     var composition: Composition
 
@@ -66,6 +66,9 @@ struct EaselDocument: FileDocument {
             guard let existing = configuration.existingFile else { throw CocoaError(.fileWriteNoPermission) }
             return existing
         }
+        if configuration.contentType.conforms(to: .photoshopLargeImage) {
+            return FileWrapper(regularFileWithContents: try PSDWriter.data(for: composition, large: true))
+        }
         if configuration.contentType.conforms(to: .photoshopImage) {
             return FileWrapper(regularFileWithContents: try PSDWriter.data(for: composition))
         }
@@ -80,7 +83,7 @@ struct EaselDocument: FileDocument {
 
     /// Types Easel opens but cannot write back.
     static func isReadOnly(_ contentType: UTType) -> Bool {
-        [UTType.photoshopLargeImage, .pixelmatorProImage, .pixelmatorProPackage].contains { contentType.conforms(to: $0) }
+        [UTType.pixelmatorProImage, .pixelmatorProPackage].contains { contentType.conforms(to: $0) }
     }
 
     private static func pictureType(for contentType: UTType) -> UTType? {

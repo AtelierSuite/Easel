@@ -166,7 +166,7 @@
 			<key>CFBundleTypeName</key>
 			<string>Large Photoshop Document</string>
 			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
+			<string>Editor</string>
 			<key>LSHandlerRank</key>
 			<string>Alternate</string>
 			<key>LSItemContentTypes</key>
