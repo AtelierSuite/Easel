@@ -25,16 +25,21 @@ struct DocumentConversionTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["Photo.easel"])
     }
 
-    /// Photoshop and Pixelmator Pro files are saved as an Easel copy
-    /// before they are edited, rather than converted where they lie.
-    @Test func photoshopAndPixelmatorFilesRequireACopy() {
-        for name in ["Sketch.pxd", "Poster.psb", "Layers.PSD"] {
+    /// Photoshop and Pixelmator Pro files are never converted where they
+    /// lie; they are saved as an Easel copy before they are edited only when
+    /// writing them back would lose something.
+    @Test func layeredDocumentsRequireACopyOnlyWhenTheyWouldLoseSomething() {
+        let composition = Composition.blank()
+        var lossy = composition
+        lossy.needsCopyBeforeEditing = true
+        for name in ["Poster.psb", "Layers.PSD", "Sketch.pxd"] {
             let url = URL(filePath: "/tmp/\(name)")
-            #expect(DocumentConversion.requiresCopy(url))
+            #expect(!DocumentConversion.requiresCopy(url, composition: composition))
+            #expect(DocumentConversion.requiresCopy(url, composition: lossy))
             #expect(!DocumentConversion.canConvert(url))
         }
         for name in ["Photo.png", "Photo.jpg", "Painting.easel"] {
-            #expect(!DocumentConversion.requiresCopy(URL(filePath: "/tmp/\(name)")))
+            #expect(!DocumentConversion.requiresCopy(URL(filePath: "/tmp/\(name)"), composition: lossy))
         }
     }
 }

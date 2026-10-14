@@ -35,6 +35,9 @@ enum PXDReader {
         var skipped = 0
         // Each group once, however a damaged file nests them.
         var visited: Set<String> = [""]
+        // Layers that should have come in but could not be decoded: writing
+        // back would take them out of the document.
+        var lost = false
 
         /// Bottom first: Pixelmator lists layers top first.
         func visit(_ parent: String, groupID: UUID?) {
@@ -71,6 +74,7 @@ enum PXDReader {
                     layers.append(layer)
                 } else {
                     skipped += 1
+                    if structure.layers.contains(row.identifier) { lost = true }
                 }
             }
         }
@@ -93,6 +97,7 @@ enum PXDReader {
         guard !layers.isEmpty else { throw Failure.notPixelmator }
         var composition = Composition(size: canvas, layers: layers, groups: groups)
         composition.normalizeGroups()
+        composition.needsCopyBeforeEditing = lost
         return composition
     }
 

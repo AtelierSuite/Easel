@@ -97,6 +97,7 @@ enum PSDReader {
             composition.photoshop = PhotoshopDocumentExtras(
                 resources: resources.kept, colorProfile: mode == .rgb ? resources.colorProfile : nil, losses: losses
             )
+            composition.needsCopyBeforeEditing = !losses.isEmpty
             return composition
         }
         var composition = Composition(size: canvas, layers: layers, groups: groups)
@@ -115,6 +116,7 @@ enum PSDReader {
             losses: losses
         )
         composition.normalizeGroups()
+        composition.needsCopyBeforeEditing = !losses.isEmpty
         return composition
     }
 

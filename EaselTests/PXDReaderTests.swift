@@ -379,14 +379,63 @@ struct PXDReaderTests {
         }
     }
 
-    /// Pixelmator files open but are never written over.
-    @Test func onlyUnwritableTypesAreReadOnly() throws {
+    /// Every file Easel opens it can write back: Pixelmator files in
+    /// either form, and Photoshop files large or not.
+    @Test func everyReadableTypeIsWritable() throws {
         let pxd = try #require(UTType(filenameExtension: "pxd", conformingTo: .data))
-        #expect(EaselDocument.isReadOnly(pxd))
-        #expect(EaselDocument.isReadOnly(.pixelmatorProPackage))
-        for type in EaselDocument.writableContentTypes {
-            #expect(!EaselDocument.isReadOnly(type))
+        let psb = try #require(UTType(filenameExtension: "psb"))
+        for type in [pxd, .pixelmatorProPackage, psb] {
+            #expect(EaselDocument.writableContentTypes.contains { type.conforms(to: $0) })
+            #expect(EaselDocument.isLayeredDocument(type))
         }
+        for type in EaselDocument.readableContentTypes {
+            #expect(EaselDocument.writableContentTypes.contains(type))
+        }
+    }
+
+    /// A Pixelmator document with a layer Easel could not decode would lose
+    /// it written back, so it asks for a copy; one with only text Easel did
+    /// not read keeps the text as it is, and does not.
+    @Test func undecodableLayersAskForACopy() throws {
+        let red = PXDPixels.bgra(0, 0, 255, width: 2, height: 2)
+        let fine = try PXDBuilder(canvas: (2, 2), layers: [
+            .init(index: 0, type: 2, name: "Title", position: CGPoint(x: 1, y: 1), size: CGSize(width: 2, height: 1)),
+            .init(index: 1, type: 1, name: "Paint", position: CGPoint(x: 1, y: 1), size: CGSize(width: 2, height: 2),
+                  pixels: red),
+        ]).build()
+        #expect(try !PXDReader.composition(from: fine).needsCopyBeforeEditing)
+
+        // A buffer whose pixels stop short.
+        let identifier = UUID().uuidString
+        let damaged = try PXDBuilder(canvas: (2, 2), layers: [
+            .init(identifier: identifier, index: 0, type: 1, name: "Paint", position: CGPoint(x: 1, y: 1),
+                  size: CGSize(width: 2, height: 2), pixels: red),
+            .init(index: 1, type: 1, name: "Other", position: CGPoint(x: 1, y: 1), size: CGSize(width: 2, height: 2),
+                  pixels: red),
+        ]).build()
+        var files = try #require(damaged.fileWrappers?["data"]?.fileWrappers)
+        let buffer = try #require(files[identifier]?.regularFileContents)
+        files[identifier] = FileWrapper(regularFileWithContents: buffer.prefix(buffer.count - 4))
+        var children = try #require(damaged.fileWrappers)
+        children["data"] = FileWrapper(directoryWithFileWrappers: files)
+        let composition = try PXDReader.composition(from: FileWrapper(directoryWithFileWrappers: children))
+        #expect(composition.needsCopyBeforeEditing)
+    }
+
+    /// Saving a document that would lose something leaves it as it was;
+    /// one that would not is written back.
+    @Test func documentsAreWrittenBackOnlyWhenNothingIsLost() throws {
+        let original = try PXDBuilder(canvas: (2, 2), layers: [
+            .init(index: 0, type: 1, name: "Paint", position: CGPoint(x: 1, y: 1), size: CGSize(width: 2, height: 2),
+                  pixels: .bgra(0, 0, 255, width: 2, height: 2)),
+        ], zipped: true).build()
+        var document = EaselDocument(composition: try PXDReader.composition(from: original))
+        document.composition.layers[0].name = "Renamed"
+        let written = try document.written(as: .pixelmatorProImage, existing: original)
+        #expect(try PXDReader.composition(from: written).layers[0].name == "Renamed")
+
+        document.composition.needsCopyBeforeEditing = true
+        #expect(try document.written(as: .pixelmatorProImage, existing: original) === original)
     }
 
     /// Earlier builds wrote Easel packages over Pixelmator files; those

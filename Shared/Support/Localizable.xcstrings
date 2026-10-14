@@ -5781,31 +5781,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photoshop and Pixelmator Pro documents aren’t edited directly. You’re about to save a copy as an Easel image, and that copy is what you’ll edit. The original file stays as it is."
+            "value": "This Photoshop or Pixelmator Pro document has parts Easel can’t save back into it, so it isn’t edited directly. You’re about to save a copy as an Easel image, and that copy is what you’ll edit. The original file stays as it is."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "PhotoshopおよびPixelmator Proの書類は直接編集されません。これからEasel画像としてコピーを保存し、そのコピーを編集します。元のファイルはそのまま残ります。"
+            "value": "このPhotoshopまたはPixelmator Proの書類にはEaselが書き戻せない内容が含まれているため、直接編集されません。これからEasel画像としてコピーを保存し、そのコピーを編集します。元のファイルはそのまま残ります。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photoshop 및 Pixelmator Pro 문서는 직접 편집되지 않습니다. 사본을 Easel 이미지로 저장하며, 그 사본을 편집하게 됩니다. 원본 파일은 그대로 유지됩니다."
+            "value": "이 Photoshop 또는 Pixelmator Pro 문서에는 Easel이 다시 저장할 수 없는 부분이 있어 직접 편집되지 않습니다. 사본을 Easel 이미지로 저장하며, 그 사본을 편집하게 됩니다. 원본 파일은 그대로 유지됩니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photoshop 和 Pixelmator Pro 文稿不会被直接编辑。你将把副本存储为 Easel 图像，并编辑该副本。原始文件将保持不变。"
+            "value": "此 Photoshop 或 Pixelmator Pro 文稿含有 Easel 无法存回的内容，因此不会被直接编辑。你将把副本存储为 Easel 图像，并编辑该副本。原始文件将保持不变。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photoshop 和 Pixelmator Pro 文件不會被直接編輯。你將把副本儲存為 Easel 影像，並編輯該副本。原始檔案將保持不變。"
+            "value": "此 Photoshop 或 Pixelmator Pro 文件含有 Easel 無法存回的內容，因此不會被直接編輯。你將把副本儲存為 Easel 影像，並編輯該副本。原始檔案將保持不變。"
           }
         }
       }

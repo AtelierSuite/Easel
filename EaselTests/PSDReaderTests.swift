@@ -276,9 +276,9 @@ struct PSDReaderTests {
         ]).build())
         #expect(deep.photoshop?.losses == [.depth])
         let url = URL(fileURLWithPath: "/tmp/Picture.psd")
-        #expect(DocumentConversion.savesPhotoshopInPlace(url, composition: plain))
-        #expect(!DocumentConversion.savesPhotoshopInPlace(url, composition: deep))
-        #expect(!DocumentConversion.savesPhotoshopInPlace(URL(fileURLWithPath: "/tmp/Picture.pxd"), composition: plain))
+        #expect(!DocumentConversion.requiresCopy(url, composition: plain))
+        #expect(DocumentConversion.requiresCopy(url, composition: deep))
+        #expect(!DocumentConversion.requiresCopy(URL(fileURLWithPath: "/tmp/Picture.psb"), composition: plain))
         // Easel's own files lose nothing coming back.
         let written = try PSDReader.composition(from: try PSDWriter.data(for: plain))
         #expect(written.photoshop?.losses == [])
@@ -384,6 +384,5 @@ struct PSDReaderTests {
         #expect(type.identifier == "com.adobe.photoshop-large-image")
         #expect(EaselDocument.readableContentTypes.contains { type.conforms(to: $0) })
         #expect(EaselDocument.writableContentTypes.contains { type.conforms(to: $0) })
-        #expect(!EaselDocument.isReadOnly(type))
     }
 }

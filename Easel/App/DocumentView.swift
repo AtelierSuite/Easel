@@ -18,13 +18,11 @@ struct DocumentView: View {
         fileURL?.deletingPathExtension().lastPathComponent ?? String(localized: "Export.DefaultName")
     }
 
-    /// A Photoshop or Pixelmator Pro file, not yet saved as an Easel copy,
-    /// which stays untouched until it is: it opens to look at, and the first
-    /// edit asks for the copy. Photoshop files Easel can write back whole
-    /// are edited where they are.
+    /// A Photoshop or Pixelmator Pro file that would lose something written
+    /// back, not yet saved as an Easel copy, which stays untouched until it
+    /// is: it opens to look at, and the first edit asks for the copy.
     private var copyBeforeEditing: CopyBeforeEditing? {
-        guard let fileURL, DocumentConversion.requiresCopy(fileURL),
-              !DocumentConversion.savesPhotoshopInPlace(fileURL, composition: document.composition) else { return nil }
+        guard let fileURL, DocumentConversion.requiresCopy(fileURL, composition: document.composition) else { return nil }
         return CopyBeforeEditing(isRequired: { !hasCopy }) { completion in
             copySaved = completion
             isSavingCopy = true

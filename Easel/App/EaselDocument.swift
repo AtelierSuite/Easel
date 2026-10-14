@@ -19,14 +19,18 @@ extension UTType {
 /// or a plain picture file edited where it lies — which keeps its format
 /// and so is flattened when it is saved.
 struct EaselDocument: FileDocument {
-    /// Photoshop and Pixelmator Pro files open, but are saved as an Easel
-    /// copy before they are edited. Photoshop files, large ones too, can
-    /// still be written; Pixelmator Pro files cannot.
+    /// Every type Easel opens it can also write back. Photoshop and
+    /// Pixelmator Pro files are edited where they lie, written back into
+    /// themselves, unless their reader found something that would be lost;
+    /// then they are saved as an Easel copy before they are edited.
     static let readableContentTypes: [UTType] = [
         .easelImage, .png, .jpeg, .heic, .photoshopImage, .photoshopLargeImage,
         .pixelmatorProImage, .pixelmatorProPackage,
     ]
-    static let writableContentTypes: [UTType] = [.easelImage, .png, .jpeg, .heic, .photoshopImage, .photoshopLargeImage]
+    static let writableContentTypes: [UTType] = [
+        .easelImage, .png, .jpeg, .heic, .photoshopImage, .photoshopLargeImage,
+        .pixelmatorProImage, .pixelmatorProPackage,
+    ]
 
     var composition: Composition
 
@@ -45,8 +49,7 @@ struct EaselDocument: FileDocument {
     static func composition(from file: FileWrapper, contentType: UTType) throws -> Composition {
         // Earlier builds saved Easel packages over Pixelmator files, keeping
         // their names; those open as the Easel images they now are.
-        let isPixelmator = contentType.conforms(to: .pixelmatorProImage) || contentType.conforms(to: .pixelmatorProPackage)
-        if isPixelmator, !(file.isDirectory && file.fileWrappers?["metadata.info"] == nil) {
+        if isPixelmator(contentType), !(file.isDirectory && file.fileWrappers?[PXDFormat.databaseName] == nil) {
             return try PXDReader.composition(from: file)
         } else if file.isDirectory {
             return try CompositionArchive.composition(from: file)
@@ -60,30 +63,55 @@ struct EaselDocument: FileDocument {
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        // Saving still comes through for files Easel cannot write; they are
-        // left exactly as they were.
-        if Self.isReadOnly(configuration.contentType) {
-            guard let existing = configuration.existingFile else { throw CocoaError(.fileWriteNoPermission) }
+        try written(as: configuration.contentType, existing: configuration.existingFile)
+    }
+
+    /// The document as a file of this type, given the file it is saved over.
+    func written(as contentType: UTType, existing: FileWrapper?) throws -> FileWrapper {
+        // A Photoshop or Pixelmator Pro file that would lose something is
+        // left exactly as it was until it has been saved as a copy.
+        if composition.needsCopyBeforeEditing, Self.isLayeredDocument(contentType), let existing {
             return existing
         }
-        if configuration.contentType.conforms(to: .photoshopLargeImage) {
+        if contentType.conforms(to: .photoshopLargeImage) {
             return FileWrapper(regularFileWithContents: try PSDWriter.data(for: composition, large: true))
         }
-        if configuration.contentType.conforms(to: .photoshopImage) {
+        if contentType.conforms(to: .photoshopImage) {
             return FileWrapper(regularFileWithContents: try PSDWriter.data(for: composition))
+        }
+        if Self.isPixelmator(contentType) {
+            return try pixelmatorFileWrapper(existing: existing)
         }
         // Only a picture format named outright is flattened; anything else,
         // including a type the system has not resolved yet, keeps the layers.
-        guard let type = Self.pictureType(for: configuration.contentType) else {
+        guard let type = Self.pictureType(for: contentType) else {
             return try CompositionArchive.fileWrapper(for: composition)
         }
         let image = CompositionRenderer.render(composition)
         return FileWrapper(regularFileWithContents: try ImageCodec.encode(image, as: type))
     }
 
-    /// Types Easel opens but cannot write back.
-    static func isReadOnly(_ contentType: UTType) -> Bool {
-        [UTType.pixelmatorProImage, .pixelmatorProPackage].contains { contentType.conforms(to: $0) }
+    /// A Pixelmator Pro document is written by patching the file it was read
+    /// from, so there has to be one.
+    private func pixelmatorFileWrapper(existing: FileWrapper?) throws -> FileWrapper {
+        guard let existing else { throw CocoaError(.fileWriteUnsupportedScheme) }
+        // An Easel package an earlier build saved under the Pixelmator name
+        // stays one.
+        if existing.isDirectory, existing.fileWrappers?[PXDFormat.databaseName] == nil {
+            return try CompositionArchive.fileWrapper(for: composition)
+        }
+        return try PXDWriter.fileWrapper(for: composition, original: existing)
+    }
+
+    static func isPixelmator(_ contentType: UTType) -> Bool {
+        contentType.conforms(to: .pixelmatorProImage) || contentType.conforms(to: .pixelmatorProPackage)
+    }
+
+    /// Photoshop and Pixelmator Pro documents, which Easel writes back into
+    /// rather than replaces.
+    static func isLayeredDocument(_ contentType: UTType) -> Bool {
+        isPixelmator(contentType) || contentType.conforms(to: .photoshopImage)
+            || contentType.conforms(to: .photoshopLargeImage)
     }
 
     private static func pictureType(for contentType: UTType) -> UTType? {

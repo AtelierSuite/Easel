@@ -3,26 +3,28 @@ import Foundation
 /// Turns a plain picture file, which can only be saved flattened, into an
 /// Easel image that keeps its layers — in place, the way Rename moves a file,
 /// so the open document follows it and from then on saves as a package.
-/// Photoshop and Pixelmator Pro documents are not converted: before
-/// anything changes, they are saved as an Easel copy wherever the person
-/// picks, and the open document follows that copy instead — unless Easel
-/// can write a Photoshop file back with nothing lost, when it is edited
-/// where it is.
+/// Photoshop and Pixelmator Pro documents keep their own format: they are
+/// edited where they lie and written back into, unless their reader found
+/// something that writing back would lose. Then, before anything changes,
+/// they are saved as an Easel copy wherever the person picks, and the open
+/// document follows that copy instead.
 enum DocumentConversion {
     static func canConvert(_ fileURL: URL) -> Bool {
-        fileURL.pathExtension.lowercased() != "easel" && !requiresCopy(fileURL)
+        fileURL.pathExtension.lowercased() != "easel" && !isLayeredDocument(fileURL)
     }
 
-    /// Whether the file has to be saved as an Easel copy before it is edited:
-    /// its layers, effects and masks would not all survive being written back.
-    static func requiresCopy(_ fileURL: URL) -> Bool {
+    /// Photoshop and Pixelmator Pro documents, which keep layers of their
+    /// own and so are never turned into Easel images where they lie.
+    static func isLayeredDocument(_ fileURL: URL) -> Bool {
         ["psd", "psb", "pxd"].contains(fileURL.pathExtension.lowercased())
     }
 
-    /// Whether a Photoshop file, as Easel read it, can be saved back over
-    /// itself keeping everything it had: then it needs no copy.
-    static func savesPhotoshopInPlace(_ fileURL: URL, composition: Composition) -> Bool {
-        ["psd", "psb"].contains(fileURL.pathExtension.lowercased()) && composition.photoshop?.losses.isEmpty == true
+    /// Whether the file has to be saved as an Easel copy before it is edited:
+    /// a Photoshop or Pixelmator Pro document whose reader found something —
+    /// layers, effects, masks, depth — that would not survive being written
+    /// back. Anything else is saved in place.
+    static func requiresCopy(_ fileURL: URL, composition: Composition) -> Bool {
+        isLayeredDocument(fileURL) && composition.needsCopyBeforeEditing
     }
 
     /// Moves the file to an `.easel` name beside it and writes the
