@@ -66,11 +66,10 @@ struct PhotoshopExtras: Codable, Equatable, Sendable {
     }
 
     /// The styles as Photoshop had them, while Easel's are as read. Pattern
-    /// overlays name tiles by Photoshop's ids, which are not kept, so they
-    /// are always written afresh.
+    /// overlays name their tiles by Photoshop's ids, which the file's own
+    /// pattern tiles are written back with.
     func effectBlocks(for layer: Layer) -> [Block]? {
-        guard let effects, effects.value == layer.effects, effects.transform == layer.transform,
-              !layer.effects.contains(where: { $0.kind == .patternOverlay }) else { return nil }
+        guard let effects, effects.value == layer.effects, effects.transform == layer.transform else { return nil }
         return effects.blocks
     }
 
@@ -109,6 +108,9 @@ struct PhotoshopDocumentExtras: Equatable, Sendable {
 
     var resources: [Resource] = []
     var blocks: [PhotoshopExtras.Block] = []
+    /// Its pattern tiles as they were, `Patt`, `Pat2` and `Pat3`, which its
+    /// styles and fills name by id: written back so those still find them.
+    var patternBlocks: [PhotoshopExtras.Block] = []
     /// The ICC profile its colours were in, which they go back to.
     var colorProfile: Data?
     /// What of the file Easel could not keep, so would not write back:

@@ -112,8 +112,8 @@ enum PSDReader {
             }
         }
         composition.photoshop = PhotoshopDocumentExtras(
-            resources: resources.kept, blocks: extras.globalBlocks, colorProfile: mode == .rgb ? resources.colorProfile : nil,
-            losses: losses
+            resources: resources.kept, blocks: extras.globalBlocks, patternBlocks: extras.patternBlocks,
+            colorProfile: mode == .rgb ? resources.colorProfile : nil, losses: losses
         )
         composition.normalizeGroups()
         composition.writeBackLosses = losses
@@ -151,6 +151,7 @@ enum PSDReader {
         var artboards: [Artboard] = []
         /// The document's tagged blocks Easel does not use.
         var globalBlocks: [PhotoshopExtras.Block] = []
+        var patternBlocks: [PhotoshopExtras.Block] = []
         /// What of the layers saving back would lose.
         var losses = Set<WriteBackLoss>()
         /// Whether groups say how comps show them, which Easel's comps do not.
@@ -235,7 +236,7 @@ enum PSDReader {
             records.append(try readRecord(&reader, isLarge: isLarge))
         }
         // Tiles become the picture's own patterns, those overlays use.
-        let swatches = shared.tiles.map { PatternSwatch(name: $0.name, image: LayerImage($0.image)) }
+        let swatches = shared.tiles.map { PatternSwatch(name: $0.name, image: LayerImage($0.image), photoshopID: $0.id) }
         var patterns: [String: PatternChoice] = [:]
         for (tile, swatch) in zip(shared.tiles, swatches) {
             patterns[tile.id] = PatternChoice(preset: nil, swatchID: swatch.id).carryingTile(from: swatches)
@@ -254,6 +255,7 @@ enum PSDReader {
         var groups: [LayerGroup] = []
         var extras = LayerExtras()
         extras.globalBlocks = shared.kept
+        extras.patternBlocks = shared.patternBlocks
         // Records run bottom first: a group's divider, its layers, then the
         // group's own record with its name and settings.
         var open: [UUID] = []
@@ -376,9 +378,6 @@ enum PSDReader {
             // `lmfx` instead, laid out the same way.
             if let effects = record.blocks["lfx2"] ?? record.blocks["lmfx"] {
                 layer.effects = PSDEffects.effects(from: effects, patterns: patterns)
-                // Overlays' patterns are named afresh, so their styles are
-                // written afresh too.
-                if layer.effects.contains(where: { $0.kind == .patternOverlay }) { extras.losses.insert(.effects) }
             }
             // Linked smart objects keep the same as `SoLE`.
             if let block = record.blocks["SoLd"] ?? record.blocks["SoLE"], let placed = PSDSmartObjects.placement(from: block) {
@@ -475,6 +474,7 @@ enum PSDReader {
         /// Smart filters' masks, by the `placed` id of their smart object.
         var filterMasks: [String: PSDFilterEffects.Mask] = [:]
         var tiles: [PSDPatterns.Tile] = []
+        var patternBlocks: [PhotoshopExtras.Block] = []
         /// Where `Lr16` or `Lr32` holds a deep document's layers.
         var deepLayers: Range<Int>?
         /// Blocks Easel does not use, to write back.
@@ -505,7 +505,9 @@ enum PSDReader {
             } else if key == "Lr16" || key == "Lr32" {
                 blocks.deepLayers = start..<(start + length)
             } else if ["Patt", "Pat2", "Pat3"].contains(key) {
-                blocks.tiles += PSDPatterns.tiles(from: try reader.bytes(length))
+                let bytes = try reader.bytes(length)
+                blocks.tiles += PSDPatterns.tiles(from: bytes)
+                blocks.patternBlocks.append(PhotoshopExtras.Block(key: key, data: Data(bytes)))
             } else if !handledGlobalKeys.contains(key) {
                 blocks.kept.append(PhotoshopExtras.Block(key: key, data: Data(try reader.bytes(length))))
             }

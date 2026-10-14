@@ -89,6 +89,47 @@ struct PSDEffectTests {
         #expect(pixel.blue > 240 && pixel.red < 15)
     }
 
+    /// A pattern overlay read from a file goes back with Photoshop's own
+    /// record of the style, and the tile it names keeps its id, once.
+    @Test func patternOverlaysGoBackAsTheyWere() throws {
+        let tile = TestImages.solid(RGBAColor(red: 0, green: 0, blue: 1), width: 4, height: 4)
+        let swatch = PatternSwatch(name: "Blue", image: LayerImage(tile))
+        var overlay = LayerEffect(kind: .patternOverlay)
+        overlay.pattern = PatternChoice(preset: nil, swatchID: swatch.id, scale: 2).carryingTile(from: [swatch])
+        var square = Layer(name: "Square", image: LayerImage(TestImages.solid(RGBAColor(red: 1, green: 0, blue: 0), width: 20, height: 20)),
+                           transform: LayerTransform(position: CGPoint(x: 30, y: 20)))
+        square.effects = [overlay]
+        var composition = Composition(size: size, layers: [square])
+        composition.patterns = [swatch]
+
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: composition))
+        #expect(read.writeBackLosses.isEmpty)
+        let id = try #require(read.patterns.first?.photoshopID)
+        let layer = try #require(read.layers.first)
+        #expect(layer.photoshop?.effectBlocks(for: layer) != nil)
+
+        let again = try PSDReader.composition(from: try PSDWriter.data(for: read))
+        #expect(again.patterns.map(\.photoshopID) == [id])
+        #expect(again.photoshop?.patternBlocks.map(\.key) == ["Patt"])
+        let effect = try #require(again.layers.first?.effects.first)
+        #expect(effect.kind == .patternOverlay)
+        #expect(effect.pattern.swatchID == again.patterns.first?.id)
+
+        // A new overlay's tile joins the file's own in its block.
+        var added = read
+        var checker = LayerEffect(kind: .patternOverlay)
+        checker.pattern = PatternChoice(preset: .checker)
+        var second = added.layers[0]
+        second.id = UUID()
+        second.photoshop = nil
+        second.effects = [checker]
+        added.layers.append(second)
+        let grown = try PSDReader.composition(from: try PSDWriter.data(for: added))
+        #expect(grown.patterns.count == 2)
+        #expect(grown.photoshop?.patternBlocks.count == 1)
+        #expect(grown.patterns.contains { $0.photoshopID == id })
+    }
+
     @Test func builtInPatternsGoAsTiles() throws {
         var overlay = LayerEffect(kind: .patternOverlay)
         overlay.pattern = PatternChoice(preset: .checker)

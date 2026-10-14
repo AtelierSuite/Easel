@@ -105,4 +105,7 @@ struct PatternSwatch: Identifiable, Equatable, Sendable {
     var id = UUID()
     var name: String
     var image: LayerImage
+    /// The id a Photoshop file it came from knows it by, which that file's
+    /// styles and fills name it with.
+    var photoshopID: String?
 }

@@ -74,11 +74,25 @@ enum PSDWriter {
         section.length(info.data.count)
         section.bytes(info.data)
         section.uint32(0) // No global mask.
-        // The tiles pattern overlays name, once each.
+        // The tiles pattern overlays name, once each: the file's own as they
+        // were, which its styles and fills name, then any new ones.
+        let keptPatterns = composition.photoshop?.patternBlocks ?? []
+        let keptIDs = keptPatterns.reduce(into: Set<String>()) { $0.formUnion(PSDPatterns.ids(in: [UInt8]($1.data))) }
         var tiles: [PSDPatterns.Tile] = []
-        for tile in records.flatMap(\.tiles) where !tiles.contains(where: { $0.id == tile.id }) { tiles.append(tile) }
-        if !tiles.isEmpty {
-            section.taggedBlock("Patt", PSDPatterns.block(for: tiles), padding: 4)
+        for tile in records.flatMap(\.tiles) where !keptIDs.contains(tile.id) && !tiles.contains(where: { $0.id == tile.id }) {
+            tiles.append(tile)
+        }
+        var added = tiles.isEmpty ? [] : PSDPatterns.block(for: tiles)
+        for block in keptPatterns {
+            var data = [UInt8](block.data)
+            if block.key == "Patt", !added.isEmpty {
+                data += [UInt8](repeating: 0, count: (4 - data.count % 4) % 4) + added
+                added = []
+            }
+            section.taggedBlock(block.key, data, padding: 4)
+        }
+        if !added.isEmpty {
+            section.taggedBlock("Patt", added, padding: 4)
         }
         let filterEffects = records.compactMap(\.filterEffect)
         if !filterEffects.isEmpty {

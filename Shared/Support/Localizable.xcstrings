@@ -34369,41 +34369,6 @@
         }
       }
     },
-    "WriteBackLoss.Effects": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Layer styles Easel would write differently"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Easelでは異なる形で書き出されるレイヤースタイル"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Easel이 다르게 저장하는 레이어 스타일"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Easel 会以不同方式写入的图层样式"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Easel 會以不同方式寫入的圖層樣式"
-          }
-        }
-      }
-    },
     "WriteBackLoss.ExtraChannels": {
       "extractionState": "manual",
       "localizations": {

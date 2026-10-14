@@ -107,6 +107,24 @@ enum PSDPatterns {
         return String(name[name.index(after: equals)...])
     }
 
+    /// The ids of the tiles in a pattern block, readable or not.
+    static func ids(in data: [UInt8]) -> Set<String> {
+        var reader = BigEndianReader(bytes: data)
+        var ids: Set<String> = []
+        while reader.remaining >= 4, let length = try? Int(reader.uint32()), length > 0 {
+            let end = reader.offset + length
+            if let id = try? id(&reader) { ids.insert(id) }
+            guard reader.seek(to: end + (4 - length % 4) % 4) || reader.seek(to: end) else { break }
+        }
+        return ids
+    }
+
+    private static func id(_ reader: inout BigEndianReader) throws -> String {
+        try reader.skip(12) // Version, mode, height and width.
+        _ = try unicode(&reader)
+        return try reader.ascii(Int(try reader.uint8()))
+    }
+
     // MARK: - Writing
 
     /// The tile a pattern overlay shows, named and with an id that stays
@@ -120,8 +138,10 @@ enum PSDPatterns {
             return Tile(id: "easel-\(preset.rawValue)-\(color)", name: String(localized: String.LocalizationValue(preset.labelKey)), image: image)
         }
         let id = pattern.swatchID ?? UUID()
-        let name = swatches.first { $0.id == id }?.name ?? String(localized: "LayerEffect.PatternOverlay")
-        return Tile(id: id.uuidString.lowercased(), name: name, image: image)
+        let swatch = swatches.first { $0.id == id }
+        let name = swatch?.name ?? String(localized: "LayerEffect.PatternOverlay")
+        // A tile from a Photoshop file keeps the id that file knows it by.
+        return Tile(id: swatch?.photoshopID ?? id.uuidString.lowercased(), name: name, image: image)
     }
 
     /// The tiles as the body of a `Patt` block, RGB with transparency.

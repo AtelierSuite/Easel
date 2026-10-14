@@ -11,8 +11,6 @@ enum WriteBackLoss: String, Sendable, CaseIterable {
     case extraChannels
     /// Layers whose pixels could not be read, in either kind of file.
     case layers
-    /// Styles Easel writes afresh, which may say less than Photoshop's.
-    case effects
     /// Adjustments Easel splits into several, written afresh.
     case adjustments
     /// A user mask and a vector mask, kept only as one.
@@ -30,7 +28,6 @@ enum WriteBackLoss: String, Sendable, CaseIterable {
         case .colorMode: String(localized: "WriteBackLoss.ColorMode")
         case .extraChannels: String(localized: "WriteBackLoss.ExtraChannels")
         case .layers: String(localized: "WriteBackLoss.Layers")
-        case .effects: String(localized: "WriteBackLoss.Effects")
         case .adjustments: String(localized: "WriteBackLoss.Adjustments")
         case .masks: String(localized: "WriteBackLoss.Masks")
         case .comps: String(localized: "WriteBackLoss.Comps")
