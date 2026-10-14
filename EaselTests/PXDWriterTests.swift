@@ -46,6 +46,14 @@ struct PXDWriterTests {
             .map { ($0.identifier, $0.parent, $0.index, $0.type) }
     }
 
+    /// One row's settings.
+    private func info(_ wrapper: FileWrapper, _ identifier: String) throws -> [String: [UInt8]] {
+        let metadata = try #require(try entries(wrapper)["metadata.info"]?.contents())
+        let database = try PXDFormat.Database(data: metadata)
+        let row = try #require(database.layers().first { $0.identifier == identifier })
+        return database.info(for: row.id)
+    }
+
     @Test func unchangedDocumentsAreLeftAsTheyWere() throws {
         let original = try document()
         let composition = try PXDReader.composition(from: original)
@@ -138,6 +146,98 @@ struct PXDWriterTests {
         }
         let again = try PXDReader.composition(from: try PXDWriter.fileWrapper(for: unlocked, original: written))
         #expect(again.layers.allSatisfy { !$0.isLocked && !$0.isClipped })
+    }
+
+    /// An adjustment layer goes in as a colour adjustments layer with
+    /// Pixelmator's like control set, and comes back as it was.
+    @Test func adjustmentLayersAreWrittenBack() throws {
+        let original = try document()
+        var composition = try PXDReader.composition(from: original)
+        var adjustment = composition.adjustmentLayer(.saturation)
+        adjustment.adjustment?.amount = -0.4
+        adjustment.isClipped = true
+        composition.layers.append(adjustment)
+        let once = try PXDWriter.fileWrapper(for: composition, original: original)
+        let table = try rows(once)
+        #expect(table.first { $0.identifier == adjustment.id.uuidString }?.type == PXDFormat.adjustmentsLayer)
+        let json = try #require(try info(once, adjustment.id.uuidString)[PXDAdjustments.key])
+        let settings = try #require(try JSONSerialization.jsonObject(with: Data(json)) as? [Any])
+        let hueSaturation = try #require(((settings[1] as? [String: Any])?["hS"] as? [Any])?[1] as? [String: Any])
+        #expect((hueSaturation["s"] as? Double) == -0.4)
+        #expect((hueSaturation["E"] as? Int) == 1)
+
+        let reread = try PXDReader.composition(from: once)
+        let back = try #require(reread.layers.first { $0.isAdjustment })
+        #expect(back.adjustment == adjustment.adjustment)
+        #expect(back.isClipped)
+        #expect(back.pixelmator?.identifier == adjustment.id.uuidString)
+        // Saving again changes nothing, and adds no second row or mask.
+        let twice = try PXDWriter.fileWrapper(for: reread, original: once)
+        #expect(twice.regularFileContents == once.regularFileContents)
+
+        // A changed setting goes back in its row; a removed layer leaves.
+        var changed = reread
+        let index = try #require(changed.layers.firstIndex { $0.isAdjustment })
+        changed.layers[index].adjustment?.amount = 0.3
+        let edited = try PXDReader.composition(from: try PXDWriter.fileWrapper(for: changed, original: once))
+        #expect(edited.layers.first { $0.isAdjustment }?.adjustment?.amount == 0.3)
+        changed.layers.remove(at: index)
+        #expect(try rows(try PXDWriter.fileWrapper(for: changed, original: once)).allSatisfy { $0.type != PXDFormat.adjustmentsLayer })
+    }
+
+    /// Filters Pixelmator has no control like stay out of the document.
+    @Test func adjustmentsPixelmatorHasNothingLikeAreLeftOut() throws {
+        let original = try document()
+        var composition = try PXDReader.composition(from: original)
+        composition.layers.append(composition.adjustmentLayer(.gradientMap))
+        let written = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try rows(written).allSatisfy { $0.type != PXDFormat.adjustmentsLayer })
+    }
+
+    /// Colour adjustments layers Pixelmator made come in when they amount
+    /// to one filter of Easel's, and the rest stay unread.
+    @Test func pixelmatorAdjustmentLayersComeIn() throws {
+        var index = 2
+        func adjustments(_ json: String) -> PXDBuilder.LayerSpec {
+            index += 1
+            return .init(identifier: UUID().uuidString, index: index, type: PXDFormat.adjustmentsLayer, name: "Adjust", position: .zero,
+                  size: .zero, info: [PXDAdjustments.key: Array(json.utf8)])
+        }
+        let exposure = adjustments(#"[3,{"l":[1,{"E":1,"V":1,"e":1.5,"b":0,"c":0,"h":0,"s":0,"B":0,"A":0,"C":0,"T":0}],"i":[1,{"E":0,"V":1,"i":1}],"av":1}]"#)
+        let two = adjustments(#"[3,{"l":[1,{"E":1,"V":1,"e":1.5,"b":0.2}],"av":1}]"#)
+        let warmth = adjustments(#"[3,{"w":[1,{"E":1,"V":1,"t":0.3,"T":0}],"av":1}]"#)
+        let original = try document(extra: [exposure, two, warmth])
+        let composition = try PXDReader.composition(from: original)
+        let read = composition.layers.filter(\.isAdjustment)
+        #expect(read.count == 1)
+        #expect(read.first?.adjustment?.kind == .exposure)
+        #expect(read.first?.adjustment?.value(0) == 1.5)
+        #expect(read.first?.pixelmator?.identifier == exposure.identifier)
+        // Read as it was, it goes back as it was.
+        #expect(try PXDWriter.fileWrapper(for: composition, original: original).regularFileContents == original.regularFileContents)
+    }
+
+    @Test func eachControlComesBackAsItsFilter() throws {
+        var filters: [LayerFilter] = []
+        for kind in [LayerFilter.Kind.invert, .blackAndWhite, .sepia, .saturation, .brightness, .contrast] {
+            var filter = LayerFilter(kind: kind)
+            if kind != .invert { filter.amount = 0.35 }
+            filters.append(filter)
+        }
+        var exposure = LayerFilter(kind: .exposure)
+        exposure.setValue(-1.25, at: 0)
+        var vibrance = LayerFilter(kind: .vibrance)
+        vibrance.setValue(40, at: 0)
+        filters += [exposure, vibrance]
+        for filter in filters {
+            let json = try #require(PXDAdjustments.json(for: filter))
+            // From Pixelmator's settings alone, then with Easel's kept.
+            let read = try #require(PXDAdjustments.filter(json: json), "\(filter.kind)")
+            #expect(read.kind == filter.kind)
+            #expect(read.amount == filter.amount || filter.kind == .exposure || filter.kind == .vibrance)
+            #expect(read.value(0) == filter.value(0))
+            #expect(PXDAdjustments.filter(json: json, kept: PXDAdjustments.kept(filter, json: json)) == filter)
+        }
     }
 
     /// A text layer Easel did not read keeps its row, and stays just above

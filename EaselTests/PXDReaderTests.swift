@@ -93,6 +93,8 @@ struct PXDBuilder {
         var pixels: PXDPixels?
         /// An original image file for a placed layer, or nil.
         var original: Data?
+        /// More settings, as `layer_info` keeps them.
+        var info: [String: [UInt8]] = [:]
     }
 
     var canvas: (Int, Int)
@@ -164,6 +166,7 @@ struct PXDBuilder {
             if let background = layer.maskBackground {
                 info.append(("maskBackgroundValue", Value.makeDouble("Bckd", background)))
             }
+            info += layer.info.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
             for (key, value) in info { insert("insert into layer_info values (?, ?, ?)", [id, key, value]) }
             if let pixels = layer.pixels {
                 files[layer.identifier] = FileWrapper(regularFileWithContents: pixels.buffer())

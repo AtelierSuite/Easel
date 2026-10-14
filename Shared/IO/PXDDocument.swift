@@ -12,6 +12,7 @@ enum PXDFormat {
     /// `document_layers.type`.
     static let pixelLayer = 1
     static let groupLayer = 4
+    static let adjustmentsLayer = 6
 
     /// Bits of a layer's `flags`.
     static let visibleFlag: UInt64 = 0x01
@@ -385,7 +386,11 @@ enum PXDFormat {
         /// Top first under each parent, keyed by the parent's identifier, ""
         /// for the top level.
         var children: [String: [LayerRow]]
+        /// Layers Easel reads: pixel layers with pixels it knows, and colour
+        /// adjustments layers that amount to one filter of Easel's.
         var layers: Set<String> = []
+        /// Those colour adjustments layers' filters.
+        var adjustments: [String: LayerFilter] = [:]
         var groups: Set<String> = []
         /// Each layer's bitmap mask.
         var masks: [String: String] = [:]
@@ -403,6 +408,12 @@ enum PXDFormat {
 
             for row in rows where row.type == pixelLayer && info[row.id]?.isMask == false {
                 if PXDFormat.hasPixels(row.identifier, file: file) { layers.insert(row.identifier) }
+            }
+            for row in rows where row.type == adjustmentsLayer && info[row.id]?.isMask == false {
+                guard let values = info[row.id]?.values, let json = values[PXDAdjustments.key],
+                      let filter = PXDAdjustments.filter(json: json, kept: values[PXDAdjustments.easelKey]) else { continue }
+                adjustments[row.identifier] = filter
+                layers.insert(row.identifier)
             }
             for row in rows where layers.contains(row.identifier) {
                 if let mask = children[row.identifier]?.first(where: { child in

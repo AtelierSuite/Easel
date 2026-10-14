@@ -11,6 +11,8 @@ struct PixelmatorSource: Equatable, Sendable {
     /// The layer's bitmap mask in the document, and its pixels as read.
     var maskIdentifier: String?
     var mask: LayerImage?
+    /// A colour adjustments layer's filter as it was read.
+    var adjustment: LayerFilter?
     /// Set on Pixelmator's own preview, brought in to compare against: it is
     /// not part of the document, and is written back only once painted on.
     var isPreview = false

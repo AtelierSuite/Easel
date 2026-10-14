@@ -368,14 +368,14 @@ private struct Patch {
     // MARK: Matching
 
     private func plan(_ layer: Layer, claimed: inout Set<String>) -> Planned? {
-        // Adjustment layers have no pixels to keep; Pixelmator's preview is
-        // not part of the document unless it was painted on.
-        if layer.isAdjustment { return nil }
+        // Pixelmator's preview is not part of the document unless it was
+        // painted on.
         if let source = layer.pixelmator, source.isPreview, source.image === layer.image { return nil }
+        if let filter = layer.adjustment { return planAdjustment(layer, filter: filter, claimed: &claimed) }
 
         var identifier = layer.id.uuidString
         if let source = layer.pixelmator, !source.isPreview, structure.layers.contains(source.identifier),
-           !claimed.contains(source.identifier) {
+           structure.adjustments[source.identifier] == nil, !claimed.contains(source.identifier) {
             identifier = source.identifier
         }
         claimed.insert(identifier)
@@ -409,6 +409,35 @@ private struct Patch {
             layer: layer, identifier: identifier, row: row, image: image, imageChanged: imageChanged,
             mask: mask, maskChanged: maskChanged, transform: transform
         )
+    }
+
+    /// An adjustment layer, as a colour adjustments layer: only those whose
+    /// filter Pixelmator has a control for.
+    private func planAdjustment(_ layer: Layer, filter: LayerFilter, claimed: inout Set<String>) -> Planned? {
+        guard PXDAdjustments.section(for: filter) != nil else { return nil }
+        var identifier = layer.id.uuidString
+        if let source = layer.pixelmator, structure.adjustments[source.identifier] != nil,
+           !claimed.contains(source.identifier) {
+            identifier = source.identifier
+        }
+        claimed.insert(identifier)
+        let row = structure.row(identifier).flatMap { $0.type == PXDFormat.adjustmentsLayer ? $0 : nil }
+        let source = row != nil ? layer.pixelmator : nil
+        // A mask showing everything is no mask in Pixelmator.
+        var mask = layer.mask
+        if let current = mask, source?.maskIdentifier == nil,
+           current.image === source?.mask || (current.isEnabled && Self.revealsAll(current)) {
+            mask = nil
+        }
+        return Planned(
+            layer: layer, identifier: identifier, row: row, image: layer.image, imageChanged: false,
+            mask: mask, maskChanged: source?.mask !== mask?.image || source?.maskIdentifier == nil, transform: layer.transform
+        )
+    }
+
+    private static func revealsAll(_ mask: LayerMask) -> Bool {
+        guard let pixels = Bitmap.pixels(of: mask.image.cgImage) else { return false }
+        return stride(from: 3, to: pixels.bytes.count, by: 4).allSatisfy { pixels.bytes[$0] == 255 }
     }
 
     /// Groups Easel dropped that still hold rows Easel never read.
@@ -533,7 +562,7 @@ private struct Patch {
 
     private mutating func write(_ plan: Planned) throws {
         let isNew = plan.row == nil
-        let rowID = plan.row?.id ?? insertLayer(plan.identifier)
+        let rowID = plan.row?.id ?? (plan.layer.isAdjustment ? insertAdjustments(plan.identifier) : insertLayer(plan.identifier))
         let info = isNew ? PXDFormat.Info(values: database.info(for: rowID)) : structure.info[rowID] ?? PXDFormat.Info(values: [:])
         let layer = plan.layer
 
@@ -543,6 +572,17 @@ private struct Patch {
         setOpacity(layer.opacity, info: info, rowID: rowID)
         if isNew || info.blendTag.map(PSDReader.blendMode) != layer.blendMode, let tag = PXDWriter.blendTag(layer.blendMode) {
             set("blendMode", Value.makeTag("Blnd", tag), rowID: rowID, old: info["blendMode"])
+        }
+
+        if let filter = layer.adjustment {
+            writeAdjustment(filter, of: layer, info: info, rowID: rowID, isNew: isNew)
+            // Over the whole canvas, so only a mask has a place.
+            let backing = info.backingScale
+            let centre = CGPoint(x: plan.transform.position.x / backing, y: (canvas.height - plan.transform.position.y) / backing)
+            var flags = flags(for: layer, info: info)
+            writeMask(plan, info: info, position: centre, angle: 0, moved: isNew, flags: &flags)
+            if isNew || flags != info.flags { set("flags", Value.makeUInt64(flags), rowID: rowID, old: info["flags"]) }
+            return
         }
 
         // Pixels: a painted layer's buffer saved again as it was; anything
@@ -589,11 +629,26 @@ private struct Patch {
             || min(turn, 360 - turn) > 1e-6
 
         // Visibility, lock, clipping, and whether the layer has a mask.
-        var flags = info.flags & ~(PXDFormat.visibleFlag | PXDFormat.lockedFlag | PXDFormat.clippedFlag)
-            | (layer.isVisible ? PXDFormat.visibleFlag : 0) | (layer.isLocked ? PXDFormat.lockedFlag : 0)
-            | (layer.isClipped ? PXDFormat.clippedFlag : 0)
+        var flags = flags(for: layer, info: info)
         writeMask(plan, info: info, position: position, angle: angle, moved: moved || isNew, flags: &flags)
         if isNew || flags != info.flags { set("flags", Value.makeUInt64(flags), rowID: rowID, old: info["flags"]) }
+    }
+
+    private func flags(for layer: Layer, info: PXDFormat.Info) -> UInt64 {
+        info.flags & ~(PXDFormat.visibleFlag | PXDFormat.lockedFlag | PXDFormat.clippedFlag)
+            | (layer.isVisible ? PXDFormat.visibleFlag : 0) | (layer.isLocked ? PXDFormat.lockedFlag : 0)
+            | (layer.isClipped ? PXDFormat.clippedFlag : 0)
+    }
+
+    /// The filter as Pixelmator's colour adjustments, with Easel's own kept
+    /// beside them, when it changed.
+    private mutating func writeAdjustment(_ filter: LayerFilter, of layer: Layer, info: PXDFormat.Info, rowID: Int64, isNew: Bool) {
+        guard isNew || layer.pixelmator?.adjustment != filter,
+              let json = PXDAdjustments.json(for: filter, existing: info[PXDAdjustments.key]) else { return }
+        set(PXDAdjustments.key, json, rowID: rowID, old: info[PXDAdjustments.key])
+        if let kept = PXDAdjustments.kept(filter, json: json) {
+            set(PXDAdjustments.easelKey, kept, rowID: rowID, old: info[PXDAdjustments.easelKey])
+        }
     }
 
     /// Writes whichever of place, size, scale and angle changed, by more
@@ -632,6 +687,21 @@ private struct Patch {
         var info = baseInfo(like: PXDFormat.pixelLayer)
         info["flags"] = Value.makeUInt64(0x41)
         // Placeholders until the layer's own settings are written.
+        info["opacity"] = Value.makePercent(100)
+        info["opct-nrm"] = Value.makeDouble("LDOp", 1)
+        setInfo(info, rowID: rowID)
+        return rowID
+    }
+
+    /// A colour adjustments layer's row, its filter written after.
+    private mutating func insertAdjustments(_ identifier: String) -> Int64 {
+        let rowID = insertRow(identifier, parent: nil, index: 0, type: PXDFormat.adjustmentsLayer)
+        var info = baseInfo(like: PXDFormat.adjustmentsLayer)
+        info["adjustments-type"] = Value.make("SI16", Value.littleEndian(UInt32(0)))
+        info["color-value"] = []
+        info["size"] = Value.makePoint("PTSz", .zero)
+        info["position"] = Value.makePoint("PTPt", .zero)
+        info["flags"] = Value.makeUInt64(0x41)
         info["opacity"] = Value.makePercent(100)
         info["opct-nrm"] = Value.makeDouble("LDOp", 1)
         setInfo(info, rowID: rowID)

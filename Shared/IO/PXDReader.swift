@@ -12,6 +12,9 @@ import Foundation
 /// relative to a group. Each layer and group remembers where in the document
 /// it came from, so the document can be written back in place.
 ///
+/// Colour adjustments layers come in as Easel's adjustment layers when they
+/// amount to one filter Easel has.
+///
 /// Text, shapes and Pixelmator's effects have no pixels saved for them, so
 /// when a document has any, its own preview comes in as a hidden top layer
 /// to compare against; writing back keeps them as they were.
@@ -63,7 +66,8 @@ enum PXDReader {
                     groups.append(folder)
                     visit(row.identifier, groupID: folder.id)
                 } else if structure.layers.contains(row.identifier),
-                          var layer = rasterLayer(row, info: info, files: files, canvas: canvas) {
+                          var layer = structure.adjustments[row.identifier].map({ adjustmentLayer($0, row: row, info: info, canvas: canvas) })
+                            ?? rasterLayer(row, info: info, files: files, canvas: canvas) {
                     layer.groupID = groupID
                     if let maskID = structure.masks[row.identifier], let maskRow = structure.row(maskID),
                        let maskInfo = structure.info[maskRow.id],
@@ -127,6 +131,27 @@ enum PXDReader {
         layer.isClipped = info.isClipped
         layer.isLocked = info.isLocked
         layer.pixelmator = PixelmatorSource(identifier: row.identifier, image: pixels)
+        return layer
+    }
+
+    /// A colour adjustments layer: no pixels, one filter over the whole
+    /// canvas.
+    private static func adjustmentLayer(
+        _ filter: LayerFilter, row: PXDFormat.LayerRow, info: PXDFormat.Info, canvas: CGSize
+    ) -> Layer {
+        var layer = Layer(
+            name: info.name ?? filter.kind.label,
+            image: LayerImage(Bitmap.solid(size: canvas, color: .clear)), canvasSize: canvas
+        )
+        layer.adjustment = filter
+        layer.opacity = info.opacity
+        layer.blendMode = info.blendTag.map(PSDReader.blendMode) ?? .normal
+        layer.isVisible = info.isVisible
+        layer.isClipped = info.isClipped
+        layer.isLocked = info.isLocked
+        // Showing all of the canvas unless Pixelmator has a mask for it.
+        layer.mask = .revealingAll(size: canvas)
+        layer.pixelmator = PixelmatorSource(identifier: row.identifier, image: layer.image, mask: layer.mask?.image, adjustment: filter)
         return layer
     }
 
