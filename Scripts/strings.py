@@ -975,6 +975,15 @@ S = {
 "BlendMode.Divide": ("Divide", "除算", "나누기", "划分", "分割"),
 "BlendMode.PassThrough": ("Pass Through", "通過", "통과", "穿透", "穿透"),
 "Layers.Fill": ("Fill", "塗り", "칠", "填充", "填滿"),
+"WriteBackLoss.Depth": ("16 or 32 bits a channel, which Easel keeps as 8", "チャンネルあたり16または32ビットの色（Easelでは8ビットになります）", "채널당 16 또는 32비트 색상(Easel에서는 8비트로 유지됨)", "每通道 16 或 32 位色彩（Easel 会保留为 8 位）", "每通道 16 或 32 位元色彩（Easel 會保留為 8 位元）"),
+"WriteBackLoss.ColorMode": ("Grayscale, CMYK or bitmap color, which Easel keeps as RGB", "グレースケール、CMYK、またはビットマップのカラーモード（EaselではRGBになります）", "회색조, CMYK 또는 비트맵 색상 모드(Easel에서는 RGB로 유지됨)", "灰度、CMYK 或位图颜色模式（Easel 会保留为 RGB）", "灰階、CMYK 或點陣圖色彩模式（Easel 會保留為 RGB）"),
+"WriteBackLoss.ExtraChannels": ("Alpha and spot color channels", "アルファチャンネルとスポットカラーチャンネル", "알파 및 별색 채널", "Alpha 通道和专色通道", "Alpha 色版和特別色色版"),
+"WriteBackLoss.Layers": ("Layers Easel can’t read", "Easelで読み込めないレイヤー", "Easel에서 읽을 수 없는 레이어", "Easel 无法读取的图层", "Easel 無法讀取的圖層"),
+"WriteBackLoss.Effects": ("Layer styles Easel would write differently", "Easelでは異なる形で書き出されるレイヤースタイル", "Easel이 다르게 저장하는 레이어 스타일", "Easel 会以不同方式写入的图层样式", "Easel 會以不同方式寫入的圖層樣式"),
+"WriteBackLoss.Adjustments": ("Adjustment layers Easel splits into several", "Easelで複数に分かれる調整レイヤー", "Easel에서 여러 개로 나뉘는 조정 레이어", "Easel 会拆分成多个的调整图层", "Easel 會拆分成多個的調整圖層"),
+"WriteBackLoss.Masks": ("Layers with both a pixel mask and a vector mask", "ピクセルマスクとベクトルマスクの両方を持つレイヤー", "픽셀 마스크와 벡터 마스크가 모두 있는 레이어", "同时带有像素蒙版和矢量蒙版的图层", "同時帶有像素遮色片和向量遮色片的圖層"),
+"WriteBackLoss.Comps": ("Layer comps’ styles, groups or masks", "レイヤーカンプのスタイル、グループ、またはマスク", "레이어 구성 요소의 스타일, 그룹 또는 마스크", "图层复合的样式、组或蒙版", "圖層構圖的樣式、群組或遮色片"),
+"WriteBackLoss.Metadata": ("Layers’ timeline and other metadata", "レイヤーのタイムラインとその他のメタデータ", "레이어의 타임라인 및 기타 메타데이터", "图层的时间轴和其他元数据", "圖層的時間軸和其他後設資料"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]

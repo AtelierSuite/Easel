@@ -102,7 +102,7 @@ enum PXDReader {
         guard !layers.isEmpty else { throw Failure.notPixelmator }
         var composition = Composition(size: canvas, layers: layers, groups: groups)
         composition.normalizeGroups()
-        composition.needsCopyBeforeEditing = lost
+        composition.writeBackLosses = lost ? [.layers] : []
         // Measured from when Easel last wrote the document, if it did.
         composition.canvasChange = database.canvasChange()
         return composition

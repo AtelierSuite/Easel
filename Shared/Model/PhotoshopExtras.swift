@@ -113,28 +113,5 @@ struct PhotoshopDocumentExtras: Equatable, Sendable {
     var colorProfile: Data?
     /// What of the file Easel could not keep, so would not write back:
     /// empty when the file can be edited where it is.
-    var losses: Set<PhotoshopLoss> = []
-}
-
-/// Something in a Photoshop file that saving it back from Easel would lose.
-enum PhotoshopLoss: String, Sendable, CaseIterable {
-    /// 16 or 32 bits a channel, which Easel keeps as 8.
-    case depth
-    /// Greys, CMYK or bitmap, which Easel keeps as RGB.
-    case colorMode
-    /// Alpha or spot channels beside the picture's own.
-    case extraChannels
-    /// Layers whose pixels could not be read.
-    case layers
-    /// Styles Easel writes afresh, which may say less than Photoshop's.
-    case effects
-    /// Adjustments Easel splits into several, written afresh.
-    case adjustments
-    /// A user mask and a vector mask, kept only as one.
-    case masks
-    /// What layer comps say beyond each layer's visibility, position and
-    /// blend: their styles, groups and masks.
-    case comps
-    /// Layers' timeline and other metadata.
-    case metadata
+    var losses: Set<WriteBackLoss> = []
 }

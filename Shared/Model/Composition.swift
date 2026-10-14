@@ -27,10 +27,11 @@ struct Composition: Equatable, Sendable {
     var resolution: Double?
     /// What its Photoshop file had that Easel does not use, to write back.
     var photoshop: PhotoshopDocumentExtras?
-    /// Set by a reader when the file holds something that writing the
-    /// picture back to it would lose: such a file is saved as a copy before
-    /// it is edited, and is otherwise left as it is.
-    var needsCopyBeforeEditing = false
+    /// Set by a reader to what the file holds that writing the picture back
+    /// to it would lose: such a file is saved as a copy before it is
+    /// edited, and is otherwise left as it is.
+    var writeBackLosses: Set<WriteBackLoss> = []
+    var needsCopyBeforeEditing: Bool { !writeBackLosses.isEmpty }
     /// How the canvas has moved the layers since the picture was read:
     /// what it came from has content Easel did not read, which follows the
     /// same way when the picture is written back.

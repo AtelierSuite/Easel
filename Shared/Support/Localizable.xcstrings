@@ -34228,6 +34228,321 @@
           }
         }
       }
+    },
+    "WriteBackLoss.Adjustments": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adjustment layers Easel splits into several"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easelで複数に分かれる調整レイヤー"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel에서 여러 개로 나뉘는 조정 레이어"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel 会拆分成多个的调整图层"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel 會拆分成多個的調整圖層"
+          }
+        }
+      }
+    },
+    "WriteBackLoss.ColorMode": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grayscale, CMYK or bitmap color, which Easel keeps as RGB"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グレースケール、CMYK、またはビットマップのカラーモード（EaselではRGBになります）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "회색조, CMYK 또는 비트맵 색상 모드(Easel에서는 RGB로 유지됨)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "灰度、CMYK 或位图颜色模式（Easel 会保留为 RGB）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "灰階、CMYK 或點陣圖色彩模式（Easel 會保留為 RGB）"
+          }
+        }
+      }
+    },
+    "WriteBackLoss.Comps": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layer comps’ styles, groups or masks"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レイヤーカンプのスタイル、グループ、またはマスク"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "레이어 구성 요소의 스타일, 그룹 또는 마스크"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图层复合的样式、组或蒙版"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖層構圖的樣式、群組或遮色片"
+          }
+        }
+      }
+    },
+    "WriteBackLoss.Depth": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "16 or 32 bits a channel, which Easel keeps as 8"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャンネルあたり16または32ビットの色（Easelでは8ビットになります）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "채널당 16 또는 32비트 색상(Easel에서는 8비트로 유지됨)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每通道 16 或 32 位色彩（Easel 会保留为 8 位）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每通道 16 或 32 位元色彩（Easel 會保留為 8 位元）"
+          }
+        }
+      }
+    },
+    "WriteBackLoss.Effects": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layer styles Easel would write differently"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easelでは異なる形で書き出されるレイヤースタイル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel이 다르게 저장하는 레이어 스타일"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel 会以不同方式写入的图层样式"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel 會以不同方式寫入的圖層樣式"
+          }
+        }
+      }
+    },
+    "WriteBackLoss.ExtraChannels": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alpha and spot color channels"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アルファチャンネルとスポットカラーチャンネル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알파 및 별색 채널"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alpha 通道和专色通道"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alpha 色版和特別色色版"
+          }
+        }
+      }
+    },
+    "WriteBackLoss.Layers": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layers Easel can’t read"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easelで読み込めないレイヤー"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel에서 읽을 수 없는 레이어"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel 无法读取的图层"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel 無法讀取的圖層"
+          }
+        }
+      }
+    },
+    "WriteBackLoss.Masks": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layers with both a pixel mask and a vector mask"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ピクセルマスクとベクトルマスクの両方を持つレイヤー"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "픽셀 마스크와 벡터 마스크가 모두 있는 레이어"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同时带有像素蒙版和矢量蒙版的图层"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同時帶有像素遮色片和向量遮色片的圖層"
+          }
+        }
+      }
+    },
+    "WriteBackLoss.Metadata": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layers’ timeline and other metadata"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レイヤーのタイムラインとその他のメタデータ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "레이어의 타임라인 및 기타 메타데이터"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图层的时间轴和其他元数据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖層的時間軸和其他後設資料"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

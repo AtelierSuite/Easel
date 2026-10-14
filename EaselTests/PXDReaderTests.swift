@@ -456,7 +456,7 @@ struct PXDReaderTests {
         let written = try document.written(as: .pixelmatorProImage, existing: original)
         #expect(try PXDReader.composition(from: written).layers[0].name == "Renamed")
 
-        document.composition.needsCopyBeforeEditing = true
+        document.composition.writeBackLosses = [.layers]
         #expect(try document.written(as: .pixelmatorProImage, existing: original) === original)
     }
 

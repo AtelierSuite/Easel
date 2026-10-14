@@ -65,7 +65,7 @@ enum PSDReader {
         var extras = LayerExtras()
         // What saving back would lose, beginning with what Easel keeps
         // fewer of: bits, colours and channels.
-        var losses = Set<PhotoshopLoss>()
+        var losses = Set<WriteBackLoss>()
         if depth != 8 { losses.insert(mode == .bitmap ? .colorMode : .depth) }
         if mode != .rgb { losses.insert(.colorMode) }
         if channelCount > (mode == .cmyk ? 5 : mode == .rgb ? 4 : 2) { losses.insert(.extraChannels) }
@@ -97,7 +97,7 @@ enum PSDReader {
             composition.photoshop = PhotoshopDocumentExtras(
                 resources: resources.kept, colorProfile: mode == .rgb ? resources.colorProfile : nil, losses: losses
             )
-            composition.needsCopyBeforeEditing = !losses.isEmpty
+            composition.writeBackLosses = losses
             return composition
         }
         var composition = Composition(size: canvas, layers: layers, groups: groups)
@@ -116,7 +116,7 @@ enum PSDReader {
             losses: losses
         )
         composition.normalizeGroups()
-        composition.needsCopyBeforeEditing = !losses.isEmpty
+        composition.writeBackLosses = losses
         return composition
     }
 
@@ -152,7 +152,7 @@ enum PSDReader {
         /// The document's tagged blocks Easel does not use.
         var globalBlocks: [PhotoshopExtras.Block] = []
         /// What of the layers saving back would lose.
-        var losses = Set<PhotoshopLoss>()
+        var losses = Set<WriteBackLoss>()
         /// Whether groups say how comps show them, which Easel's comps do not.
         var groupsHaveCompSettings = false
     }

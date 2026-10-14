@@ -31,7 +31,7 @@ struct DocumentConversionTests {
     @Test func layeredDocumentsRequireACopyOnlyWhenTheyWouldLoseSomething() {
         let composition = Composition.blank()
         var lossy = composition
-        lossy.needsCopyBeforeEditing = true
+        lossy.writeBackLosses = [.layers]
         for name in ["Poster.psb", "Layers.PSD", "Sketch.pxd"] {
             let url = URL(filePath: "/tmp/\(name)")
             #expect(!DocumentConversion.requiresCopy(url, composition: composition))
@@ -41,5 +41,12 @@ struct DocumentConversionTests {
         for name in ["Photo.png", "Photo.jpg", "Painting.easel"] {
             #expect(!DocumentConversion.requiresCopy(URL(filePath: "/tmp/\(name)"), composition: lossy))
         }
+    }
+
+    /// Asking for a copy says what writing back would lose, each in words.
+    @Test func everyLossIsDescribed() {
+        let labels = WriteBackLoss.allCases.map(\.label)
+        #expect(Set(labels).count == labels.count)
+        #expect(labels.allSatisfy { !$0.isEmpty && !$0.hasPrefix("WriteBackLoss.") })
     }
 }

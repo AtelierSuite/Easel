@@ -4,6 +4,8 @@ import SwiftUI
 /// has to be, and how to save the copy, reporting whether one was saved.
 struct CopyBeforeEditing {
     var isRequired: () -> Bool
+    /// What writing back to the file would lose, to say so when asking.
+    var reasons: [String] = []
     var save: (_ completion: @escaping (_ saved: Bool) -> Void) -> Void
 }
 

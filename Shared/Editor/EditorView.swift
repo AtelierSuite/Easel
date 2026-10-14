@@ -443,7 +443,10 @@ extension View {
             Button("CopyToEasel.SaveAndEdit") { state.saveCopyForHeldEdit() }
             Button("CopyToEasel.CancelEdit", role: .cancel) { state.cancelHeldEdit() }
         } message: {
-            Text("CopyToEasel.Message")
+            // What would be lost, one to a line, after the explanation.
+            let reasons = (state.copyBeforeEditing?.reasons ?? []).map { "• \($0)" }
+            Text(verbatim: ([String(localized: "CopyToEasel.Message")] + (reasons.isEmpty ? [] : [reasons.joined(separator: "\n")]))
+                .joined(separator: "\n\n"))
         }
     }
 }

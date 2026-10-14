@@ -23,7 +23,8 @@ struct DocumentView: View {
     /// is: it opens to look at, and the first edit asks for the copy.
     private var copyBeforeEditing: CopyBeforeEditing? {
         guard let fileURL, DocumentConversion.requiresCopy(fileURL, composition: document.composition) else { return nil }
-        return CopyBeforeEditing(isRequired: { !hasCopy }) { completion in
+        let losses = WriteBackLoss.allCases.filter(document.composition.writeBackLosses.contains)
+        return CopyBeforeEditing(isRequired: { !hasCopy }, reasons: losses.map(\.label)) { completion in
             copySaved = completion
             isSavingCopy = true
         }
