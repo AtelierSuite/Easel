@@ -470,6 +470,38 @@ enum PXDFormat {
             }
         }
 
+        /// Runs one statement with its values bound in order: text, whole
+        /// numbers, bytes, or nil for NULL.
+        @discardableResult
+        func execute(_ sql: String, _ values: [Any?] = []) -> Bool {
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else { return false }
+            defer { sqlite3_finalize(statement) }
+            let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            for (index, value) in values.enumerated() {
+                let position = Int32(index + 1)
+                switch value {
+                case let text as String: sqlite3_bind_text(statement, position, text, -1, transient)
+                case let number as Int: sqlite3_bind_int64(statement, position, Int64(number))
+                case let number as Int64: sqlite3_bind_int64(statement, position, number)
+                case let bytes as [UInt8]:
+                    sqlite3_bind_blob(statement, position, bytes, Int32(bytes.count), transient)
+                default: sqlite3_bind_null(statement, position)
+                }
+            }
+            return sqlite3_step(statement) == SQLITE_DONE
+        }
+
+        var lastInsertedRow: Int64 { sqlite3_last_insert_rowid(handle) }
+
+        /// Closes the database and hands back its file, to be saved in the
+        /// document again.
+        func finish() throws -> Data {
+            sqlite3_close(handle)
+            handle = nil
+            return try Data(contentsOf: url)
+        }
+
         func query(_ sql: String, _ bind: (OpaquePointer?) -> Void = { _ in }, row: (OpaquePointer?) -> Void) {
             var statement: OpaquePointer?
             guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK else { return }
