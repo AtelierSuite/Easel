@@ -105,15 +105,22 @@ enum PSDReader {
         composition.resolution = resources.resolution
         composition.guides = resources.guides
         composition.artboards = extras.artboards
+        var keptComps: PhotoshopDocumentExtras.KeptComps?
         if let comps = resources.comps {
             composition.layerComps = PSDDocumentInfo.layerComps(comps, layers: layers, settings: extras.compSettings)
-            if extras.groupsHaveCompSettings || !extras.compSettings.values.allSatisfy(PSDDocumentInfo.isKeptWhole) {
-                losses.insert(.comps)
+            // Photoshop's own list says more than Easel keeps — groups,
+            // styles, masks — and goes back while the comps are as read.
+            let numbers = (comps["list"]?.list ?? []).compactMap(\.descriptor).map { Int32($0["compID"]?.number ?? 0) }
+            if let data = resources.compsData {
+                keptComps = .init(
+                    resource: data, value: composition.layerComps,
+                    ids: Dictionary(zip(composition.layerComps.map(\.id), numbers), uniquingKeysWith: { first, _ in first })
+                )
             }
         }
         composition.photoshop = PhotoshopDocumentExtras(
             resources: resources.kept, blocks: extras.globalBlocks, patternBlocks: extras.patternBlocks,
-            colorProfile: mode == .rgb ? resources.colorProfile : nil, losses: losses
+            colorProfile: mode == .rgb ? resources.colorProfile : nil, losses: losses, comps: keptComps
         )
         composition.normalizeGroups()
         composition.writeBackLosses = losses
@@ -154,8 +161,6 @@ enum PSDReader {
         var patternBlocks: [PhotoshopExtras.Block] = []
         /// What of the layers saving back would lose.
         var losses = Set<WriteBackLoss>()
-        /// Whether groups say how comps show them, which Easel's comps do not.
-        var groupsHaveCompSettings = false
     }
 
     /// ImageIO reads the flattened picture of most Photoshop files.
@@ -259,6 +264,7 @@ enum PSDReader {
         // Records run bottom first: a group's divider, its layers, then the
         // group's own record with its name and settings.
         var open: [UUID] = []
+        var dividers: [UUID: PhotoshopExtras.Divider] = [:]
         for record in records {
             var planes: [Int: [UInt8]] = [:]
             for channel in record.channels {
@@ -277,6 +283,9 @@ enum PSDReader {
                 let group = LayerGroup(name: "", parentID: open.last)
                 groups.append(group)
                 open.append(group.id)
+                if record.extras.layerID != nil || record.blocks["shmd"] != nil {
+                    dividers[group.id] = .init(layerID: record.extras.layerID, metadata: record.blocks["shmd"].map { Data($0) })
+                }
                 continue
             }
             if record.sectionType == 1 || record.sectionType == 2, let id = open.popLast(),
@@ -288,8 +297,18 @@ enum PSDReader {
                 let key = record.sectionBlendKey ?? record.blendKey
                 groups[index].blendMode = key == "pass" ? nil : blendMode(key)
                 groups[index].isLocked = record.isLocked
-                if record.blocks["shmd"].flatMap(PSDDocumentInfo.compSettings) != nil { extras.groupsHaveCompSettings = true }
-                if record.extras != PhotoshopExtras() { groups[index].photoshop = record.extras }
+                var groupExtras = record.extras
+                groupExtras.divider = dividers[id]
+                if let metadata = record.blocks["shmd"] {
+                    let state = PhotoshopExtras.CompState(
+                        isVisible: groups[index].isVisible, opacity: groups[index].opacity, blendMode: groups[index].blendMode
+                    )
+                    groupExtras.metadata = .init(
+                        blocks: [PhotoshopExtras.Block(key: "shmd", data: Data(metadata))], value: state,
+                        transform: LayerTransform(position: .zero)
+                    )
+                }
+                if groupExtras != PhotoshopExtras() { groups[index].photoshop = groupExtras }
                 if let rect = record.blocks["artb"].flatMap(PSDDocumentInfo.artboardRect) {
                     extras.artboards.append(Artboard(name: groups[index].name, rect: rect, groupID: id))
                 }
@@ -371,7 +390,6 @@ enum PSDReader {
             layer.fillOpacity = Double(record.fillOpacity) / 255
             layer.isLocked = record.isLocked
             if let settings = record.blocks["shmd"].flatMap(PSDDocumentInfo.compSettings) { extras.compSettings[layer.id] = settings }
-            if record.blocks["shmd"].map(PSDDocumentInfo.hasOtherMetadata) == true { extras.losses.insert(.metadata) }
             if record.realMask != nil { extras.losses.insert(.masks) }
             // Photoshop keeps a layer's own pixels and its styles apart, as
             // Easel does. Files with several of one effect may keep them as
@@ -416,8 +434,14 @@ enum PSDReader {
     /// What the record had that Easel does not use, and the layer as it is
     /// read, which its content blocks describe.
     private static func photoshopExtras(_ record: LayerRecord, of layer: Layer) -> PhotoshopExtras? {
-        guard record.extras != PhotoshopExtras() else { return nil }
         var extras = record.extras
+        if let metadata = record.blocks["shmd"] {
+            let state = PhotoshopExtras.CompState(isVisible: layer.isVisible, opacity: layer.opacity, blendMode: layer.blendMode)
+            extras.metadata = .init(
+                blocks: [PhotoshopExtras.Block(key: "shmd", data: Data(metadata))], value: state, transform: layer.transform
+            )
+        }
+        guard extras != PhotoshopExtras() else { return nil }
         extras.source = PhotoshopExtras.Source(
             image: layer.image.id, mask: layer.mask?.image.id, transform: layer.transform, filters: layer.filters
         )
@@ -624,6 +648,8 @@ enum PSDReader {
                 // Kept too, for the locks on transparency, pixels or
                 // position alone.
                 record.extras.blocks.append(PhotoshopExtras.Block(key: key, data: Data(locks)))
+            case "lyid":
+                record.extras.layerID = try reader.uint32()
             case "iOpa":
                 record.fillOpacity = Int(try reader.uint8())
             case "lsct", "lsdk":

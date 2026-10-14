@@ -146,9 +146,42 @@ enum PSDWriter {
     private static func records(for composition: Composition, space: CGColorSpace, large: Bool) -> [Record] {
         var records: [Record] = []
         var open: [UUID] = []
+        // Each layer and group keeps the id Photoshop gave it, which its
+        // comps' settings name it by; copies sharing one, and new layers,
+        // take ids of their own past them.
+        let known = composition.layers.compactMap(\.photoshop?.layerID) + composition.groups.compactMap(\.photoshop?.layerID)
+            + composition.groups.compactMap(\.photoshop?.divider?.layerID)
+        var nextID = (known.max() ?? 0) + 1
+        var usedIDs = Set<UInt32>()
+        func assignID(_ original: UInt32?) -> (id: UInt32, isOriginal: Bool) {
+            if let original, usedIDs.insert(original).inserted { return (original, true) }
+            while !usedIDs.insert(nextID).inserted { nextID += 1 }
+            return (nextID, false)
+        }
+        // Photoshop's own comps go back while Easel's are as read, and with
+        // them each layer's settings, while the layer is as it was.
+        let compsKept = composition.photoshop?.comps.map { $0.value == composition.layerComps } ?? false
+        func metadata(_ extras: PhotoshopExtras?, state: PhotoshopExtras.CompState, transform: LayerTransform,
+                      isOriginal: Bool, settings: () -> PSDDescriptor?) -> [UInt8]? {
+            let kept = extras?.metadata
+            if compsKept, isOriginal, let kept, kept.value == state, kept.transform == transform {
+                return kept.blocks.first.map { [UInt8]($0.data) }
+            }
+            return PSDDocumentInfo.metadataBlock(settings: settings(), keeping: kept?.blocks.first.map { [UInt8]($0.data) })
+        }
         func close(down to: Int) {
             while open.count > to, let id = open.popLast(), let group = composition.group(id) {
                 var blocks: [(key: String, data: [UInt8])] = []
+                let (number, isOriginal) = assignID(group.photoshop?.layerID)
+                var layerID = PSDBinaryWriter()
+                layerID.uint32(Int(number))
+                blocks.append(("lyid", layerID.data))
+                // Easel's comps say nothing of groups: only Photoshop's own.
+                let state = PhotoshopExtras.CompState(isVisible: group.isVisible, opacity: group.opacity, blendMode: group.blendMode)
+                if let block = metadata(group.photoshop, state: state, transform: LayerTransform(position: .zero),
+                                        isOriginal: isOriginal, settings: { nil }) {
+                    blocks.append(("shmd", block))
+                }
                 if group.isLocked { blocks.append(("lspf", PSDDocumentInfo.lockBlock)) }
                 if let artboard = composition.artboards.first(where: { $0.groupID == id }) {
                     blocks.append(("artb", PSDDocumentInfo.artboardBlock(artboard.rect)))
@@ -179,17 +212,32 @@ enum PSDWriter {
             while common < min(open.count, chain.count), open[common] == chain[common] { common += 1 }
             close(down: common)
             for id in chain[common...] {
-                records.append(folderRecord(name: "</Layer group>", opacity: 1, isVisible: true, type: 3, blendKey: "norm", large: large))
+                // The divider keeps its own id and metadata, as Photoshop gave them.
+                let divider = composition.group(id)?.photoshop?.divider
+                let (number, isOriginal) = assignID(divider?.layerID)
+                var layerID = PSDBinaryWriter()
+                layerID.uint32(Int(number))
+                var blocks: [(key: String, data: [UInt8])] = [("lyid", layerID.data)]
+                if let raw = divider?.metadata.map({ [UInt8]($0) }),
+                   let block = compsKept && isOriginal ? raw : PSDDocumentInfo.metadataBlock(settings: nil, keeping: raw) {
+                    blocks.append(("shmd", block))
+                }
+                records.append(folderRecord(name: "</Layer group>", opacity: 1, isVisible: true, type: 3, blendKey: "norm",
+                                            blocks: blocks, large: large))
                 open.append(id)
             }
-            var extra: [(key: String, data: [UInt8])] = []
-            if !composition.layerComps.isEmpty {
-                // Each layer says how each comp shows it, by a number of its own.
-                let number = records.count + 1
-                var layerID = PSDBinaryWriter()
-                layerID.uint32(number)
-                extra = [("lyid", layerID.data),
-                         ("shmd", PSDDocumentInfo.metadataBlock(for: layer, comps: composition.layerComps, layerID: number))]
+            // Each layer says how each comp shows it, by its id.
+            let (number, isOriginal) = assignID(original.photoshop?.layerID)
+            var layerID = PSDBinaryWriter()
+            layerID.uint32(Int(number))
+            var extra: [(key: String, data: [UInt8])] = [("lyid", layerID.data)]
+            let state = PhotoshopExtras.CompState(isVisible: layer.isVisible, opacity: layer.opacity, blendMode: layer.blendMode)
+            if let block = metadata(original.photoshop, state: state, transform: original.transform, isOriginal: isOriginal, settings: {
+                composition.layerComps.isEmpty ? nil : PSDDocumentInfo.compSettings(
+                    for: layer, comps: composition.layerComps, layerID: number
+                ) { PSDDocumentInfo.compID($0, in: composition) }
+            }) {
+                extra.append(("shmd", block))
             }
             records.append(layerRecord(layer, canvasSize: composition.size, swatches: composition.patterns, space: space, large: large, extraBlocks: extra))
         }

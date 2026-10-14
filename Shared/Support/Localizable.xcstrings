@@ -34299,41 +34299,6 @@
         }
       }
     },
-    "WriteBackLoss.Comps": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Layer comps’ styles, groups or masks"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "レイヤーカンプのスタイル、グループ、またはマスク"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "레이어 구성 요소의 스타일, 그룹 또는 마스크"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "图层复合的样式、组或蒙版"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "圖層構圖的樣式、群組或遮色片"
-          }
-        }
-      }
-    },
     "WriteBackLoss.Depth": {
       "extractionState": "manual",
       "localizations": {
@@ -34470,41 +34435,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "同時帶有像素遮色片和向量遮色片的圖層"
-          }
-        }
-      }
-    },
-    "WriteBackLoss.Metadata": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Layers’ timeline and other metadata"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "レイヤーのタイムラインとその他のメタデータ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "레이어의 타임라인 및 기타 메타데이터"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "图层的时间轴和其他元数据"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "圖層的時間軸和其他後設資料"
           }
         }
       }

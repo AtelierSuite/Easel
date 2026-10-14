@@ -14,6 +14,8 @@ enum PSDDocumentInfo {
         var guides: [Guide] = []
         /// The `CompList` descriptor: the comps' names and ids.
         var comps: PSDDescriptor?
+        /// The resource as it came.
+        var compsData: Data?
         /// Those Easel does not use, to write back.
         var kept: [PhotoshopDocumentExtras.Resource] = []
     }
@@ -46,6 +48,7 @@ enum PSDDocumentInfo {
         case 1065:
             guard (try? reader.uint32()) == 16 else { return }
             resources.comps = try? PSDDescriptor.read(&reader)
+            resources.compsData = Data(data)
         default:
             break
         }
@@ -84,10 +87,13 @@ enum PSDDocumentInfo {
             }
             resource(1032, body.data)
         }
-        if !composition.layerComps.isEmpty {
+        if let kept = composition.photoshop?.comps, kept.value == composition.layerComps {
+            // Photoshop's own list, saying more than Easel keeps of comps.
+            resource(1065, [UInt8](kept.resource))
+        } else if !composition.layerComps.isEmpty {
             let list = composition.layerComps.map { comp in
                 PSDDescriptor.Value.descriptor(PSDDescriptor(classID: "Comp", items: [
-                    ("Nm  ", .text(comp.name)), ("compID", .integer(compID(comp))),
+                    ("Nm  ", .text(comp.name)), ("compID", .integer(compID(comp, in: composition))),
                     // Visibility, position and appearance.
                     ("capturedInfo", .integer(7)),
                 ]))
@@ -110,7 +116,12 @@ enum PSDDocumentInfo {
 
     // MARK: - Layer comps
 
-    /// The number Photoshop knows a comp by, made from its id.
+    /// The number Photoshop knows a comp by: the one it had in the file it
+    /// came from, else one made from its id.
+    static func compID(_ comp: LayerComp, in composition: Composition) -> Int32 {
+        composition.photoshop?.comps?.ids[comp.id] ?? compID(comp)
+    }
+
     static func compID(_ comp: LayerComp) -> Int32 {
         let bytes = withUnsafeBytes(of: comp.id.uuid) { Array($0.prefix(4)) }
         let value = Int32(bitPattern: UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3])) & 0x7FFF_FFFF
@@ -131,27 +142,6 @@ enum PSDDocumentInfo {
             }
         }
         return nil
-    }
-
-    /// Whether a layer's comp settings say no more than Easel keeps of them.
-    static func isKeptWhole(_ settings: PSDDescriptor) -> Bool {
-        let kept: Set<String> = ["enab", "Ofst", "blendOptions", "compList", "FXRefPoint"]
-        return (settings["layerSettings"]?.list ?? []).compactMap(\.descriptor).allSatisfy { entry in
-            entry.items.allSatisfy { kept.contains($0.key) }
-        }
-    }
-
-    /// Whether a layer's `shmd` holds more than comps and its own time,
-    /// such as an animation's frames.
-    static func hasOtherMetadata(_ block: [UInt8]) -> Bool {
-        var reader = BigEndianReader(bytes: block)
-        guard let count = try? reader.uint32() else { return false }
-        for _ in 0..<count {
-            guard (try? reader.bytes(4)) != nil, let key = try? reader.ascii(4), (try? reader.bytes(4)) != nil,
-                  let length = try? reader.uint32(), (try? reader.bytes(Int(length))) != nil else { return false }
-            if !["cmls", "cust"].contains(key) { return true }
-        }
-        return false
     }
 
     /// The comps in `list`, each layer as its settings say for it. A layer
@@ -198,8 +188,9 @@ enum PSDDocumentInfo {
         }
     }
 
-    /// A layer's `shmd` block, telling how each comp shows it.
-    static func metadataBlock(for layer: Layer, comps: [LayerComp], layerID: Int) -> [UInt8] {
+    /// A layer's comp settings: how each comp shows it, by `compID`, and
+    /// how it is now.
+    static func compSettings(for layer: Layer, comps: [LayerComp], layerID: UInt32, compID: (LayerComp) -> Int32) -> PSDDescriptor {
         func entry(_ state: LayerComp.LayerState, compID: Int32) -> PSDDescriptor.Value {
             let dx = (state.transform.position.x - layer.transform.position.x).rounded()
             let dy = (state.transform.position.y - layer.transform.position.y).rounded()
@@ -217,17 +208,40 @@ enum PSDDocumentInfo {
             isVisible: layer.isVisible, opacity: layer.opacity, blendMode: layer.blendMode, transform: layer.transform
         )
         let entries = comps.map { entry($0.states[layer.id] ?? now, compID: compID($0)) } + [entry(now, compID: 0)]
-        let settings = PSDDescriptor(classID: "null", items: [("LyrI", .integer(Int32(layerID))), ("layerSettings", .list(entries))])
-        var body = settings.versionedBytes
-        while body.count % 4 != 0 { body.append(0) }
+        return PSDDescriptor(classID: "null", items: [("LyrI", .integer(Int32(bitPattern: layerID))), ("layerSettings", .list(entries))])
+    }
+
+    /// An `shmd` block of metadata: `settings` as its comps' entry, after
+    /// whatever else `original` held — its time, an animation — kept as it
+    /// was. Nil when there is nothing to say.
+    static func metadataBlock(settings: PSDDescriptor?, keeping original: [UInt8]?) -> [UInt8]? {
+        var entries: [[UInt8]] = []
+        if let original {
+            var reader = BigEndianReader(bytes: original)
+            let count = (try? reader.uint32()) ?? 0
+            for _ in 0..<count {
+                let start = reader.offset
+                guard (try? reader.bytes(4)) != nil, let key = try? reader.ascii(4), (try? reader.bytes(4)) != nil,
+                      let length = try? reader.uint32(), (try? reader.bytes(Int(length))) != nil else { break }
+                if key != "cmls" { entries.append(Array(original[start..<reader.offset])) }
+            }
+        }
+        if let settings {
+            var body = settings.versionedBytes
+            while body.count % 4 != 0 { body.append(0) }
+            var entry = PSDBinaryWriter()
+            entry.ascii("8BIM")
+            entry.ascii("cmls")
+            entry.uint8(0)
+            entry.zeros(3)
+            entry.uint32(body.count)
+            entry.bytes(body)
+            entries.append(entry.data)
+        }
+        guard !entries.isEmpty else { return nil }
         var out = PSDBinaryWriter()
-        out.uint32(1)
-        out.ascii("8BIM")
-        out.ascii("cmls")
-        out.uint8(0)
-        out.zeros(3)
-        out.uint32(body.count)
-        out.bytes(body)
+        out.uint32(entries.count)
+        for entry in entries { out.bytes(entry) }
         return out.data
     }
 

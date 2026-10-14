@@ -27,6 +27,28 @@ struct PhotoshopExtras: Codable, Equatable, Sendable {
     var effects: Kept<[LayerEffect]>?
     var adjustment: Kept<LayerFilter>?
     var smartObject: Kept<SmartObjectState>?
+    /// The layer's id in the file, which its comps' settings name it by.
+    var layerID: UInt32?
+    /// Its `shmd` metadata as it came — how each comp shows it, its time,
+    /// any animation — and the layer as it was then, which that holds true of.
+    var metadata: Kept<CompState>?
+
+    /// A group's closing divider's own id and metadata, which Photoshop
+    /// keeps apart from the group's.
+    var divider: Divider?
+
+    struct Divider: Codable, Equatable, Sendable {
+        var layerID: UInt32?
+        var metadata: Data?
+    }
+
+    /// What comps' settings for a layer are measured from.
+    struct CompState: Codable, Equatable, Sendable {
+        var isVisible: Bool
+        var opacity: Double
+        /// For a group, nil passing through.
+        var blendMode: LayerBlendMode?
+    }
 
     struct Kept<Value: Codable & Equatable & Sendable>: Codable, Equatable, Sendable {
         var blocks: [Block]
@@ -116,4 +138,17 @@ struct PhotoshopDocumentExtras: Equatable, Sendable {
     /// What of the file Easel could not keep, so would not write back:
     /// empty when the file can be edited where it is.
     var losses: Set<WriteBackLoss> = []
+    /// Its layer comps as Photoshop listed them, to write back while
+    /// Easel's are as read.
+    var comps: KeptComps?
+
+    struct KeptComps: Equatable, Sendable {
+        /// The `CompList` resource as it came.
+        var resource: Data
+        /// What Easel made of the comps.
+        var value: [LayerComp]
+        /// The number Photoshop knew each comp by, which layers' settings
+        /// name it with.
+        var ids: [UUID: Int32]
+    }
 }

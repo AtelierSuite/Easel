@@ -15,11 +15,6 @@ enum WriteBackLoss: String, Sendable, CaseIterable {
     case adjustments
     /// A user mask and a vector mask, kept only as one.
     case masks
-    /// What layer comps say beyond each layer's visibility, position and
-    /// blend: their styles, groups and masks.
-    case comps
-    /// Layers' timeline and other metadata.
-    case metadata
 
     /// What is lost, as the person is told when asked to save a copy.
     var label: String {
@@ -30,8 +25,6 @@ enum WriteBackLoss: String, Sendable, CaseIterable {
         case .layers: String(localized: "WriteBackLoss.Layers")
         case .adjustments: String(localized: "WriteBackLoss.Adjustments")
         case .masks: String(localized: "WriteBackLoss.Masks")
-        case .comps: String(localized: "WriteBackLoss.Comps")
-        case .metadata: String(localized: "WriteBackLoss.Metadata")
         }
     }
 }

@@ -105,6 +105,39 @@ struct PSDWriterTests {
         #expect(asIs.transform.position == blue.transform.position && asIs.isVisible && asIs.blendMode == .screen)
     }
 
+    /// Comps read from a file go back as Photoshop listed them, every layer
+    /// and group keeping its id and settings; a layer changed since gets
+    /// Easel's settings, naming the comps by Photoshop's own numbers.
+    @Test func photoshopsCompsGoBackAsTheyWere() throws {
+        var composition = sample()
+        var comp = composition.layerComp(named: "Moved")
+        comp.states[composition.layers[1].id]?.transform.position.x += 3
+        composition.layerComps = [comp]
+        let first = try PSDReader.composition(from: try PSDWriter.data(for: composition))
+        let kept = try #require(first.photoshop?.comps)
+        #expect(kept.value == first.layerComps)
+        #expect(first.layers.allSatisfy { $0.photoshop?.layerID != nil && $0.photoshop?.metadata != nil })
+        #expect(first.groups.allSatisfy { $0.photoshop?.layerID != nil && $0.photoshop?.divider?.layerID != nil })
+
+        let second = try PSDReader.composition(from: try PSDWriter.data(for: first))
+        #expect(second.layers.map(\.photoshop?.layerID) == first.layers.map(\.photoshop?.layerID))
+        #expect(second.layers.map(\.photoshop?.metadata?.blocks) == first.layers.map(\.photoshop?.metadata?.blocks))
+        #expect(second.groups.map(\.photoshop?.divider) == first.groups.map(\.photoshop?.divider))
+        #expect(second.photoshop?.comps?.resource == kept.resource)
+
+        // Moved since: that layer's settings are written afresh, the
+        // comps still as they were.
+        var moved = first
+        moved.layers[1].transform.position.y += 2
+        let third = try PSDReader.composition(from: try PSDWriter.data(for: moved))
+        #expect(third.photoshop?.comps?.resource == kept.resource)
+        #expect(third.layers[1].photoshop?.metadata?.blocks != first.layers[1].photoshop?.metadata?.blocks)
+        #expect(third.layers[0].photoshop?.metadata?.blocks == first.layers[0].photoshop?.metadata?.blocks)
+        let state = try #require(third.layerComps.first?.states[third.layers[1].id])
+        let expected = try #require(first.layerComps.first?.states[first.layers[1].id])
+        #expect(state.transform.position == expected.transform.position)
+    }
+
     @Test func whatEaselDoesNotUseGoesBack() throws {
         var composition = sample()
         var blue = composition.layers[1]

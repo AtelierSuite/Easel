@@ -981,8 +981,6 @@ S = {
 "WriteBackLoss.Layers": ("Layers Easel can’t read", "Easelで読み込めないレイヤー", "Easel에서 읽을 수 없는 레이어", "Easel 无法读取的图层", "Easel 無法讀取的圖層"),
 "WriteBackLoss.Adjustments": ("Adjustment layers Easel splits into several", "Easelで複数に分かれる調整レイヤー", "Easel에서 여러 개로 나뉘는 조정 레이어", "Easel 会拆分成多个的调整图层", "Easel 會拆分成多個的調整圖層"),
 "WriteBackLoss.Masks": ("Layers with both a pixel mask and a vector mask", "ピクセルマスクとベクトルマスクの両方を持つレイヤー", "픽셀 마스크와 벡터 마스크가 모두 있는 레이어", "同时带有像素蒙版和矢量蒙版的图层", "同時帶有像素遮色片和向量遮色片的圖層"),
-"WriteBackLoss.Comps": ("Layer comps’ styles, groups or masks", "レイヤーカンプのスタイル、グループ、またはマスク", "레이어 구성 요소의 스타일, 그룹 또는 마스크", "图层复合的样式、组或蒙版", "圖層構圖的樣式、群組或遮色片"),
-"WriteBackLoss.Metadata": ("Layers’ timeline and other metadata", "レイヤーのタイムラインとその他のメタデータ", "레이어의 타임라인 및 기타 메타데이터", "图层的时间轴和其他元数据", "圖層的時間軸和其他後設資料"),
 }
 
 LANGS = ["en", "ja", "ko", "zh-Hans", "zh-Hant"]
