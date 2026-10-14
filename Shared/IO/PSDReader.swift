@@ -243,6 +243,7 @@ enum PSDReader {
         // Tiles become the picture's own patterns, those overlays use.
         let swatches = shared.tiles.map { PatternSwatch(name: $0.name, image: LayerImage($0.image), photoshopID: $0.id) }
         var patterns: [String: PatternChoice] = [:]
+        let tileImages = Dictionary(shared.tiles.map { ($0.id, $0.image) }, uniquingKeysWith: { first, _ in first })
         for (tile, swatch) in zip(shared.tiles, swatches) {
             patterns[tile.id] = PatternChoice(preset: nil, swatchID: swatch.id).carryingTile(from: swatches)
         }
@@ -362,6 +363,12 @@ enum PSDReader {
                 // over the canvas, its masks saying where it shows.
                 (record.left, record.top, record.right, record.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
                 decoded = Bitmap.solid(size: canvas, color: color)
+            }
+            if decoded == nil, let fill = fill(record, canvas: canvas, tiles: tileImages) {
+                // A gradient or pattern fill Photoshop kept no pixels for,
+                // likewise.
+                (record.left, record.top, record.right, record.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
+                decoded = fill
             }
             if decoded == nil, record.width <= 0 || record.height <= 0 {
                 // An empty layer, or a fill Easel cannot draw, which goes
@@ -560,7 +567,7 @@ enum PSDReader {
         "lyid",
     ])
 
-    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "PlLd", "plLd", "fxrp", "shmd", "artb", "vmsk", "vsms", "SoCo"])
+    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "PlLd", "plLd", "fxrp", "shmd", "artb", "vmsk", "vsms", "SoCo", "GdFl", "PtFl"])
 
     private static func readRecord(_ reader: inout BigEndianReader, isLarge: Bool) throws -> LayerRecord {
         var record = LayerRecord()
@@ -973,6 +980,29 @@ enum PSDReader {
             Bitmap.draw(vector.image.cgImage, in: CGRect(origin: .zero, size: size), context: context)
         }
         return LayerMask(image: LayerImage(both), isEnabled: user.isEnabled)
+    }
+
+    /// A gradient or pattern fill drawn over the canvas, aligned to its
+    /// vector mask's bounds when it has one.
+    private static func fill(_ record: LayerRecord, canvas: CGSize, tiles: [String: CGImage]) -> CGImage? {
+        guard record.blocks["GdFl"] != nil || record.blocks["PtFl"] != nil else { return nil }
+        let width = Int(canvas.width), height = Int(canvas.height)
+        var bounds: CGRect?
+        if let path = record.blocks["vmsk"] ?? record.blocks["vsms"],
+           let coverage = PSDVectorMask.coverage(path, width: width, height: height) {
+            var (minX, minY, maxX, maxY) = (width, height, -1, -1)
+            for y in 0..<height {
+                for x in 0..<width where coverage[y * width + x] > 0 {
+                    minX = min(minX, x)
+                    maxX = max(maxX, x)
+                    minY = min(minY, y)
+                    maxY = max(maxY, y)
+                }
+            }
+            if maxX >= minX { bounds = CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1) }
+        }
+        if let block = record.blocks["GdFl"] { return PSDFills.gradient(block, canvas: canvas, bounds: bounds) }
+        return record.blocks["PtFl"].flatMap { PSDFills.pattern($0, canvas: canvas, bounds: bounds, tiles: tiles) }
     }
 
     /// A colour fill's colour, from its `SoCo` block.
