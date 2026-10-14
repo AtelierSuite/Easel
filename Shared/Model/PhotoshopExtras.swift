@@ -109,4 +109,6 @@ struct PhotoshopDocumentExtras: Equatable, Sendable {
 
     var resources: [Resource] = []
     var blocks: [PhotoshopExtras.Block] = []
+    /// The ICC profile its colours were in, which they go back to.
+    var colorProfile: Data?
 }

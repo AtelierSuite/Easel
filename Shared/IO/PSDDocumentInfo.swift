@@ -8,6 +8,7 @@ enum PSDDocumentInfo {
     /// Image resources Easel reads.
     struct Resources {
         var colorSpace: CGColorSpace?
+        var colorProfile: Data?
         /// Pixels per inch.
         var resolution: Double?
         var guides: [Guide] = []
@@ -31,6 +32,7 @@ enum PSDDocumentInfo {
         switch id {
         case 1039:
             resources.colorSpace = CGColorSpace(iccData: Data(data) as CFData)
+            if resources.colorSpace != nil { resources.colorProfile = Data(data) }
         case 1005:
             // Fixed point, 16.16, always per inch whatever unit it shows in.
             if let fixed = try? reader.uint32(), fixed > 0 { resources.resolution = Double(fixed) / 65536 }

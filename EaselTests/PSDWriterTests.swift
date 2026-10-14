@@ -169,6 +169,37 @@ struct PSDWriterTests {
         #expect(again.layers[1].photoshop?.effects?.blocks.map(\.key) == ["lfx2"])
     }
 
+    @Test func coloursGoBackToTheFilesProfile() throws {
+        var composition = sample()
+        let srgb = try #require(CGColorSpace(name: CGColorSpace.sRGB)?.copyICCData() as Data?)
+        composition.photoshop = PhotoshopDocumentExtras(colorProfile: srgb)
+        let data = try PSDWriter.data(for: composition)
+        let read = try PSDReader.composition(from: data)
+        #expect(read.photoshop?.colorProfile == srgb)
+        // Red in sRGB is red again once read back.
+        #expect(TestImages.isRed(read.layers[0].image.cgImage, x: 2, y: 2))
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        let merged = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        #expect(merged.colorSpace?.name == CGColorSpace.sRGB || merged.colorSpace.flatMap { $0.copyICCData() as Data? } == srgb)
+    }
+
+    /// Easel's own adjustments go as the pixels they make of what is beneath.
+    @Test func adjustmentsPhotoshopLacksGoAsPixels() throws {
+        var composition = Composition(size: size, layers: [
+            Layer(name: "Back", image: LayerImage(TestImages.solid(RGBAColor(red: 1, green: 0, blue: 0), width: 20, height: 10)), canvasSize: size),
+        ])
+        var adjustment = composition.adjustmentLayer(.sepia)
+        adjustment.adjustment?.amount = 1
+        composition.layers.append(adjustment)
+        #expect(PSDAdjustments.blocks(for: adjustment.adjustment!) == nil)
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: composition))
+        #expect(read.layers.count == 2)
+        #expect(read.layers[1].adjustment == nil)
+        let written = TestImages.pixel(read.layers[1].image.cgImage, x: 5, y: 5)
+        let expected = TestImages.pixel(CompositionRenderer.render(composition), x: 5, y: 5)
+        #expect(written.alpha > 250 && abs(written.red - expected.red) < 4 && abs(written.green - expected.green) < 4)
+    }
+
     @Test func otherAppsSeeTheFlattenedPicture() throws {
         let data = try PSDWriter.data(for: sample())
         let image = try ImageCodec.decode(data)

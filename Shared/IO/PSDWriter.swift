@@ -26,10 +26,20 @@ enum PSDWriter {
         out.uint16(3)
         out.uint32(0)
 
+        // Colours go back to the profile the file had, or the app's own.
+        // Profiles that cannot be drawn into are left for the app's own.
+        let kept = composition.photoshop?.colorProfile.flatMap { data in
+            CGColorSpace(iccData: data as CFData).map { (space: $0, data: data) }
+        }.flatMap { kept in
+            CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: kept.space,
+                      bitmapInfo: Bitmap.bitmapInfo) == nil ? nil : kept
+        }
+        let space = kept?.space ?? Bitmap.colorSpace
+
         // Image resources: the colour profile the pixels are in, then the
         // resolution, guides and layer comps.
         var resources = PSDBinaryWriter()
-        if let icc = Bitmap.colorSpace.copyICCData() as Data? {
+        if let icc = kept?.data ?? Bitmap.colorSpace.copyICCData() as Data? {
             resources.ascii("8BIM")
             resources.uint16(1039)
             resources.uint16(0)
@@ -54,7 +64,7 @@ enum PSDWriter {
 
         // Layers.
         var info = PSDBinaryWriter()
-        let records = Self.records(for: composition)
+        let records = Self.records(for: composition, space: space)
         info.int16(records.count)
         for record in records { info.bytes(record.header) }
         for record in records { info.bytes(record.channels) }
@@ -92,7 +102,7 @@ enum PSDWriter {
 
         // The flattened picture.
         let merged = CompositionRenderer.render(composition)
-        guard let pixels = Bitmap.pixels(of: merged) else { throw ImageCodec.Failure.unwritable }
+        guard let pixels = Self.pixels(of: merged, in: space) else { throw ImageCodec.Failure.unwritable }
         let planes = Self.planes(pixels, rect: CGRect(x: 0, y: 0, width: width, height: height))
         out.uint16(1)
         let packed = planes.map { Self.packRows($0, width: width, height: height) }
@@ -118,7 +128,7 @@ enum PSDWriter {
 
     /// Records bottom first, with group folders around their layers: a
     /// divider below them and the folder's own record above.
-    private static func records(for composition: Composition) -> [Record] {
+    private static func records(for composition: Composition, space: CGColorSpace) -> [Record] {
         var records: [Record] = []
         var open: [UUID] = []
         func close(down to: Int) {
@@ -134,7 +144,21 @@ enum PSDWriter {
                                             blocks: blocks))
             }
         }
-        for layer in composition.layers {
+        let shown = composition.displayLayers
+        for (index, original) in composition.layers.enumerated() {
+            var layer = original
+            if layer.adjustment != nil, layer.photoshop?.adjustmentBlocks(for: layer) == nil,
+               layer.adjustment.flatMap(PSDAdjustments.blocks(for:)) == nil {
+                // An adjustment Photoshop has nothing like goes as what it
+                // makes of the layers beneath, shown as the adjustment is.
+                var plain = layer.with(opacity: 1, blendMode: .normal)
+                plain.mask = nil
+                plain.isVisible = true
+                let below = shown[..<index].filter(\.isVisible)
+                layer.image = LayerImage(CompositionRenderer.render(layers: below + [plain], size: composition.size))
+                layer.adjustment = nil
+                layer.transform = LayerTransform(position: CGPoint(x: composition.size.width / 2, y: composition.size.height / 2))
+            }
             let chain = composition.ancestors(of: layer.groupID).reversed().map(\.id)
             var common = 0
             while common < min(open.count, chain.count), open[common] == chain[common] { common += 1 }
@@ -152,14 +176,15 @@ enum PSDWriter {
                 extra = [("lyid", layerID.data),
                          ("shmd", PSDDocumentInfo.metadataBlock(for: layer, comps: composition.layerComps, layerID: number))]
             }
-            records.append(layerRecord(layer, canvasSize: composition.size, swatches: composition.patterns, extraBlocks: extra))
+            records.append(layerRecord(layer, canvasSize: composition.size, swatches: composition.patterns, space: space, extraBlocks: extra))
         }
         close(down: 0)
         return records
     }
 
     private static func layerRecord(
-        _ layer: Layer, canvasSize: CGSize, swatches: [PatternSwatch], extraBlocks: [(key: String, data: [UInt8])] = []
+        _ layer: Layer, canvasSize: CGSize, swatches: [PatternSwatch], space: CGColorSpace,
+        extraBlocks: [(key: String, data: [UInt8])] = []
     ) -> Record {
         // An adjustment Photoshop has a record for is written as one, with
         // no pixels; it may take some of its strength from the opacity.
@@ -234,7 +259,7 @@ enum PSDWriter {
         let frame = drawnFrame(for: layer, canvasSize: canvasSize)
         plain.transform.position.x -= frame.minX
         plain.transform.position.y -= frame.minY
-        let pixels = adjustment == nil ? Bitmap.pixels(of: CompositionRenderer.render(layers: [plain], size: frame.size)) : nil
+        let pixels = adjustment == nil ? Self.pixels(of: CompositionRenderer.render(layers: [plain], size: frame.size), in: space) : nil
         let rect = pixels.map { opaqueBounds($0).offsetBy(dx: frame.minX, dy: frame.minY) } ?? .zero
         // A mask over an adjustment covers the canvas; otherwise the pixels.
         let maskRect = adjustment == nil ? rect : CGRect(origin: .zero, size: canvasSize)
@@ -380,6 +405,22 @@ enum PSDWriter {
     }
 
     // MARK: - Pixels
+
+    /// An image's pixels in the colour space the file is written in.
+    private static func pixels(of image: CGImage, in space: CGColorSpace) -> PixelBuffer? {
+        guard space !== Bitmap.colorSpace else { return Bitmap.pixels(of: image) }
+        let width = image.width, height = image.height
+        var data = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = data.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: space, bitmapInfo: Bitmap.bitmapInfo
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        return drawn ? PixelBuffer(width: width, height: height, bytes: data) : nil
+    }
 
     /// The canvas, grown to take in a layer that is only moved, whole
     /// pixels at a time, so its pixels go out as they are, past the

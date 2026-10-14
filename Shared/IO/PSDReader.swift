@@ -91,8 +91,9 @@ enum PSDReader {
         composition.resolution = resources.resolution
         composition.guides = resources.guides
         composition.artboards = extras.artboards
-        if !resources.kept.isEmpty || !extras.globalBlocks.isEmpty {
-            composition.photoshop = PhotoshopDocumentExtras(resources: resources.kept, blocks: extras.globalBlocks)
+        let profile = mode == .rgb ? resources.colorProfile : nil
+        if !resources.kept.isEmpty || !extras.globalBlocks.isEmpty || profile != nil {
+            composition.photoshop = PhotoshopDocumentExtras(resources: resources.kept, blocks: extras.globalBlocks, colorProfile: profile)
         }
         if let comps = resources.comps {
             composition.layerComps = PSDDocumentInfo.layerComps(comps, layers: layers, settings: extras.compSettings)
