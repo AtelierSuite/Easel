@@ -106,6 +106,40 @@ struct PXDWriterTests {
         #expect(abs(sky.transform.rotation + .pi / 2) < 0.001)
     }
 
+    /// Pixelmator keeps a lock and a clipping mask as bits of the flags,
+    /// which come in and go back with the rest.
+    @Test func locksAndClippingAreWrittenBack() throws {
+        let original = try document()
+        var composition = try PXDReader.composition(from: original)
+        #expect(composition.layers.allSatisfy { !$0.isLocked && !$0.isClipped })
+        let red = try #require(composition.layers.firstIndex { $0.name == "Red" })
+        composition.layers[red].isClipped = true
+        let blue = try #require(composition.layers.firstIndex { $0.name == "Blue" })
+        composition.layers[blue].isLocked = true
+        var group = LayerGroup(name: "Folder")
+        group.isLocked = true
+        composition.groups.append(group)
+        composition.layers[blue].groupID = group.id
+        composition.normalizeGroups()
+        let written = try PXDWriter.fileWrapper(for: composition, original: original)
+
+        let reread = try PXDReader.composition(from: written)
+        #expect(try layer(reread, "Red").isClipped)
+        #expect(try !layer(reread, "Red").isLocked)
+        #expect(try layer(reread, "Blue").isLocked)
+        #expect(try !layer(reread, "Blue").isClipped)
+        #expect(reread.groups.first?.isLocked == true)
+
+        // And off again.
+        var unlocked = reread
+        for index in unlocked.layers.indices {
+            unlocked.layers[index].isLocked = false
+            unlocked.layers[index].isClipped = false
+        }
+        let again = try PXDReader.composition(from: try PXDWriter.fileWrapper(for: unlocked, original: written))
+        #expect(again.layers.allSatisfy { !$0.isLocked && !$0.isClipped })
+    }
+
     /// A text layer Easel did not read keeps its row, and stays just above
     /// the layer it was above when the others are reordered.
     @Test func unreadLayersStayWhereTheyWere() throws {

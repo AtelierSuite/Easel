@@ -9,8 +9,8 @@ import UniformTypeIdentifiers
 ///
 /// Every file the edits leave alone is copied through as it was — in a ZIP,
 /// byte for byte — and in the layer table only the settings Easel knows are
-/// touched: name, place, size, angle, opacity, visibility, blend mode, mask,
-/// order and grouping. Layers Easel did not read, such as text and shapes,
+/// touched: name, place, size, angle, opacity, visibility, lock, clipping,
+/// blend mode, mask, order and grouping. Layers Easel did not read, such as text and shapes,
 /// keep their rows and stay where they were among the layers around them.
 /// Painted layers whose pixels changed are saved again in the format they
 /// came in; placed pictures and new layers are saved as PNG pictures.
@@ -511,7 +511,8 @@ private struct Patch {
     private mutating func updateGroup(_ group: LayerGroup, rowID: Int64, isNew: Bool) {
         let info = isNew ? PXDFormat.Info(values: database.info(for: rowID)) : structure.info[rowID] ?? PXDFormat.Info(values: [:])
         if info.name != group.name { set("name", Value.makeString(group.name), rowID: rowID, old: info["name"]) }
-        let flags = info.flags & ~PXDFormat.visibleFlag | (group.isVisible ? PXDFormat.visibleFlag : 0)
+        let flags = info.flags & ~(PXDFormat.visibleFlag | PXDFormat.lockedFlag)
+            | (group.isVisible ? PXDFormat.visibleFlag : 0) | (group.isLocked ? PXDFormat.lockedFlag : 0)
         if flags != info.flags || info["flags"] == nil { set("flags", Value.makeUInt64(flags), rowID: rowID, old: info["flags"]) }
         setOpacity(group.opacity, info: info, rowID: rowID)
         // No blend mode of its own is Pixelmator's pass-through.
@@ -587,8 +588,10 @@ private struct Patch {
             || oldExtent.map { abs($0.x - newExtent.x) > 1e-3 || abs($0.y - newExtent.y) > 1e-3 } ?? true
             || min(turn, 360 - turn) > 1e-6
 
-        // Visibility, and whether the layer has a mask.
-        var flags = info.flags & ~PXDFormat.visibleFlag | (layer.isVisible ? PXDFormat.visibleFlag : 0)
+        // Visibility, lock, clipping, and whether the layer has a mask.
+        var flags = info.flags & ~(PXDFormat.visibleFlag | PXDFormat.lockedFlag | PXDFormat.clippedFlag)
+            | (layer.isVisible ? PXDFormat.visibleFlag : 0) | (layer.isLocked ? PXDFormat.lockedFlag : 0)
+            | (layer.isClipped ? PXDFormat.clippedFlag : 0)
         writeMask(plan, info: info, position: position, angle: angle, moved: moved || isNew, flags: &flags)
         if isNew || flags != info.flags { set("flags", Value.makeUInt64(flags), rowID: rowID, old: info["flags"]) }
     }

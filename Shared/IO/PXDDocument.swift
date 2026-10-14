@@ -15,6 +15,10 @@ enum PXDFormat {
 
     /// Bits of a layer's `flags`.
     static let visibleFlag: UInt64 = 0x01
+    /// The layer, or group, cannot be changed.
+    static let lockedFlag: UInt64 = 0x02
+    /// The layer shows only where the layer below it does.
+    static let clippedFlag: UInt64 = 0x08
     /// The layer is another's mask, listed under it.
     static let maskFlag: UInt64 = 0x10
     /// The layer has a mask listed under it.
@@ -129,6 +133,8 @@ enum PXDFormat {
         var flags: UInt64 { values["flags"].map(Value.uint64) ?? visibleFlag }
         var isMask: Bool { flags & maskFlag != 0 }
         var isVisible: Bool { flags & visibleFlag != 0 }
+        var isLocked: Bool { flags & lockedFlag != 0 }
+        var isClipped: Bool { flags & clippedFlag != 0 }
         var name: String? { values["name"].map(Value.string) }
 
         /// The normalised opacity when there is one, which is exact, else

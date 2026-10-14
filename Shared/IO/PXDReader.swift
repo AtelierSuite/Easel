@@ -57,6 +57,7 @@ enum PXDReader {
                         name: info.name ?? String(localized: "Layer.DefaultName.Group"),
                         parentID: groupID, isVisible: info.isVisible, opacity: info.opacity
                     )
+                    folder.isLocked = info.isLocked
                     folder.blendMode = info.blendTag.flatMap { $0 == "pass" ? nil : PSDReader.blendMode($0) }
                     folder.pixelmatorID = row.identifier
                     groups.append(folder)
@@ -123,6 +124,8 @@ enum PXDReader {
             blendMode: info.blendTag.map(PSDReader.blendMode) ?? .normal,
             isVisible: info.isVisible
         )
+        layer.isClipped = info.isClipped
+        layer.isLocked = info.isLocked
         layer.pixelmator = PixelmatorSource(identifier: row.identifier, image: pixels)
         return layer
     }
