@@ -656,9 +656,7 @@ private struct StrokePreview: View {
                     group.opacity = 1
                     group.blendMode = .normal
                     if stroke.settings.tip == .watercolor && !stroke.isEraser {
-                        if let wash = stroke.wash(canvasSize: canvasSize) {
-                            group.draw(Image(decorative: wash.image, scale: 1), in: wash.rect.applying(transform))
-                        }
+                        drawWash(of: stroke, in: &group, transform: transform)
                         return
                     }
                     if stroke.usesDabs {
@@ -717,11 +715,41 @@ extension StrokePreview {
         drawLine(of: stroke, in: &context, color: stroke.glowCore.color, transform: transform, scale: scale, widthScale: 0.3)
     }
 
+    /// A watercolour's wash, as `Stroke.wash` works it out: the part that
+    /// can no longer change drawn already, and around the end of the
+    /// stroke, worked out again.
+    fileprivate func drawWash(of stroke: Stroke, in context: inout GraphicsContext, transform: CGAffineTransform) {
+        let raster = StrokeRasterCache.shared.raster(for: stroke, canvasSize: canvasSize)
+        var settled = context
+        if let tail = raster.tailWash {
+            let around = raster.tiles.reduce(tail.rect) { $0.union($1.rect) }
+            var outside = Path(around.applying(transform))
+            outside.addRect(tail.rect.applying(transform))
+            settled.clip(to: outside, style: FillStyle(eoFill: true))
+        }
+        for tile in raster.tiles {
+            settled.draw(Image(decorative: tile.image, scale: 1), in: tile.rect.applying(transform))
+        }
+        if let tail = raster.tailWash {
+            context.draw(Image(decorative: tail.image, scale: 1), in: tail.rect.applying(transform))
+        }
+    }
+
     /// A stamped stroke's dabs, placed as `Stroke.drawDabs` places them.
     fileprivate func drawDabs(of stroke: Stroke, in context: inout GraphicsContext, transform: CGAffineTransform, scale: Double) {
         let color = stroke.isEraser ? RGBAColor.black : stroke.settings.color
+        // What of the stroke can no longer change is drawn already; only
+        // the dabs at its end are stamped here.
+        let raster = StrokeRasterCache.shared.raster(for: stroke, canvasSize: canvasSize)
+        for tile in raster.tiles {
+            context.draw(
+                Image(decorative: tile.image, scale: 1).interpolation(stroke.settings.tip == .pixel ? .none : .high),
+                in: tile.rect.applying(transform)
+            )
+        }
+        let dabs = raster.tail
         if stroke.settings.tip == .pixel {
-            for dab in stroke.dabs {
+            for dab in dabs {
                 var square = context
                 square.opacity = dab.opacity
                 square.fill(
@@ -734,7 +762,7 @@ extension StrokePreview {
         if stroke.pickup != nil, !stroke.isEraser {
             // Mixed paint: the white tip, coloured dab by dab.
             let tip = context.resolve(Image(decorative: stroke.tipImage(in: .white), scale: 1))
-            for dab in stroke.dabs {
+            for dab in dabs {
                 var stamp = context
                 let center = dab.center.applying(transform)
                 stamp.translateBy(x: center.x, y: center.y)
@@ -748,7 +776,7 @@ extension StrokePreview {
             return
         }
         var tips: [RGBAColor: GraphicsContext.ResolvedImage] = [:]
-        for dab in stroke.dabs {
+        for dab in dabs {
             let paint = stroke.paint(of: dab, brush: color)
             let tip = tips[paint] ?? context.resolve(Image(decorative: stroke.tipImage(in: paint), scale: 1))
             tips[paint] = tip

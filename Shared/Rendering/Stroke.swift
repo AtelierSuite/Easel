@@ -388,13 +388,23 @@ struct Stroke: Equatable, Sendable {
             context.translateBy(x: -rect.minX, y: -rect.minY)
             drawDabs(in: context, color: .white)
         }
+        return washImage(of: shape, at: rect).map { ($0, rect) }
+    }
+
+    /// How far the blur reaches that a wash's pooling is found by, each of
+    /// its two passes.
+    var washBlurRadius: Int { max(1, Int(settings.size * 0.12)) }
+
+    /// The wash over `rect` of the canvas, from `shape`, the dabs drawn
+    /// there in white.
+    func washImage(of shape: CGImage, at rect: CGRect) -> CGImage? {
         guard let pixels = Bitmap.pixels(of: shape) else { return nil }
         let width = pixels.width, height = pixels.height
         let coverage = (0..<(width * height)).map { Float(pixels.bytes[$0 * 4 + 3]) / 255 }
         // Paint runs to the edge as it dries: wherever the wash is fuller
         // than its surroundings, it pools.
         var surroundings = coverage
-        Healer.boxBlur(&surroundings, width: width, height: height, radius: max(1, Int(settings.size * 0.12)), passes: 2)
+        Healer.boxBlur(&surroundings, width: width, height: height, radius: washBlurRadius, passes: 2)
         let paint = settings.color.cgColor.converted(to: Bitmap.colorSpace, intent: .defaultIntent, options: nil)?.components
             ?? [settings.color.red, settings.color.green, settings.color.blue, 1]
         var bytes = [UInt8](repeating: 0, count: width * height * 4)
@@ -415,8 +425,7 @@ struct Stroke: Equatable, Sendable {
                 bytes[index * 4 + 3] = UInt8(alpha * 255)
             }
         }
-        guard let image = PixelBuffer(width: width, height: height, bytes: bytes).makeImage() else { return nil }
-        return (image, rect)
+        return PixelBuffer(width: width, height: height, bytes: bytes).makeImage()
     }
 
     /// A fixed noise value, 0..<1, for a canvas pixel.

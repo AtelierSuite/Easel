@@ -307,6 +307,40 @@ struct BrushDab: Equatable, Sendable {
     var square: CGRect {
         CGRect(x: center.x - diameter / 2, y: center.y - diameter / 2, width: diameter, height: diameter)
     }
+
+    /// The square it can mark, however it is turned.
+    var reach: CGRect {
+        let radius = diameter * 0.75 + 1
+        return CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+    }
+}
+
+/// How far along a stroke its dabs have been worked out, with all it takes
+/// to carry on from there as more of the stroke is drawn.
+struct DabWalk {
+    var dabs: [BrushDab] = []
+    /// The last point walked to.
+    fileprivate(set) var reached = 0
+    fileprivate var random: SeededRandom
+    fileprivate var carried = 0.0
+    fileprivate var covered = 0.0
+    /// For a brush that picks up paint: how many dabs are mixed, what is on
+    /// the brush after them, and where the last of them was.
+    fileprivate var mixed = 0
+    fileprivate var load: (Double, Double, Double)?
+    fileprivate var lastMixed: CGPoint?
+
+    fileprivate init(random: SeededRandom) {
+        self.random = random
+    }
+
+    /// The walk carried on from here, with none of the dabs so far.
+    var continuing: DabWalk {
+        var walk = self
+        walk.dabs = []
+        walk.mixed = 0
+        return walk
+    }
 }
 
 extension Stroke {
@@ -341,61 +375,37 @@ extension Stroke {
     /// Where each dab of a stamped stroke goes, the same each time it is
     /// worked out, so the preview and the painted result match.
     var dabs: [BrushDab] {
-        let tip = settings.tip
-        guard let first = points.first else { return [] }
-        var random = SeededRandom(seed: UInt64(points.count == 1 ? 1 : 7))
         let widths = widths
-        let follows = settings.dynamics.followsStroke
-        let scatter = scatter, sizeJitter = sizeJitter
+        guard var walk = startDabs(widths: widths) else { return [] }
+        walkDabs(&walk, through: points.count - 1, widths: widths)
+        return walk.dabs
+    }
+
+    /// The first dabs, where the stroke starts, as a walk along it to carry
+    /// on from. Nil for a stroke with no points.
+    func startDabs(widths: [Double]) -> DabWalk? {
+        guard let first = points.first else { return nil }
+        var walk = DabWalk(random: SeededRandom(seed: UInt64(points.count == 1 ? 1 : 7)))
         let colors = jitteredColors
-        func dab(at point: StrokePoint, width: Double, heading: Double, along: Double) -> BrushDab {
-            var diameter = max(1, width * tip.dabScale)
-            if sizeJitter > 0 { diameter = max(1, diameter * (1 - sizeJitter * random.next())) }
-            var opacity = tip.flow
-            if let reach = tip.reachBeforeDry {
-                // Fades out over its reach, never quite to nothing.
-                opacity *= max(0.15, 1 - along / (settings.size * reach))
-            }
-            // Laid on its side, a dry tip shades broad and light.
-            if tip.grain > 0 {
-                let lean = tilt(at: point)
-                diameter *= 1 + lean * 1.5
-                opacity *= 1 - lean * 0.45
-            }
-            var center = point.location
-            var angle = tip.isNib ? nibAngle(at: point) : random.next() * 2 * .pi
-            if follows || tip.followsStroke { angle = heading + .pi / 2 }
-            if tip.wobble > 0 {
-                center.x += (random.next() - 0.5) * diameter * tip.wobble
-                center.y += (random.next() - 0.5) * diameter * tip.wobble
-            }
-            if scatter > 0 {
-                // Anywhere in a disc around the line, evenly over its area.
-                let toward = random.next() * 2 * .pi, away = sqrt(random.next()) * scatter * width
-                center.x += cos(toward) * away
-                center.y += sin(toward) * away
-            }
-            if tip == .round || tip == .pixel { angle = 0 }
-            if tip == .pixel {
-                // Whole pixels, lined up with the canvas's.
-                diameter = max(1, diameter.rounded())
-                center.x = (center.x - diameter / 2).rounded() + diameter / 2
-                center.y = (center.y - diameter / 2).rounded() + diameter / 2
-            }
-            let color = colors.isEmpty ? nil : colors[min(Int(random.next() * Double(colors.count)), colors.count - 1)]
-            return BrushDab(
-                center: center, diameter: diameter, angle: angle, roundness: tip.roundness, opacity: opacity,
-                color: color
-            )
-        }
         // The first dab faces the way the stroke sets off.
         let start = points.first { $0.location != first.location }?.location ?? first.location
         let heading = atan2(start.y - first.location.y, start.x - first.location.x)
-        var result = (0..<tip.dabsPerStep).map { _ in dab(at: first, width: widths[0], heading: heading, along: 0) }
-        // Walks the stroke, dropping a dab every `spacing` of the brush's
-        // width at the point reached.
-        var carried = 0.0, covered = 0.0
-        for index in 1..<max(points.count, 1) {
+        for _ in 0..<settings.tip.dabsPerStep {
+            walk.dabs.append(dab(at: first, width: widths[0], heading: heading, along: 0, colors: colors, random: &walk.random))
+        }
+        if let pickup, !isEraser { mix(&walk, from: pickup) }
+        return walk
+    }
+
+    /// Carries `walk` on along the stroke as far as point `end`, dropping a
+    /// dab every `spacing` of the brush's width at the point reached.
+    /// Walked in pieces or all at once, the dabs come out the same.
+    func walkDabs(_ walk: inout DabWalk, through end: Int, widths: [Double]) {
+        let tip = settings.tip
+        let colors = jitteredColors
+        while walk.reached < min(end, points.count - 1) {
+            let index = walk.reached + 1
+            walk.reached = index
             let from = points[index - 1], to = points[index]
             let length = hypot(to.location.x - from.location.x, to.location.y - from.location.y)
             guard length > 0 else { continue }
@@ -404,13 +414,13 @@ extension Stroke {
             var travelled = 0.0
             while true {
                 let step = max(0.5, width(at: travelled / length) * tip.spacing)
-                let needed = step - carried
+                let needed = step - walk.carried
                 guard travelled + needed <= length else {
-                    carried += length - travelled
+                    walk.carried += length - travelled
                     break
                 }
                 travelled += needed
-                carried = 0
+                walk.carried = 0
                 let at = travelled / length
                 let point = StrokePoint(
                     location: CGPoint(
@@ -421,26 +431,79 @@ extension Stroke {
                     azimuth: to.azimuth, altitude: to.altitude
                 )
                 for _ in 0..<tip.dabsPerStep {
-                    result.append(dab(at: point, width: width(at: at), heading: heading, along: covered + travelled))
+                    walk.dabs.append(dab(
+                        at: point, width: width(at: at), heading: heading, along: walk.covered + travelled,
+                        colors: colors, random: &walk.random
+                    ))
                 }
             }
-            covered += length
+            walk.covered += length
         }
-        if let pickup, !isEraser { mix(&result, from: pickup) }
-        return result
+        if let pickup, !isEraser { mix(&walk, from: pickup) }
     }
 
-    /// Works out each dab's colour as a loaded brush mixes it: paint picked
-    /// up from where it passes stirs into what is on the brush, so the
-    /// stroke starts in the brush's colour and drifts toward what it drags
-    /// through.
-    private func mix(_ dabs: inout [BrushDab], from pickup: PaintSource) {
-        let p3 = settings.color.cgColor.converted(to: Bitmap.colorSpace, intent: .defaultIntent, options: nil)?.components
-            ?? [settings.color.red, settings.color.green, settings.color.blue]
-        var load = (Double(p3[0]), Double(p3[1]), Double(p3[2]))
-        var last = dabs.first?.center
-        for index in dabs.indices {
-            let dab = dabs[index]
+    /// One dab at `point`, `along` the stroke from its start.
+    private func dab(
+        at point: StrokePoint, width: Double, heading: Double, along: Double, colors: [RGBAColor],
+        random: inout SeededRandom
+    ) -> BrushDab {
+        let tip = settings.tip
+        var diameter = max(1, width * tip.dabScale)
+        if sizeJitter > 0 { diameter = max(1, diameter * (1 - sizeJitter * random.next())) }
+        var opacity = tip.flow
+        if let reach = tip.reachBeforeDry {
+            // Fades out over its reach, never quite to nothing.
+            opacity *= max(0.15, 1 - along / (settings.size * reach))
+        }
+        // Laid on its side, a dry tip shades broad and light.
+        if tip.grain > 0 {
+            let lean = tilt(at: point)
+            diameter *= 1 + lean * 1.5
+            opacity *= 1 - lean * 0.45
+        }
+        var center = point.location
+        var angle = tip.isNib ? nibAngle(at: point) : random.next() * 2 * .pi
+        if settings.dynamics.followsStroke || tip.followsStroke { angle = heading + .pi / 2 }
+        if tip.wobble > 0 {
+            center.x += (random.next() - 0.5) * diameter * tip.wobble
+            center.y += (random.next() - 0.5) * diameter * tip.wobble
+        }
+        let scatter = scatter
+        if scatter > 0 {
+            // Anywhere in a disc around the line, evenly over its area.
+            let toward = random.next() * 2 * .pi, away = sqrt(random.next()) * scatter * width
+            center.x += cos(toward) * away
+            center.y += sin(toward) * away
+        }
+        if tip == .round || tip == .pixel { angle = 0 }
+        if tip == .pixel {
+            // Whole pixels, lined up with the canvas's.
+            diameter = max(1, diameter.rounded())
+            center.x = (center.x - diameter / 2).rounded() + diameter / 2
+            center.y = (center.y - diameter / 2).rounded() + diameter / 2
+        }
+        let color = colors.isEmpty ? nil : colors[min(Int(random.next() * Double(colors.count)), colors.count - 1)]
+        return BrushDab(
+            center: center, diameter: diameter, angle: angle, roundness: tip.roundness, opacity: opacity, color: color
+        )
+    }
+
+    /// Works out the colour of each dab not yet mixed as a loaded brush
+    /// mixes it: paint picked up from where it passes stirs into what is on
+    /// the brush, so the stroke starts in the brush's colour and drifts
+    /// toward what it drags through.
+    private func mix(_ walk: inout DabWalk, from pickup: PaintSource) {
+        var load: (Double, Double, Double)
+        if let loaded = walk.load {
+            load = loaded
+        } else {
+            let p3 = settings.color.cgColor.converted(to: Bitmap.colorSpace, intent: .defaultIntent, options: nil)?.components
+                ?? [settings.color.red, settings.color.green, settings.color.blue]
+            load = (Double(p3[0]), Double(p3[1]), Double(p3[2]))
+        }
+        var last = walk.lastMixed ?? walk.dabs.first?.center
+        for index in walk.mixed..<walk.dabs.count {
+            let dab = walk.dabs[index]
             let travelled = last.map { hypot(dab.center.x - $0.x, dab.center.y - $0.y) } ?? 0
             last = dab.center
             if let found = pickup.color(around: dab.center, reach: dab.diameter * 0.3) {
@@ -452,9 +515,12 @@ extension Stroke {
                 let blue: Double = load.2 + (found.blue - load.2) * take
                 load = (red, green, blue)
             }
-            dabs[index].color = CGColor(colorSpace: Bitmap.colorSpace, components: [load.0, load.1, load.2, 1])
+            walk.dabs[index].color = CGColor(colorSpace: Bitmap.colorSpace, components: [load.0, load.1, load.2, 1])
                 .flatMap(RGBAColor.init) ?? settings.color
         }
+        walk.mixed = walk.dabs.count
+        walk.load = load
+        walk.lastMixed = last
     }
 
     /// The angle a flat nib lies at for this point: across the way Apple
@@ -490,17 +556,26 @@ extension Stroke {
     /// Stamps the dabs in solid `color`, or each in its own, into
     /// `context`, then lets the paper show through as the tip's grain asks.
     func drawDabs(in context: CGContext, color: RGBAColor) {
-        defer {
-            if let grain = PaperGrain.image(for: settings.tip) {
-                context.saveGState()
-                context.clip(to: bounds)
-                context.setBlendMode(.destinationIn)
-                context.setAlpha(1)
-                let side = Double(grain.width) * grainScale
-                context.draw(grain, in: CGRect(x: 0, y: 0, width: side, height: side), byTiling: true)
-                context.restoreGState()
-            }
-        }
+        stamp(dabs, in: context, color: color)
+        applyGrain(in: context)
+    }
+
+    /// Lets the paper show through what is drawn in `context`, as the tip's
+    /// grain asks.
+    func applyGrain(in context: CGContext) {
+        guard let grain = PaperGrain.image(for: settings.tip) else { return }
+        context.saveGState()
+        context.clip(to: bounds)
+        context.setBlendMode(.destinationIn)
+        context.setAlpha(1)
+        let side = Double(grain.width) * grainScale
+        context.draw(grain, in: CGRect(x: 0, y: 0, width: side, height: side), byTiling: true)
+        context.restoreGState()
+    }
+
+    /// Stamps `dabs`, some of the stroke's, in solid `color` or each in its
+    /// own, into `context`.
+    func stamp(_ dabs: [BrushDab], in context: CGContext, color: RGBAColor) {
         if settings.tip == .pixel {
             // Squares filled without smoothing, so every pixel is all or
             // nothing.
