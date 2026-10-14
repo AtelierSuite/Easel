@@ -272,6 +272,8 @@ private struct Patch {
     let parts: PXDWriter.Parts
     let structure: PXDFormat.Structure
     let canvas: CGSize
+    /// The canvas as the document had it.
+    let oldCanvas: CGSize
     let timestamp = Date().timeIntervalSinceReferenceDate
     /// Whether anything in the document was changed.
     private(set) var changed = false
@@ -285,6 +287,7 @@ private struct Patch {
         self.parts = parts
         structure = PXDFormat.Structure(database: database) { parts.data($0) }
         canvas = CGSize(width: composition.size.width.rounded(), height: composition.size.height.rounded())
+        oldCanvas = database.documentSize() ?? canvas
     }
 
     /// A layer as it will be written.
@@ -355,6 +358,7 @@ private struct Patch {
         }
 
         arrange(tree: tree, kept: kept, used: usedIdentifiers)
+        followCanvas()
         resizeCanvasIfNeeded()
         forgetDeletedSelection()
 
@@ -909,6 +913,55 @@ private struct Patch {
     }
 
     // MARK: Document
+
+    /// Moves what Easel did not read — text, shapes, layers it could not
+    /// decode, and masks it does not write — the way changes to the canvas
+    /// moved the layers since the document was read or last written.
+    private mutating func followCanvas() {
+        let applied = database.canvasChange()
+        guard composition.canvasChange != applied || oldCanvas != canvas else { return }
+        let change = composition.canvasChange.since(applied)
+        // Measured from the bottom, content moves when only the canvas's
+        // height changed, too.
+        if change.isAffine, !change.isIdentity || oldCanvas.height != canvas.height {
+            var remaining: Set<String> = []
+            database.query("select identifier from document_layers") { statement in
+                if let identifier = PXDFormat.Database.text(statement, 0) { remaining.insert(identifier) }
+            }
+            for row in structure.rows where remaining.contains(row.identifier) && row.type != PXDFormat.groupLayer {
+                guard let info = structure.info[row.id], !structure.layers.contains(row.identifier) else { continue }
+                // A bitmap mask Easel read is placed with its layer already.
+                if info.isMask, let parent = row.parent, structure.layers.contains(parent), structure.masks[parent] == row.identifier {
+                    continue
+                }
+                move(row, info: info, by: change)
+            }
+        }
+        if let note = try? JSONEncoder().encode(composition.canvasChange) {
+            database.execute("insert into document_info (key, value) values (?, ?)", [PXDFormat.canvasChangeKey, [UInt8](note)])
+        }
+        changed = true
+    }
+
+    private mutating func move(_ row: PXDFormat.LayerRow, info: PXDFormat.Info, by change: CanvasChange) {
+        guard let position = info.position else { return }
+        let backing = info.backingScale
+        // From Pixelmator's points, up from the bottom left, to the canvas's
+        // pixels and back.
+        let placement = change.applied(to: LayerTransform(
+            position: CGPoint(x: position.x * backing, y: oldCanvas.height - position.y * backing),
+            scaleX: info.scale.x, scaleY: info.scale.y, rotation: info.rotation
+        ))
+        var scale = CGPoint(x: placement.scaleX, y: placement.scaleY)
+        let angle = PXDFormat.Info.angle(rotation: placement.rotation, scale: scale)
+        // Text turns with the canvas but, as Pixelmator keeps it, is never
+        // mirrored.
+        if row.type == PXDFormat.textLayer { scale = CGPoint(x: abs(scale.x), y: abs(scale.y)) }
+        setPlacement(
+            position: CGPoint(x: placement.position.x / backing, y: (canvas.height - placement.position.y) / backing),
+            size: info.size ?? .zero, scale: scale, angle: angle, info: info, rowID: row.id
+        )
+    }
 
     private mutating func resizeCanvasIfNeeded() {
         let width = Int(canvas.width), height = Int(canvas.height)

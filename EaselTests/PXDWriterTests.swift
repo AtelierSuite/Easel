@@ -240,6 +240,41 @@ struct PXDWriterTests {
         }
     }
 
+    /// The text layer's place, scale and angle, in Pixelmator's points.
+    private func textPlacement(_ wrapper: FileWrapper) throws -> (position: CGPoint, scale: CGPoint, angle: Double) {
+        let values = PXDFormat.Info(values: try info(wrapper, "TEXT"))
+        return (try #require(values.position), values.scale, values.angle)
+    }
+
+    /// Text Easel did not read moves as the canvas moved the layers, once:
+    /// saving again does not move it twice.
+    @Test func unreadLayersFollowTheCanvas() throws {
+        let original = try document()
+        var composition = try PXDReader.composition(from: original)
+        // Grown to the right and down, the top left staying put: the text,
+        // measured up from the bottom, rises by the two rows added.
+        composition.resize(to: CGSize(width: 6, height: 6), mode: .anchor, anchor: .zero)
+        let grown = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try textPlacement(grown).position == CGPoint(x: 2, y: 4))
+        #expect(try PXDWriter.fileWrapper(for: composition, original: grown).regularFileContents == grown.regularFileContents)
+        // Read again, nothing has moved since.
+        #expect(try PXDReader.composition(from: grown).canvasChange == composition.canvasChange)
+
+        // Doubled and flipped across: text is moved and scaled, but as in
+        // Pixelmator, not mirrored.
+        composition.resizeImage(to: CGSize(width: 12, height: 12))
+        composition.flip(horizontal: true)
+        let flipped = try PXDWriter.fileWrapper(for: composition, original: grown)
+        let placement = try textPlacement(flipped)
+        #expect(placement.position == CGPoint(x: 8, y: 8))
+        #expect(placement.scale == CGPoint(x: 2, y: 2))
+
+        // A quarter turn clockwise: the text turns with it.
+        composition.rotate(clockwise: true)
+        let turned = try textPlacement(try PXDWriter.fileWrapper(for: composition, original: flipped))
+        #expect(abs(turned.angle - 90) < 1e-9 || abs(turned.angle - 270) < 1e-9)
+    }
+
     /// A text layer Easel did not read keeps its row, and stays just above
     /// the layer it was above when the others are reordered.
     @Test func unreadLayersStayWhereTheyWere() throws {

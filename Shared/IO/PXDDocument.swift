@@ -11,6 +11,7 @@ import zlib
 enum PXDFormat {
     /// `document_layers.type`.
     static let pixelLayer = 1
+    static let textLayer = 2
     static let groupLayer = 4
     static let adjustmentsLayer = 6
 
@@ -29,6 +30,8 @@ enum PXDFormat {
     static let maskIndex = 32767
 
     static let databaseName = "metadata.info"
+    /// Easel's own note of how it moved the layers, in `document_info`.
+    static let canvasChangeKey = "easel-canvas-change"
 
     static func bitmapPath(_ identifier: String) -> String { "data/\(identifier)" }
     static func originalPath(_ identifier: String) -> String { "data/\(identifier)-OriginalContentSource" }
@@ -556,6 +559,17 @@ enum PXDFormat {
         }
 
         /// The canvas size: two little-endian integers.
+        /// How Easel last moved the canvas's layers, which content it did
+        /// not read has followed already.
+        func canvasChange() -> CanvasChange {
+            var change = CanvasChange()
+            query("select value from document_info where key = '\(PXDFormat.canvasChangeKey)'") { statement in
+                let bytes = Self.blob(statement, 0)
+                if let decoded = try? JSONDecoder().decode(CanvasChange.self, from: Data(bytes)) { change = decoded }
+            }
+            return change
+        }
+
         func documentSize() -> CGSize? {
             var size: CGSize?
             query("select value from document_info where key = 'size'") { statement in

@@ -103,6 +103,8 @@ enum PXDReader {
         var composition = Composition(size: canvas, layers: layers, groups: groups)
         composition.normalizeGroups()
         composition.needsCopyBeforeEditing = lost
+        // Measured from when Easel last wrote the document, if it did.
+        composition.canvasChange = database.canvasChange()
         return composition
     }
 

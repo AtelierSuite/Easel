@@ -31,6 +31,10 @@ struct Composition: Equatable, Sendable {
     /// picture back to it would lose: such a file is saved as a copy before
     /// it is edited, and is otherwise left as it is.
     var needsCopyBeforeEditing = false
+    /// How the canvas has moved the layers since the picture was read:
+    /// what it came from has content Easel did not read, which follows the
+    /// same way when the picture is written back.
+    var canvasChange = CanvasChange()
 
     static let defaultSize = CGSize(width: 2048, height: 1536)
 
@@ -247,6 +251,7 @@ struct Composition: Equatable, Sendable {
             moved.rect = artboard.rect.applying(transform).standardized.intersection(CGRect(origin: .zero, size: newSize))
             return moved.rect.width >= 1 && moved.rect.height >= 1 ? moved : nil
         }
+        canvasChange.apply(transform, rotation: rotation, flipX: flipX, flipY: flipY)
         for index in layers.indices {
             var placement = layers[index].transform
             placement.position = placement.position.applying(transform)
@@ -311,6 +316,7 @@ struct Composition: Equatable, Sendable {
             to: newSize,
             by: CGAffineTransform(translationX: offset.x, y: offset.y).scaledBy(x: scaleX, y: scaleY)
         )
+        canvasChange.scale(x: scaleX, y: scaleY)
         for index in layers.indices {
             layers[index].transform.scaleX *= scaleX
             layers[index].transform.scaleY *= scaleY
@@ -407,6 +413,7 @@ struct Composition: Equatable, Sendable {
         }
         size = newSize
         guides = []
+        canvasChange.isAffine = false
     }
 
     /// `image`, the size of a canvas of `canvasSize`, with `quad` pulled out
