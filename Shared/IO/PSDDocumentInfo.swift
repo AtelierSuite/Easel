@@ -13,6 +13,17 @@ enum PSDDocumentInfo {
         var guides: [Guide] = []
         /// The `CompList` descriptor: the comps' names and ids.
         var comps: PSDDescriptor?
+        /// Those Easel does not use, to write back.
+        var kept: [PhotoshopDocumentExtras.Resource] = []
+    }
+
+    /// Whether a resource is kept to write back: not those Easel writes
+    /// itself, nor those that name layers by their place in the stack or
+    /// show the picture, which change as it is edited.
+    static func keepsResource(_ id: Int) -> Bool {
+        // Profile, resolution, guides and comps; layer state, group and
+        // selection ids; thumbnails.
+        ![1039, 1005, 1032, 1065, 1024, 1026, 1069, 1072, 1033, 1036].contains(id)
     }
 
     static func readResource(id: Int, data: [UInt8], into resources: inout Resources) {

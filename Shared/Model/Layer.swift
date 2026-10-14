@@ -47,6 +47,8 @@ struct Layer: Identifiable, Equatable, Sendable {
     var isLocked = false
     /// The group the layer is in, if any.
     var groupID: UUID?
+    /// What its Photoshop file had that Easel does not use, to write back.
+    var photoshop: PhotoshopExtras?
 
     init(
         id: UUID = UUID(), name: String, image: LayerImage, text: TextContent? = nil, vector: VectorContent? = nil,

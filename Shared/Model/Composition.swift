@@ -25,6 +25,8 @@ struct Composition: Equatable, Sendable {
     var artboards: [Artboard] = []
     /// Pixels per inch, when the file it came from said.
     var resolution: Double?
+    /// What its Photoshop file had that Easel does not use, to write back.
+    var photoshop: PhotoshopDocumentExtras?
 
     static let defaultSize = CGSize(width: 2048, height: 1536)
 

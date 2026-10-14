@@ -19,6 +19,8 @@ struct LayerGroup: Identifiable, Codable, Equatable, Sendable {
     /// puts the group's layers together on their own first, and mixes that
     /// with what is beneath as one layer would be.
     var blendMode: LayerBlendMode?
+    /// What its Photoshop file had that Easel does not use, to write back.
+    var photoshop: PhotoshopExtras?
 }
 
 /// One thing in the stack as it is drawn: a layer, or a group whose layers

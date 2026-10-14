@@ -105,6 +105,38 @@ struct PSDWriterTests {
         #expect(asIs.transform.position == blue.transform.position && asIs.isVisible && asIs.blendMode == .screen)
     }
 
+    @Test func whatEaselDoesNotUseGoesBack() throws {
+        var composition = sample()
+        var blue = composition.layers[1]
+        let label = PhotoshopExtras.Block(key: "lclr", data: Data([0, 2, 0, 0, 0, 0, 0, 0]))
+        let text = PhotoshopExtras.Block(key: "TySh", data: Data([1, 2, 3, 4]))
+        blue.photoshop = PhotoshopExtras(
+            blocks: [label, text], blendingRanges: Data([0, 0, 255, 255, 0, 0, 255, 255]), maskParameters: Data([0x01, 128]),
+            source: .init(image: blue.image.id, mask: blue.mask?.image.id, transform: blue.transform, filters: blue.filters)
+        )
+        composition.layers[1] = blue
+        composition.groups[0].photoshop = PhotoshopExtras(blocks: [label])
+        composition.photoshop = PhotoshopDocumentExtras(
+            resources: [.init(id: 1037, name: [], data: Data([0, 0, 0, 30]))],
+            blocks: [.init(key: "Txt2", data: Data([9, 9, 9, 9]))]
+        )
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: composition))
+        let extras = try #require(read.layers[1].photoshop)
+        #expect(extras.blocks == [label, text])
+        #expect(extras.blendingRanges == Data([0, 0, 255, 255, 0, 0, 255, 255]))
+        #expect(extras.maskParameters == Data([0x01, 128]))
+        #expect(read.layers[1].mask != nil)
+        #expect(read.groups[0].photoshop?.blocks == [label])
+        #expect(read.photoshop?.resources.contains { $0.id == 1037 && $0.data == Data([0, 0, 0, 30]) } == true)
+        #expect(read.photoshop?.blocks.contains(.init(key: "Txt2", data: Data([9, 9, 9, 9]))) == true)
+
+        // Once the layer has moved, its text no longer says what it shows.
+        var moved = read
+        moved.layers[1].transform.position.x += 1
+        let again = try PSDReader.composition(from: try PSDWriter.data(for: moved))
+        #expect(again.layers[1].photoshop?.blocks == [label])
+    }
+
     @Test func otherAppsSeeTheFlattenedPicture() throws {
         let data = try PSDWriter.data(for: sample())
         let image = try ImageCodec.decode(data)

@@ -38,6 +38,17 @@ enum PSDWriter {
             if icc.count % 2 != 0 { resources.zeros(1) }
         }
         resources.bytes(PSDDocumentInfo.resources(for: composition))
+        // And what the file it came from had besides.
+        for resource in composition.photoshop?.resources ?? [] {
+            resources.ascii("8BIM")
+            resources.uint16(resource.id)
+            resources.uint8(resource.name.count)
+            resources.bytes(resource.name)
+            if (resource.name.count + 1) % 2 != 0 { resources.zeros(1) }
+            resources.uint32(resource.data.count)
+            resources.bytes([UInt8](resource.data))
+            if resource.data.count % 2 != 0 { resources.zeros(1) }
+        }
         out.uint32(resources.data.count)
         out.bytes(resources.data)
 
@@ -66,6 +77,9 @@ enum PSDWriter {
         let embedded = records.compactMap(\.embeddedFile)
         if !embedded.isEmpty {
             section.taggedBlock("lnk2", embedded.flatMap { $0 }, padding: 4)
+        }
+        for block in composition.photoshop?.blocks ?? [] {
+            section.taggedBlock(block.key, [UInt8](block.data), padding: 4)
         }
         out.uint32(section.data.count)
         out.bytes(section.data)
@@ -106,6 +120,7 @@ enum PSDWriter {
                 if let artboard = composition.artboards.first(where: { $0.groupID == id }) {
                     blocks.append(("artb", PSDDocumentInfo.artboardBlock(artboard.rect)))
                 }
+                blocks += kept(group.photoshop?.blocks.filter { !PhotoshopExtras.contentKeys.contains($0.key) } ?? [], besides: blocks)
                 records.append(folderRecord(name: group.name, opacity: group.opacity, isVisible: group.isVisible,
                                             type: group.isExpanded ? 1 : 2, blendKey: group.blendMode.map(blendKey) ?? "pass",
                                             blocks: blocks))
@@ -245,20 +260,40 @@ enum PSDWriter {
 
         if layer.isLocked { blocks.append(("lspf", PSDDocumentInfo.lockBlock)) }
         blocks += extraBlocks
+        blocks += kept(layer.photoshop?.blocks(for: layer) ?? [], besides: blocks)
         var extra = PSDBinaryWriter()
         if let mask {
-            extra.uint32(20)
-            extra.int32(Int(mask.rect.minY))
-            extra.int32(Int(mask.rect.minX))
-            extra.int32(Int(mask.rect.maxY))
-            extra.int32(Int(mask.rect.maxX))
-            extra.uint8(255)
-            extra.uint8(mask.disabled ? 2 : 0)
-            extra.zeros(2)
+            let parameters = layer.photoshop?.maskParameters.map { [UInt8]($0) } ?? []
+            var body = PSDBinaryWriter()
+            func rect() {
+                body.int32(Int(mask.rect.minY))
+                body.int32(Int(mask.rect.minX))
+                body.int32(Int(mask.rect.maxY))
+                body.int32(Int(mask.rect.maxX))
+            }
+            rect()
+            body.uint8(255)
+            let flags = (mask.disabled ? 2 : 0) | (parameters.isEmpty ? 0 : 0x10)
+            body.uint8(flags)
+            if parameters.isEmpty {
+                body.zeros(2)
+            } else {
+                // Density and feather, then the same mask again as the
+                // real one, as only a twenty-byte record goes without it.
+                body.bytes(parameters)
+                body.uint8(flags)
+                body.uint8(255)
+                rect()
+                if body.data.count % 2 != 0 { body.zeros(1) }
+            }
+            extra.uint32(body.data.count)
+            extra.bytes(body.data)
         } else {
             extra.uint32(0)
         }
-        extra.uint32(0)
+        let ranges = layer.photoshop?.blendingRanges.map { [UInt8]($0) } ?? []
+        extra.uint32(ranges.count)
+        extra.bytes(ranges)
         extra.pascalName(layer.name)
         extra.unicodeName(layer.name)
         for block in blocks { extra.taggedBlock(block.key, block.data) }
@@ -304,6 +339,13 @@ enum PSDWriter {
         header.bytes(extra.data)
         // Four empty raw channels.
         return Record(header: header.data, channels: [UInt8](repeating: 0, count: 8))
+    }
+
+    /// Blocks kept from the file the layer came from, but not those of a
+    /// kind already written.
+    private static func kept(_ blocks: [PhotoshopExtras.Block], besides written: [(key: String, data: [UInt8])]) -> [(key: String, data: [UInt8])] {
+        let keys = Set(written.map(\.key) + ["luni", "lsct"])
+        return blocks.filter { !keys.contains($0.key) }.map { ($0.key, [UInt8]($0.data)) }
     }
 
     // MARK: - Pixels

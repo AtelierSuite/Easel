@@ -91,6 +91,9 @@ enum PSDReader {
         composition.resolution = resources.resolution
         composition.guides = resources.guides
         composition.artboards = extras.artboards
+        if !resources.kept.isEmpty || !extras.globalBlocks.isEmpty {
+            composition.photoshop = PhotoshopDocumentExtras(resources: resources.kept, blocks: extras.globalBlocks)
+        }
         if let comps = resources.comps {
             composition.layerComps = PSDDocumentInfo.layerComps(comps, layers: layers, settings: extras.compSettings)
         }
@@ -108,9 +111,14 @@ enum PSDReader {
             let id = Int(try reader.uint16())
             let nameLength = Int(try reader.uint8())
             // The Pascal name, with its length byte, padded to even.
-            try reader.skip(nameLength + ((nameLength + 1) % 2))
+            let name = try reader.bytes(nameLength)
+            try reader.skip((nameLength + 1) % 2)
             let size = Int(try reader.uint32())
-            PSDDocumentInfo.readResource(id: id, data: try reader.bytes(size), into: &resources)
+            let data = try reader.bytes(size)
+            PSDDocumentInfo.readResource(id: id, data: data, into: &resources)
+            if PSDDocumentInfo.keepsResource(id) {
+                resources.kept.append(PhotoshopDocumentExtras.Resource(id: id, name: name, data: Data(data)))
+            }
             try reader.skip(size % 2)
         }
         return resources
@@ -122,6 +130,8 @@ enum PSDReader {
         var compSettings: [UUID: PSDDescriptor] = [:]
         /// Groups that are artboards.
         var artboards: [Artboard] = []
+        /// The document's tagged blocks Easel does not use.
+        var globalBlocks: [PhotoshopExtras.Block] = []
     }
 
     /// ImageIO reads the flattened picture of most Photoshop files.
@@ -145,6 +155,8 @@ enum PSDReader {
         /// effects.
         var fillOpacity = 255
         var isLocked = false
+        /// What Easel does not use, to write back.
+        var extras = PhotoshopExtras()
         var isHidden = false
         var isClipped = false
         var name = ""
@@ -216,6 +228,7 @@ enum PSDReader {
         var layers: [Layer] = []
         var groups: [LayerGroup] = []
         var extras = LayerExtras()
+        extras.globalBlocks = shared.kept
         // Records run bottom first: a group's divider, its layers, then the
         // group's own record with its name and settings.
         var open: [UUID] = []
@@ -248,6 +261,7 @@ enum PSDReader {
                 let key = record.sectionBlendKey ?? record.blendKey
                 groups[index].blendMode = key == "pass" ? nil : blendMode(key)
                 groups[index].isLocked = record.isLocked
+                if record.extras != PhotoshopExtras() { groups[index].photoshop = record.extras }
                 if let rect = record.blocks["artb"].flatMap(PSDDocumentInfo.artboardRect) {
                     extras.artboards.append(Artboard(name: groups[index].name, rect: rect, groupID: id))
                 }
@@ -273,6 +287,7 @@ enum PSDReader {
                     if let settings = record.blocks["shmd"].flatMap(PSDDocumentInfo.compSettings) { extras.compSettings[layer.id] = settings }
                     layer.mask = record.mask.flatMap { makeMask($0, plane: planes[-2], layer: whole) }
                         ?? .revealingAll(size: canvas)
+                    layer.photoshop = photoshopExtras(record, of: layer)
                     layers.append(layer)
                 }
                 continue
@@ -333,10 +348,22 @@ enum PSDReader {
                 let origin = point.applying(layer.affineTransform.inverted())
                 for index in layer.effects.indices { layer.effects[index].patternOrigin = origin }
             }
+            layer.photoshop = photoshopExtras(record, of: layer)
             layers.append(layer)
         }
         let used = Set(layers.flatMap(\.effects).compactMap(\.pattern.swatchID))
         return (layers, groups, swatches.filter { used.contains($0.id) }, records.count, extras)
+    }
+
+    /// What the record had that Easel does not use, and the layer as it is
+    /// read, which its content blocks describe.
+    private static func photoshopExtras(_ record: LayerRecord, of layer: Layer) -> PhotoshopExtras? {
+        guard record.extras != PhotoshopExtras() else { return nil }
+        var extras = record.extras
+        extras.source = PhotoshopExtras.Source(
+            image: layer.image.id, mask: layer.mask?.image.id, transform: layer.transform, filters: layer.filters
+        )
+        return extras
     }
 
     /// The `fxrp` block: two doubles, a point on the canvas.
@@ -370,6 +397,8 @@ enum PSDReader {
         var tiles: [PSDPatterns.Tile] = []
         /// Where `Lr16` or `Lr32` holds a deep document's layers.
         var deepLayers: Range<Int>?
+        /// Blocks Easel does not use, to write back.
+        var kept: [PhotoshopExtras.Block] = []
     }
 
     private static func globalBlocks(
@@ -394,17 +423,33 @@ enum PSDReader {
                 blocks.deepLayers = start..<(start + length)
             } else if ["Patt", "Pat2", "Pat3"].contains(key) {
                 blocks.tiles += PSDPatterns.tiles(from: try reader.bytes(length))
+            } else if !handledGlobalKeys.contains(key) {
+                blocks.kept.append(PhotoshopExtras.Block(key: key, data: Data(try reader.bytes(length))))
             }
             guard reader.seek(to: start + length + (4 - length % 4) % 4) else { break }
         }
         return blocks
     }
 
+    /// Document blocks Easel writes itself, or that hold the layers or the
+    /// merged picture's transparency, which change with them.
+    private static let handledGlobalKeys: Set<String> = [
+        "Lr16", "Lr32", "Layr", "lnk2", "lnk3", "lnkD", "lnkE", "FEid", "FXid", "Patt", "Pat2", "Pat3", "Mtrn", "Mt16", "Mt32",
+    ]
+
     /// Blocks whose length takes eight bytes in a large document.
     private static let longKeys: Set<String> = [
         "LMsk", "Lr16", "Lr32", "Layr", "Mt16", "Mt32", "Mtrn", "Alph", "FMsk", "lnk2", "lnk3", "lnkE", "FEid", "FXid", "FELS",
         "PxSD", "pths", "extd", "extn", "cinf", "artd",
     ]
+
+    /// Layer blocks Easel reads and writes itself, which are not kept as
+    /// they came.
+    private static let handledKeys = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union([
+        "luni", "lsct", "lsdk", "iOpa", "lspf", "lfx2", "lmfx", "fxrp", "SoLd", "SoLE", "PlLd", "plLd", "shmd", "artb",
+        // Ids, which copies of a layer would share.
+        "lyid",
+    ])
 
     private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "fxrp", "shmd", "artb"])
 
@@ -443,11 +488,19 @@ enum PSDReader {
             let maskFlags = try reader.uint8()
             mask.isDisabled = maskFlags & 0x02 != 0
             record.mask = mask
+            if maskFlags & 0x10 != 0, reader.offset < maskEnd {
+                // Density and feather: a byte saying which follow, each a
+                // byte or a double.
+                let which = try reader.uint8()
+                let length = [(0x01, 1), (0x02, 8), (0x04, 1), (0x08, 8)].reduce(0) { $0 + (Int(which) & $1.0 != 0 ? $1.1 : 0) }
+                record.extras.maskParameters = Data([which] + (try reader.bytes(length)))
+            }
         }
         guard reader.seek(to: maskEnd) else { throw Failure.damaged }
 
-        // Blending ranges.
-        try reader.skip(Int(try reader.uint32()))
+        // Blending ranges, kept as they are.
+        let ranges = try reader.bytes(Int(try reader.uint32()))
+        if !ranges.isEmpty { record.extras.blendingRanges = Data(ranges) }
 
         // A Pascal name padded to four bytes, then tagged blocks.
         let nameLength = Int(try reader.uint8())
@@ -479,6 +532,9 @@ enum PSDReader {
                 if length >= 12, try reader.ascii(4) == "8BIM" { record.sectionBlendKey = try reader.ascii(4) }
             default:
                 if keptBlocks.contains(key) { record.blocks[key] = try reader.bytes(length) }
+                if !handledKeys.contains(key), reader.seek(to: blockEnd - length) {
+                    record.extras.blocks.append(PhotoshopExtras.Block(key: key, data: Data(try reader.bytes(length))))
+                }
             }
             guard reader.seek(to: blockEnd) else { break }
             // Blocks are padded to an even length.
