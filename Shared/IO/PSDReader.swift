@@ -269,10 +269,13 @@ enum PSDReader {
             }
             if record.blocks.keys.contains(where: PSDAdjustments.adjustmentKeys.contains) {
                 // An adjustment layer: no pixels, a setting and a mask over
-                // the whole canvas. Kinds Easel has nothing like are left out.
+                // the whole canvas. Kinds Easel has nothing like come in as
+                // curves that change nothing, so Photoshop gets them back.
                 var whole = record
                 (whole.left, whole.top, whole.right, whole.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
-                for filter in PSDAdjustments.filters(from: record.blocks) {
+                let read = PSDAdjustments.filters(from: record.blocks)
+                let filters = read.isEmpty ? [LayerFilter(kind: .curves)] : read
+                for filter in filters {
                     var layer = Layer(
                         name: record.name.isEmpty ? filter.kind.label : record.name,
                         image: LayerImage(Bitmap.solid(size: canvas, color: .clear)), canvasSize: canvas
@@ -288,6 +291,13 @@ enum PSDReader {
                     layer.mask = record.mask.flatMap { makeMask($0, plane: planes[-2], layer: whole) }
                         ?? .revealingAll(size: canvas)
                     layer.photoshop = photoshopExtras(record, of: layer)
+                    if filters.count == 1 {
+                        // One filter stands for the whole record, kept as it was.
+                        let blocks = record.blocks.filter { PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).contains($0.key) }
+                            .sorted { $0.key < $1.key }.map { PhotoshopExtras.Block(key: $0.key, data: Data($0.value)) }
+                        layer.photoshop = layer.photoshop ?? PhotoshopExtras()
+                        layer.photoshop?.adjustment = .init(blocks: blocks, value: filter, transform: layer.transform)
+                    }
                     layers.append(layer)
                 }
                 continue
@@ -349,6 +359,7 @@ enum PSDReader {
                 for index in layer.effects.indices { layer.effects[index].patternOrigin = origin }
             }
             layer.photoshop = photoshopExtras(record, of: layer)
+            keepOriginals(record, of: &layer, entries: shared.entries)
             layers.append(layer)
         }
         let used = Set(layers.flatMap(\.effects).compactMap(\.pattern.swatchID))
@@ -364,6 +375,27 @@ enum PSDReader {
             image: layer.image.id, mask: layer.mask?.image.id, transform: layer.transform, filters: layer.filters
         )
         return extras
+    }
+
+    /// Photoshop's own records of a layer's styles and smart object, to
+    /// write back while Easel leaves them as read.
+    private static func keepOriginals(_ record: LayerRecord, of layer: inout Layer, entries: [String: [UInt8]]) {
+        func kept(_ keys: [String]) -> [PhotoshopExtras.Block] {
+            keys.compactMap { key in record.blocks[key].map { PhotoshopExtras.Block(key: key, data: Data($0)) } }
+        }
+        var extras = layer.photoshop ?? PhotoshopExtras()
+        if record.blocks["lfx2"] != nil || record.blocks["lmfx"] != nil {
+            extras.effects = .init(blocks: kept(["lfx2", "lmfx", "fxrp"]), value: layer.effects, transform: layer.transform)
+        }
+        if let block = record.blocks["SoLd"] ?? record.blocks["SoLE"] {
+            let id = PSDSmartObjects.placement(from: block)?.id
+            let state = PhotoshopExtras.SmartObjectState(
+                image: layer.image.id, warp: layer.smartObject?.warp, missingLink: layer.missingLink,
+                entry: id.flatMap { entries[$0] }.map { Data($0) }
+            )
+            extras.smartObject = .init(blocks: kept(["SoLd", "SoLE", "PlLd", "plLd"]), value: state, transform: layer.transform)
+        }
+        if extras != PhotoshopExtras() { layer.photoshop = extras }
     }
 
     /// The `fxrp` block: two doubles, a point on the canvas.
@@ -399,6 +431,8 @@ enum PSDReader {
         var deepLayers: Range<Int>?
         /// Blocks Easel does not use, to write back.
         var kept: [PhotoshopExtras.Block] = []
+        /// Embedded and linked files' entries as they were, by id.
+        var entries: [String: [UInt8]] = [:]
     }
 
     private static func globalBlocks(
@@ -417,6 +451,7 @@ enum PSDReader {
                 let found = PSDSmartObjects.embeddedFiles(from: try reader.bytes(length))
                 blocks.files.merge(found.files) { first, _ in first }
                 blocks.links.merge(found.links) { first, _ in first }
+                blocks.entries.merge(found.entries) { first, _ in first }
             } else if key == "FEid" || key == "FXid" {
                 blocks.filterMasks.merge(PSDFilterEffects.masks(from: try reader.bytes(length))) { first, _ in first }
             } else if key == "Lr16" || key == "Lr32" {
@@ -446,12 +481,12 @@ enum PSDReader {
     /// Layer blocks Easel reads and writes itself, which are not kept as
     /// they came.
     private static let handledKeys = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union([
-        "luni", "lsct", "lsdk", "iOpa", "lspf", "lfx2", "lmfx", "fxrp", "SoLd", "SoLE", "PlLd", "plLd", "shmd", "artb",
+        "luni", "lsct", "lsdk", "iOpa", "lfx2", "lmfx", "fxrp", "SoLd", "SoLE", "PlLd", "plLd", "shmd", "artb",
         // Ids, which copies of a layer would share.
         "lyid",
     ])
 
-    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "fxrp", "shmd", "artb"])
+    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "PlLd", "plLd", "fxrp", "shmd", "artb"])
 
     private static func readRecord(_ reader: inout BigEndianReader, isLarge: Bool) throws -> LayerRecord {
         var record = LayerRecord()
@@ -521,7 +556,11 @@ enum PSDReader {
                 let units = stride(from: 0, to: utf16.count - 1, by: 2).map { UInt16(utf16[$0]) << 8 | UInt16(utf16[$0 + 1]) }
                 record.name = String(decoding: units, as: UTF16.self)
             case "lspf":
-                record.isLocked = PSDDocumentInfo.isLocked(try reader.bytes(length))
+                let locks = try reader.bytes(length)
+                record.isLocked = PSDDocumentInfo.isLocked(locks)
+                // Kept too, for the locks on transparency, pixels or
+                // position alone.
+                record.extras.blocks.append(PhotoshopExtras.Block(key: key, data: Data(locks)))
             case "iOpa":
                 record.fillOpacity = Int(try reader.uint8())
             case "lsct", "lsdk":

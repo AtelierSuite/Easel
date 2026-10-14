@@ -137,6 +137,38 @@ struct PSDWriterTests {
         #expect(again.layers[1].photoshop?.blocks == [label])
     }
 
+    @Test func photoshopsOwnRecordsGoBackWhileUnchanged() throws {
+        // A Color Lookup, which Easel cannot draw, and styles Photoshop
+        // kept as `lmfx`.
+        var lookup = Layer(name: "Lookup", image: LayerImage(Bitmap.solid(size: size, color: .clear)), canvasSize: size)
+        lookup.adjustment = LayerFilter(kind: .curves)
+        lookup.photoshop = PhotoshopExtras()
+        lookup.photoshop?.adjustment = .init(blocks: [.init(key: "clrL", data: Data([0, 3, 0, 0]))], value: lookup.adjustment!,
+                                             transform: lookup.transform)
+        var styled = sample().layers[1]
+        styled.mask = nil
+        var shadow = LayerEffect(kind: .dropShadow)
+        shadow.distance = 4
+        styled.effects = [shadow]
+        let block = try #require(PSDEffects.block(for: styled.effects) { _ in nil })
+        styled.photoshop = PhotoshopExtras()
+        styled.photoshop?.effects = .init(blocks: [.init(key: "lmfx", data: Data(block))], value: styled.effects, transform: styled.transform)
+
+        let read = try PSDReader.composition(from: try PSDWriter.data(for: Composition(size: size, layers: [lookup, styled])))
+        #expect(read.layers.count == 2)
+        #expect(read.layers[0].photoshop?.adjustment?.blocks == [.init(key: "clrL", data: Data([0, 3, 0, 0]))])
+        #expect(read.layers[1].photoshop?.effects?.blocks.map(\.key) == ["lmfx"])
+        #expect(read.layers[1].effects.map(\.kind) == [.dropShadow])
+
+        // Changed in Easel, they go as Easel's own.
+        var changed = read
+        changed.layers[0].adjustment?.curve = [0, 0.3, 0.5, 0.7, 1]
+        changed.layers[1].effects[0].distance = 8
+        let again = try PSDReader.composition(from: try PSDWriter.data(for: changed))
+        #expect(again.layers[0].photoshop?.adjustment?.blocks.map(\.key) == ["curv"])
+        #expect(again.layers[1].photoshop?.effects?.blocks.map(\.key) == ["lfx2"])
+    }
+
     @Test func otherAppsSeeTheFlattenedPicture() throws {
         let data = try PSDWriter.data(for: sample())
         let image = try ImageCodec.decode(data)

@@ -129,20 +129,29 @@ enum PSDSmartObjects {
     /// The files in a `lnk2`, `lnk3` or `lnkE` block, by id: those kept in
     /// the document, or linked with a copy kept too, in `files`; those only
     /// linked, by their file's name, in `links`.
-    static func embeddedFiles(from data: [UInt8]) -> (files: [String: [UInt8]], links: [String: String]) {
+    /// `entries` has each entry as it was, to write back while nothing
+    /// about it changes.
+    static func embeddedFiles(from data: [UInt8]) -> (files: [String: [UInt8]], links: [String: String], entries: [String: [UInt8]]) {
         var reader = BigEndianReader(bytes: data)
         var files: [String: [UInt8]] = [:]
         var links: [String: String] = [:]
+        var entries: [String: [UInt8]] = [:]
         while reader.remaining >= 8, let length = try? reader.length(), length > 0 {
+            let start = reader.offset
             let end = reader.offset + length
+            let raw = end <= data.count ? Array(data[start..<end]) : nil
             switch try? entry(&reader) {
-            case .file(let id, let contents): files[id] = contents
-            case .link(let id, let name): links[id] = name
+            case .file(let id, let contents):
+                files[id] = contents
+                entries[id] = raw
+            case .link(let id, let name):
+                links[id] = name
+                entries[id] = raw
             case nil: break
             }
             guard reader.seek(to: end + (4 - length % 4) % 4) || reader.seek(to: end) else { break }
         }
-        return (files, links)
+        return (files, links, entries)
     }
 
     private enum Entry {

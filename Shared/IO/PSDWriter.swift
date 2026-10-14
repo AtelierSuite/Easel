@@ -74,9 +74,15 @@ enum PSDWriter {
             section.taggedBlock("FEid", PSDFilterEffects.block(for: filterEffects), padding: 4)
         }
         // The contents of smart objects, embedded once for the document.
-        let embedded = records.compactMap(\.embeddedFile)
+        // Layers showing the same file kept as it was name it once.
+        var seen = Set<[UInt8]>()
+        let embedded = records.compactMap(\.embeddedFile).filter { seen.insert($0).inserted }
         if !embedded.isEmpty {
             section.taggedBlock("lnk2", embedded.flatMap { $0 }, padding: 4)
+        }
+        let linked = records.compactMap(\.linkedFile).filter { seen.insert($0).inserted }
+        if !linked.isEmpty {
+            section.taggedBlock("lnkE", linked.flatMap { $0 }, padding: 4)
         }
         for block in composition.photoshop?.blocks ?? [] {
             section.taggedBlock(block.key, [UInt8](block.data), padding: 4)
@@ -106,6 +112,8 @@ enum PSDWriter {
         var tiles: [PSDPatterns.Tile] = []
         /// A smart object's pixels before its filters, and their mask.
         var filterEffect: [UInt8]?
+        /// A smart object's file it links to, as an entry of the `lnkE` block.
+        var linkedFile: [UInt8]?
     }
 
     /// Records bottom first, with group folders around their layers: a
@@ -155,12 +163,21 @@ enum PSDWriter {
     ) -> Record {
         // An adjustment Photoshop has a record for is written as one, with
         // no pixels; it may take some of its strength from the opacity.
-        let adjustment = layer.adjustment.flatMap(PSDAdjustments.blocks(for:))
+        // Records Photoshop wrote, which say more than Easel keeps, go back
+        // as they were while what Easel made of them is unchanged.
+        let original = layer.photoshop
+        func raw(_ blocks: [PhotoshopExtras.Block]) -> [(key: String, data: [UInt8])] { blocks.map { ($0.key, [UInt8]($0.data)) } }
+        let adjustment = layer.adjustment == nil ? nil
+            : original?.adjustmentBlocks(for: layer).map { (blocks: raw($0), opacity: 1.0) }
+            ?? layer.adjustment.flatMap(PSDAdjustments.blocks(for:))
         var blocks = adjustment?.blocks ?? []
         // Styles go as Photoshop's own effects, so the pixels go without them.
         // Photoshop keeps one of a kind, as Easel does when it draws.
         let tile = layer.effects.first { $0.kind == .patternOverlay }.flatMap { PSDPatterns.tile(for: $0, swatches: swatches) }
-        let effects = adjustment == nil ? PSDEffects.block(for: layer.effects) { _ in tile } : nil
+        let keptEffects = adjustment == nil ? original?.effectBlocks(for: layer) : nil
+        let effects = adjustment == nil && keptEffects == nil ? PSDEffects.block(for: layer.effects) { _ in tile } : nil
+        let writesEffects = effects != nil || keptEffects != nil
+        if let keptEffects { blocks += raw(keptEffects) }
         if let effects { blocks.append(("lfx2", effects)) }
         if effects != nil, let overlay = layer.effects.first(where: { $0.kind == .patternOverlay }) {
             // Where the pattern starts, on the canvas.
@@ -178,7 +195,18 @@ enum PSDWriter {
         let smartFilters = layer.filters.isEmpty ? nil
             : PSDSmartFilters.style(for: layer.filters, placement: .init(layer.transform, size: layer.image.size),
                                     maskEnabled: layer.filterMask?.isEnabled ?? false)
-        if adjustment == nil, let smart = layer.smartObject, layer.filters.isEmpty || smartFilters != nil,
+        var linkedFile: [UInt8]?
+        if adjustment == nil, let kept = original?.smartObjectBlocks(for: layer) {
+            blocks += raw(kept.blocks)
+            if let entry = kept.entry.map({ [UInt8]($0) }) {
+                var file = PSDBinaryWriter()
+                file.uint64(entry.count)
+                file.bytes(entry)
+                file.zeros((4 - entry.count % 4) % 4)
+                // Files kept in the document, or only linked to.
+                if entry.starts(with: Array("liFE".utf8)) { linkedFile = file.data } else { embeddedFile = file.data }
+            }
+        } else if adjustment == nil, let smart = layer.smartObject, layer.filters.isEmpty || smartFilters != nil,
            let contents = try? data(for: smart.contents) {
             let id = layer.id.uuidString.lowercased()
             blocks += PSDSmartObjects.blocks(for: layer, id: id, filters: smartFilters)
@@ -194,10 +222,10 @@ enum PSDWriter {
         plain.opacity = 1
         plain.blendMode = .normal
         plain.isVisible = true
-        if effects != nil { plain.effects = [] }
+        if writesEffects { plain.effects = [] }
         // The fill goes as a setting too, unless effects Photoshop cannot
         // take are drawn into the pixels, which then show it already.
-        if layer.fillOpacity < 1, effects != nil || !layer.hasActiveEffects {
+        if layer.fillOpacity < 1, writesEffects || !layer.hasActiveEffects {
             plain.fillOpacity = 1
             blocks.append(("iOpa", [UInt8((min(max(layer.fillOpacity, 0), 1) * 255).rounded()), 0, 0, 0]))
         }
@@ -300,7 +328,7 @@ enum PSDWriter {
         header.uint32(extra.data.count)
         header.bytes(extra.data)
         return Record(header: header.data, channels: channels.flatMap(\.data), embeddedFile: embeddedFile,
-                      tiles: effects == nil ? [] : tile.map { [$0] } ?? [], filterEffect: filterEffect)
+                      tiles: effects == nil ? [] : tile.map { [$0] } ?? [], filterEffect: filterEffect, linkedFile: linkedFile)
     }
 
     /// `blendKey` is the group's; Photoshop's `pass` lets its layers mix
@@ -345,7 +373,10 @@ enum PSDWriter {
     /// kind already written.
     private static func kept(_ blocks: [PhotoshopExtras.Block], besides written: [(key: String, data: [UInt8])]) -> [(key: String, data: [UInt8])] {
         let keys = Set(written.map(\.key) + ["luni", "lsct"])
-        return blocks.filter { !keys.contains($0.key) }.map { ($0.key, [UInt8]($0.data)) }
+        // Locks as they were, unless the lock on everything has changed:
+        // locked, Easel writes its own.
+        return blocks.filter { !keys.contains($0.key) && !($0.key == "lspf" && PSDDocumentInfo.isLocked([UInt8]($0.data))) }
+            .map { ($0.key, [UInt8]($0.data)) }
     }
 
     // MARK: - Pixels

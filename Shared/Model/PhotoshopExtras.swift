@@ -21,6 +21,30 @@ struct PhotoshopExtras: Codable, Equatable, Sendable {
     var maskParameters: Data?
     /// The layer as it was read, which content blocks describe.
     var source: Source?
+    /// Photoshop's own record of the layer's styles, adjustment or smart
+    /// object, which say more than Easel keeps of them: written back while
+    /// what Easel made of them is unchanged.
+    var effects: Kept<[LayerEffect]>?
+    var adjustment: Kept<LayerFilter>?
+    var smartObject: Kept<SmartObjectState>?
+
+    struct Kept<Value: Codable & Equatable & Sendable>: Codable, Equatable, Sendable {
+        var blocks: [Block]
+        /// What Easel made of them, and where the layer was then.
+        var value: Value
+        var transform: LayerTransform
+    }
+
+    /// What a smart object's blocks hold true of: the pixels it showed,
+    /// how they were bent and the link it waited for. The contents drawn
+    /// again give new pixels.
+    struct SmartObjectState: Codable, Equatable, Sendable {
+        var image: UUID
+        var warp: SmartObjectWarp?
+        var missingLink: SmartObjectLink?
+        /// Its entry in the document's embedded or linked files, as it was.
+        var entry: Data?
+    }
 
     struct Source: Codable, Equatable, Sendable {
         var image: UUID
@@ -39,6 +63,29 @@ struct PhotoshopExtras: Codable, Equatable, Sendable {
         self.blendingRanges = blendingRanges
         self.maskParameters = maskParameters
         self.source = source
+    }
+
+    /// The styles as Photoshop had them, while Easel's are as read. Pattern
+    /// overlays name tiles by Photoshop's ids, which are not kept, so they
+    /// are always written afresh.
+    func effectBlocks(for layer: Layer) -> [Block]? {
+        guard let effects, effects.value == layer.effects, effects.transform == layer.transform,
+              !layer.effects.contains(where: { $0.kind == .patternOverlay }) else { return nil }
+        return effects.blocks
+    }
+
+    func adjustmentBlocks(for layer: Layer) -> [Block]? {
+        guard let adjustment, adjustment.value == layer.adjustment else { return nil }
+        return adjustment.blocks
+    }
+
+    /// The smart object as Photoshop had it, while nothing about it has
+    /// changed: no new contents, placement, bend or filters.
+    func smartObjectBlocks(for layer: Layer) -> (blocks: [Block], entry: Data?)? {
+        guard let smartObject, smartObject.transform == layer.transform, layer.filters.isEmpty,
+              smartObject.value.image == layer.image.id, smartObject.value.warp == layer.smartObject?.warp,
+              smartObject.value.missingLink == layer.missingLink else { return nil }
+        return (smartObject.blocks, smartObject.value.entry)
     }
 
     /// The blocks still true of `layer`.
