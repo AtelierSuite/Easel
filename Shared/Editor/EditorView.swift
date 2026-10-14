@@ -349,6 +349,14 @@ struct EditorView<Actions: View>: View {
                 Button("Canvas.ClearGuides", systemImage: "xmark.square.fill") { state.clearGuides() }
                     .disabled(composition.guides.isEmpty)
             }
+            // An extension cannot open a link, so the Photos one leaves it out.
+            if Bundle.main.bundleURL.pathExtension != "appex" {
+                Section {
+                    Link(destination: URL(string: "https://github.com/katagaki/Easel")!) {
+                        Label("Toolbar.SourceCode", systemImage: "chevron.left.forwardslash.chevron.right")
+                    }
+                }
+            }
         } label: {
             Label("Toolbar.More", systemImage: "ellipsis")
         }
