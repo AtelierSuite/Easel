@@ -167,6 +167,8 @@ enum PSDReader {
         /// A group's blend mode, which `lsct` may carry as well.
         var sectionBlendKey: String?
         var mask: MaskRecord?
+        /// The user and vector masks together, when the layer has both.
+        var realMask: MaskRecord?
         /// Tagged blocks kept for what they say about the layer beyond its
         /// pixels: adjustments, styles, smart objects.
         var blocks: [String: [UInt8]] = [:]
@@ -236,9 +238,9 @@ enum PSDReader {
             var planes: [Int: [UInt8]] = [:]
             for channel in record.channels {
                 let end = reader.offset + channel.length
-                let isMask = channel.id == -2
-                let w = isMask ? (record.mask?.width ?? 0) : record.width
-                let h = isMask ? (record.mask?.height ?? 0) : record.height
+                let mask = channel.id == -2 ? record.mask : channel.id == -3 ? record.realMask : nil
+                let w = channel.id < -1 ? (mask?.width ?? 0) : record.width
+                let h = channel.id < -1 ? (mask?.height ?? 0) : record.height
                 if channel.length >= 2, fitsBitmap(width: w, height: h) {
                     planes[channel.id] = try? readChannel(
                         &reader, length: channel.length, width: w, height: h, format: format, isLarge: isLarge
@@ -288,8 +290,7 @@ enum PSDReader {
                     layer.isLocked = record.isLocked
                     layer.groupID = open.last
                     if let settings = record.blocks["shmd"].flatMap(PSDDocumentInfo.compSettings) { extras.compSettings[layer.id] = settings }
-                    layer.mask = record.mask.flatMap { makeMask($0, plane: planes[-2], layer: whole) }
-                        ?? .revealingAll(size: canvas)
+                    layer.mask = userMask(record, planes: planes, frame: whole, canvas: canvas) ?? .revealingAll(size: canvas)
                     layer.photoshop = photoshopExtras(record, of: layer)
                     if filters.count == 1 {
                         // One filter stands for the whole record, kept as it was.
@@ -302,9 +303,21 @@ enum PSDReader {
                 }
                 continue
             }
-            guard !record.isGroupBoundary, fitsBitmap(width: record.width, height: record.height),
-                  let image = makeImage(planes, width: record.width, height: record.height, format: format)
-            else { continue }
+            guard !record.isGroupBoundary else { continue }
+            var record = record
+            var decoded = fitsBitmap(width: record.width, height: record.height)
+                ? makeImage(planes, width: record.width, height: record.height, format: format) : nil
+            if decoded == nil, var color = record.blocks["SoCo"].flatMap(solidColor) {
+                if format.depth == 32 {
+                    // Linear, as the document's pixels are.
+                    (color.red, color.green, color.blue) = (pow(color.red, 1 / 2.2), pow(color.green, 1 / 2.2), pow(color.blue, 1 / 2.2))
+                }
+                // A colour fill Photoshop kept no pixels for: the colour
+                // over the canvas, its masks saying where it shows.
+                (record.left, record.top, record.right, record.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
+                decoded = Bitmap.solid(size: canvas, color: color)
+            }
+            guard let image = decoded else { continue }
 
             var layer = Layer(
                 name: record.name.isEmpty ? String(localized: "Layer.DefaultName.Layer") : record.name,
@@ -316,9 +329,7 @@ enum PSDReader {
                 blendMode: blendMode(record.blendKey),
                 isVisible: !record.isHidden
             )
-            if let maskRecord = record.mask {
-                layer.mask = makeMask(maskRecord, plane: planes[-2], layer: record)
-            }
+            layer.mask = userMask(record, planes: planes, frame: record, canvas: canvas)
             layer.groupID = open.last
             layer.isClipped = record.isClipped
             layer.fillOpacity = Double(record.fillOpacity) / 255
@@ -335,11 +346,9 @@ enum PSDReader {
                 if let contents = openedContents(placed.id) {
                     // A smart object: its contents whole, drawn where its
                     // corners sit. Ones Easel cannot place stay as pixels.
-                    let canvasMask = record.mask.flatMap { mask -> LayerMask? in
-                        var whole = record
-                        (whole.left, whole.top, whole.right, whole.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
-                        return makeMask(mask, plane: planes[-2], layer: whole)
-                    }
+                    var whole = record
+                    (whole.left, whole.top, whole.right, whole.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
+                    let canvasMask = userMask(record, planes: planes, frame: whole, canvas: canvas)
                     let filterMask = placed.placedID.flatMap { shared.filterMasks[$0] }
                     if PSDSmartObjects.place(&layer, placed, contents: contents, filterMask: filterMask) {
                         layer.mask = canvasMask.map { mask in
@@ -486,7 +495,7 @@ enum PSDReader {
         "lyid",
     ])
 
-    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "PlLd", "plLd", "fxrp", "shmd", "artb"])
+    private static let keptBlocks = PSDAdjustments.keys.union(PSDAdjustments.adjustmentKeys).union(["lfx2", "lmfx", "SoLd", "SoLE", "PlLd", "plLd", "fxrp", "shmd", "artb", "vmsk", "vsms", "SoCo"])
 
     private static func readRecord(_ reader: inout BigEndianReader, isLarge: Bool) throws -> LayerRecord {
         var record = LayerRecord()
@@ -529,6 +538,19 @@ enum PSDReader {
                 let which = try reader.uint8()
                 let length = [(0x01, 1), (0x02, 8), (0x04, 1), (0x08, 8)].reduce(0) { $0 + (Int(which) & $1.0 != 0 ? $1.1 : 0) }
                 record.extras.maskParameters = Data([which] + (try reader.bytes(length)))
+            }
+            if maskEnd - reader.offset >= 18 {
+                // With a vector mask too, the two together, as Photoshop
+                // shows them: the "real" mask, in channel -3.
+                let realFlags = try reader.uint8()
+                var real = MaskRecord()
+                real.defaultColor = Int(try reader.uint8())
+                real.top = Int(try reader.int32())
+                real.left = Int(try reader.int32())
+                real.bottom = Int(try reader.int32())
+                real.right = Int(try reader.int32())
+                real.isDisabled = mask.isDisabled
+                if realFlags & 0x10 != 0 { record.realMask = real }
             }
         }
         guard reader.seek(to: maskEnd) else { throw Failure.damaged }
@@ -859,6 +881,38 @@ enum PSDReader {
             Bitmap.draw(maskImage, in: rect, context: context)
         }
         return LayerMask(image: LayerImage(image), isEnabled: !mask.isDisabled)
+    }
+
+    /// A layer's masks as one, over `frame`: its user mask, and its vector
+    /// mask drawn out. Photoshop keeps the two together as well, when it
+    /// has both, which is taken as it is.
+    private static func userMask(_ record: LayerRecord, planes: [Int: [UInt8]], frame: LayerRecord, canvas: CGSize) -> LayerMask? {
+        if let real = record.realMask, let plane = planes[-3] {
+            return makeMask(real, plane: plane, layer: frame)
+        }
+        let user = record.mask.flatMap { makeMask($0, plane: planes[-2], layer: frame) }
+        guard let block = record.blocks["vmsk"] ?? record.blocks["vsms"],
+              let coverage = PSDVectorMask.coverage(block, width: Int(canvas.width), height: Int(canvas.height))
+        else { return user }
+        var whole = MaskRecord()
+        (whole.right, whole.bottom) = (Int(canvas.width), Int(canvas.height))
+        guard let vector = makeMask(whole, plane: coverage, layer: frame) else { return user }
+        guard let user else { return vector }
+        // Each hides what it hides.
+        let size = CGSize(width: frame.width, height: frame.height)
+        let both = Bitmap.render(size: size) { context in
+            Bitmap.draw(user.image.cgImage, in: CGRect(origin: .zero, size: size), context: context)
+            context.setBlendMode(.destinationIn)
+            Bitmap.draw(vector.image.cgImage, in: CGRect(origin: .zero, size: size), context: context)
+        }
+        return LayerMask(image: LayerImage(both), isEnabled: user.isEnabled)
+    }
+
+    /// A colour fill's colour, from its `SoCo` block.
+    private static func solidColor(_ block: [UInt8]) -> RGBAColor? {
+        var reader = BigEndianReader(bytes: block)
+        guard (try? reader.uint32()) == 16, let settings = try? PSDDescriptor.read(&reader) else { return nil }
+        return settings["Clr "]?.color
     }
 
     /// Whether pixels this size can be decoded: a side past the canvas cap

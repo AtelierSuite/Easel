@@ -22,6 +22,8 @@ private struct PSDBuilder {
         var unicodeName: String?
         /// 1 opens a group folder, 3 closes one.
         var section: UInt32?
+        /// More tagged blocks, as they are.
+        var blocks: [(String, [UInt8])] = []
     }
 
     var width: Int
@@ -120,6 +122,9 @@ private struct PSDBuilder {
             if let section = layer.section {
                 extra += Array("8BIMlsct".utf8) + Self.u32(4) + Self.u32(Int(section))
             }
+            for (key, body) in layer.blocks {
+                extra += Array("8BIM\(key)".utf8) + Self.u32(body.count) + body
+            }
             record += Self.u32(extra.count) + extra
             records += record
             imageData += channels.flatMap(\.1)
@@ -213,6 +218,49 @@ struct PSDReaderTests {
         let mask = try #require(composition.layers[2].mask)
         #expect(TestImages.pixel(mask.image.cgImage, x: 0, y: 0).alpha > 250)
         #expect(TestImages.pixel(mask.image.cgImage, x: 3, y: 0).alpha == 0)
+    }
+
+    /// A vector mask over the left half, as Photoshop writes one.
+    private static func leftHalfVectorMask() -> [UInt8] {
+        func record(_ selector: Int, _ body: [UInt8]) -> [UInt8] { u16(selector) + body + [UInt8](repeating: 0, count: 24 - body.count) }
+        func fixed(_ value: Double) -> [UInt8] { u32(Int(value * 16_777_216)) }
+        var out = u32(3) + u32(0) + record(6, []) + record(8, []) + record(0, u16(4) + u16(1))
+        for (x, y) in [(0.0, 0.0), (0.5, 0.0), (0.5, 1.0), (0.0, 1.0)] {
+            let point = fixed(y) + fixed(x)
+            out += record(1, point + point + point)
+        }
+        return out
+    }
+
+    private static func u16(_ v: Int) -> [UInt8] { [UInt8(v >> 8 & 0xFF), UInt8(v & 0xFF)] }
+    private static func u32(_ v: Int) -> [UInt8] { [UInt8(v >> 24 & 0xFF), UInt8(v >> 16 & 0xFF), UInt8(v >> 8 & 0xFF), UInt8(v & 0xFF)] }
+
+    @Test func vectorMasksJoinTheLayersMask() throws {
+        let data = PSDBuilder(width: 20, height: 10, layers: [
+            .init(name: "Shape", rect: (0, 0, 10, 20), color: (255, 0, 0, 255), blocks: [("vmsk", Self.leftHalfVectorMask())]),
+        ]).build()
+        let layer = try PSDReader.composition(from: data).layers[0]
+        let mask = try #require(layer.mask)
+        #expect(TestImages.pixel(mask.image.cgImage, x: 3, y: 5).alpha > 250)
+        #expect(TestImages.pixel(mask.image.cgImage, x: 16, y: 5).alpha == 0)
+    }
+
+    @Test func colourFillsWithoutPixelsFillTheirShape() throws {
+        // A colour fill, red, with no pixels kept.
+        var fill: [UInt8] = []
+        var writer = PSDBinaryWriter()
+        PSDDescriptor(classID: "null", items: [("Clr ", .descriptor(PSDDescriptor(classID: "RGBC", items: [
+            ("Rd  ", .double(255)), ("Grn ", .double(0)), ("Bl  ", .double(0)),
+        ])))]).write(to: &writer)
+        fill = Self.u32(16) + writer.data
+        let data = PSDBuilder(width: 20, height: 10, layers: [
+            .init(name: "Fill", rect: (0, 0, 0, 0), color: (0, 0, 0, 0),
+                  blocks: [("SoCo", fill + (fill.count % 2 == 0 ? [] : [0])), ("vmsk", Self.leftHalfVectorMask())]),
+        ]).build()
+        let composition = try PSDReader.composition(from: data)
+        let shown = CompositionRenderer.render(composition)
+        #expect(TestImages.isRed(shown, x: 3, y: 5))
+        #expect(TestImages.isClear(shown, x: 16, y: 5))
     }
 
     @Test func otherFilesAreRefused() {
