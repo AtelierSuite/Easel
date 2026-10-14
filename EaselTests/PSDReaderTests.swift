@@ -263,6 +263,27 @@ struct PSDReaderTests {
         #expect(TestImages.isClear(shown, x: 16, y: 5))
     }
 
+    @Test func readersSayWhatSavingBackWouldLose() throws {
+        let plain = try PSDReader.composition(from: PSDBuilder(width: 8, height: 4, layers: [
+            .init(name: "Red", rect: (0, 0, 4, 8), color: (255, 0, 0, 255)),
+            .init(name: "Empty", rect: (0, 0, 0, 0), color: (0, 0, 0, 0)),
+        ]).build())
+        #expect(plain.photoshop?.losses == [])
+        // An empty layer is kept, to go back as it came.
+        #expect(plain.layers.map(\.name) == ["Red", "Empty"])
+        let deep = try PSDReader.composition(from: PSDBuilder(width: 8, height: 4, depth: 16, layers: [
+            .init(name: "Red", rect: (0, 0, 4, 8), color: (255, 0, 0, 255)),
+        ]).build())
+        #expect(deep.photoshop?.losses == [.depth])
+        let url = URL(fileURLWithPath: "/tmp/Picture.psd")
+        #expect(DocumentConversion.savesPhotoshopInPlace(url, composition: plain))
+        #expect(!DocumentConversion.savesPhotoshopInPlace(url, composition: deep))
+        #expect(!DocumentConversion.savesPhotoshopInPlace(URL(fileURLWithPath: "/tmp/Picture.pxd"), composition: plain))
+        // Easel's own files lose nothing coming back.
+        let written = try PSDReader.composition(from: try PSDWriter.data(for: plain))
+        #expect(written.photoshop?.losses == [])
+    }
+
     @Test func otherFilesAreRefused() {
         #expect(throws: (any Error).self) { try PSDReader.composition(from: Data("not a psd".utf8)) }
     }

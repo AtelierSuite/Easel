@@ -63,6 +63,12 @@ enum PSDReader {
         var patterns: [PatternSwatch] = []
         var recordCount = 0
         var extras = LayerExtras()
+        // What saving back would lose, beginning with what Easel keeps
+        // fewer of: bits, colours and channels.
+        var losses = Set<PhotoshopLoss>()
+        if depth != 8 { losses.insert(mode == .bitmap ? .colorMode : .depth) }
+        if mode != .rgb { losses.insert(.colorMode) }
+        if channelCount > (mode == .cmyk ? 5 : mode == .rgb ? 4 : 2) { losses.insert(.extraChannels) }
         if layerSectionLength > 0 {
             do {
                 (layers, groups, patterns, recordCount, extras) = try readLayers(
@@ -70,8 +76,11 @@ enum PSDReader {
                 )
             } catch Failure.unsupported {
                 throw Failure.unsupported
-            } catch {}
+            } catch {
+                losses.insert(.layers)
+            }
         }
+        losses.formUnion(extras.losses)
         guard reader.seek(to: layerSectionEnd) else { throw Failure.damaged }
 
         if layers.isEmpty {
@@ -84,6 +93,10 @@ enum PSDReader {
             var composition = Composition(image: merged, name: String(localized: "Layer.DefaultName.Background"))
             composition.resolution = resources.resolution
             composition.guides = resources.guides
+            if recordCount > 0 { losses.insert(.layers) }
+            composition.photoshop = PhotoshopDocumentExtras(
+                resources: resources.kept, colorProfile: mode == .rgb ? resources.colorProfile : nil, losses: losses
+            )
             return composition
         }
         var composition = Composition(size: canvas, layers: layers, groups: groups)
@@ -91,13 +104,16 @@ enum PSDReader {
         composition.resolution = resources.resolution
         composition.guides = resources.guides
         composition.artboards = extras.artboards
-        let profile = mode == .rgb ? resources.colorProfile : nil
-        if !resources.kept.isEmpty || !extras.globalBlocks.isEmpty || profile != nil {
-            composition.photoshop = PhotoshopDocumentExtras(resources: resources.kept, blocks: extras.globalBlocks, colorProfile: profile)
-        }
         if let comps = resources.comps {
             composition.layerComps = PSDDocumentInfo.layerComps(comps, layers: layers, settings: extras.compSettings)
+            if extras.groupsHaveCompSettings || !extras.compSettings.values.allSatisfy(PSDDocumentInfo.isKeptWhole) {
+                losses.insert(.comps)
+            }
         }
+        composition.photoshop = PhotoshopDocumentExtras(
+            resources: resources.kept, blocks: extras.globalBlocks, colorProfile: mode == .rgb ? resources.colorProfile : nil,
+            losses: losses
+        )
         composition.normalizeGroups()
         return composition
     }
@@ -133,6 +149,10 @@ enum PSDReader {
         var artboards: [Artboard] = []
         /// The document's tagged blocks Easel does not use.
         var globalBlocks: [PhotoshopExtras.Block] = []
+        /// What of the layers saving back would lose.
+        var losses = Set<PhotoshopLoss>()
+        /// Whether groups say how comps show them, which Easel's comps do not.
+        var groupsHaveCompSettings = false
     }
 
     /// ImageIO reads the flattened picture of most Photoshop files.
@@ -264,6 +284,7 @@ enum PSDReader {
                 let key = record.sectionBlendKey ?? record.blendKey
                 groups[index].blendMode = key == "pass" ? nil : blendMode(key)
                 groups[index].isLocked = record.isLocked
+                if record.blocks["shmd"].flatMap(PSDDocumentInfo.compSettings) != nil { extras.groupsHaveCompSettings = true }
                 if record.extras != PhotoshopExtras() { groups[index].photoshop = record.extras }
                 if let rect = record.blocks["artb"].flatMap(PSDDocumentInfo.artboardRect) {
                     extras.artboards.append(Artboard(name: groups[index].name, rect: rect, groupID: id))
@@ -278,6 +299,7 @@ enum PSDReader {
                 (whole.left, whole.top, whole.right, whole.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
                 let read = PSDAdjustments.filters(from: record.blocks)
                 let filters = read.isEmpty ? [LayerFilter(kind: .curves)] : read
+                if filters.count > 1 { extras.losses.insert(.adjustments) }
                 for filter in filters {
                     var layer = Layer(
                         name: record.name.isEmpty ? filter.kind.label : record.name,
@@ -318,7 +340,16 @@ enum PSDReader {
                 (record.left, record.top, record.right, record.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
                 decoded = Bitmap.solid(size: canvas, color: color)
             }
-            guard let image = decoded else { continue }
+            if decoded == nil, record.width <= 0 || record.height <= 0 {
+                // An empty layer, or a fill Easel cannot draw, which goes
+                // back as it came.
+                (record.left, record.top, record.right, record.bottom) = (0, 0, Int(canvas.width), Int(canvas.height))
+                decoded = Bitmap.solid(size: canvas, color: .clear)
+            }
+            guard let image = decoded else {
+                extras.losses.insert(.layers)
+                continue
+            }
 
             var layer = Layer(
                 name: record.name.isEmpty ? String(localized: "Layer.DefaultName.Layer") : record.name,
@@ -336,11 +367,16 @@ enum PSDReader {
             layer.fillOpacity = Double(record.fillOpacity) / 255
             layer.isLocked = record.isLocked
             if let settings = record.blocks["shmd"].flatMap(PSDDocumentInfo.compSettings) { extras.compSettings[layer.id] = settings }
+            if record.blocks["shmd"].map(PSDDocumentInfo.hasOtherMetadata) == true { extras.losses.insert(.metadata) }
+            if record.realMask != nil { extras.losses.insert(.masks) }
             // Photoshop keeps a layer's own pixels and its styles apart, as
             // Easel does. Files with several of one effect may keep them as
             // `lmfx` instead, laid out the same way.
             if let effects = record.blocks["lfx2"] ?? record.blocks["lmfx"] {
                 layer.effects = PSDEffects.effects(from: effects, patterns: patterns)
+                // Overlays' patterns are named afresh, so their styles are
+                // written afresh too.
+                if layer.effects.contains(where: { $0.kind == .patternOverlay }) { extras.losses.insert(.effects) }
             }
             // Linked smart objects keep the same as `SoLE`.
             if let block = record.blocks["SoLd"] ?? record.blocks["SoLE"], let placed = PSDSmartObjects.placement(from: block) {

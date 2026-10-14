@@ -3,9 +3,11 @@ import Foundation
 /// Turns a plain picture file, which can only be saved flattened, into an
 /// Easel image that keeps its layers — in place, the way Rename moves a file,
 /// so the open document follows it and from then on saves as a package.
-/// Photoshop and Pixelmator Pro documents are never edited in place: before
+/// Photoshop and Pixelmator Pro documents are not converted: before
 /// anything changes, they are saved as an Easel copy wherever the person
-/// picks, and the open document follows that copy instead.
+/// picks, and the open document follows that copy instead — unless Easel
+/// can write a Photoshop file back with nothing lost, when it is edited
+/// where it is.
 enum DocumentConversion {
     static func canConvert(_ fileURL: URL) -> Bool {
         fileURL.pathExtension.lowercased() != "easel" && !requiresCopy(fileURL)
@@ -15,6 +17,12 @@ enum DocumentConversion {
     /// its layers, effects and masks would not all survive being written back.
     static func requiresCopy(_ fileURL: URL) -> Bool {
         ["psd", "psb", "pxd"].contains(fileURL.pathExtension.lowercased())
+    }
+
+    /// Whether a Photoshop file, as Easel read it, can be saved back over
+    /// itself keeping everything it had: then it needs no copy.
+    static func savesPhotoshopInPlace(_ fileURL: URL, composition: Composition) -> Bool {
+        ["psd", "psb"].contains(fileURL.pathExtension.lowercased()) && composition.photoshop?.losses.isEmpty == true
     }
 
     /// Moves the file to an `.easel` name beside it and writes the

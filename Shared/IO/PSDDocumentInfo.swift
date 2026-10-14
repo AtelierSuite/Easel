@@ -133,6 +133,27 @@ enum PSDDocumentInfo {
         return nil
     }
 
+    /// Whether a layer's comp settings say no more than Easel keeps of them.
+    static func isKeptWhole(_ settings: PSDDescriptor) -> Bool {
+        let kept: Set<String> = ["enab", "Ofst", "blendOptions", "compList", "FXRefPoint"]
+        return (settings["layerSettings"]?.list ?? []).compactMap(\.descriptor).allSatisfy { entry in
+            entry.items.allSatisfy { kept.contains($0.key) }
+        }
+    }
+
+    /// Whether a layer's `shmd` holds more than comps and its own time,
+    /// such as an animation's frames.
+    static func hasOtherMetadata(_ block: [UInt8]) -> Bool {
+        var reader = BigEndianReader(bytes: block)
+        guard let count = try? reader.uint32() else { return false }
+        for _ in 0..<count {
+            guard (try? reader.bytes(4)) != nil, let key = try? reader.ascii(4), (try? reader.bytes(4)) != nil,
+                  let length = try? reader.uint32(), (try? reader.bytes(Int(length))) != nil else { return false }
+            if !["cmls", "cust"].contains(key) { return true }
+        }
+        return false
+    }
+
     /// The comps in `list`, each layer as its settings say for it. A layer
     /// keeps a list of settings, each for some comps, the one for the
     /// layer as it is now marked 0; what a setting leaves out is as the

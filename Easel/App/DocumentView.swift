@@ -20,9 +20,11 @@ struct DocumentView: View {
 
     /// A Photoshop or Pixelmator Pro file, not yet saved as an Easel copy,
     /// which stays untouched until it is: it opens to look at, and the first
-    /// edit asks for the copy.
+    /// edit asks for the copy. Photoshop files Easel can write back whole
+    /// are edited where they are.
     private var copyBeforeEditing: CopyBeforeEditing? {
-        guard fileURL.map(DocumentConversion.requiresCopy) == true else { return nil }
+        guard let fileURL, DocumentConversion.requiresCopy(fileURL),
+              !DocumentConversion.savesPhotoshopInPlace(fileURL, composition: document.composition) else { return nil }
         return CopyBeforeEditing(isRequired: { !hasCopy }) { completion in
             copySaved = completion
             isSavingCopy = true
