@@ -3,8 +3,8 @@ import Foundation
 /// Photoshop's generic way of storing settings — layer styles, smart
 /// objects and some adjustments — as typed keys and values, read and written
 /// as Photoshop does.
-struct PSDDescriptor: Equatable {
-    indirect enum Value: Equatable {
+struct PSDDescriptor: Equatable, Sendable {
+    indirect enum Value: Equatable, Sendable {
         case descriptor(PSDDescriptor)
         case list([Value])
         case double(Double)
