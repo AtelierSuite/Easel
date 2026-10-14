@@ -24780,6 +24780,76 @@
         }
       }
     },
+    "Notice.UnsupportedFeatures.Message": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel can show this document, but saving it back into the original file would lose the following, so edits are made in an Easel copy."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easelはこの書類を表示できますが、元のファイルに書き戻すと以下の内容が失われるため、編集はEaselのコピーで行います。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel은 이 문서를 표시할 수 있지만 원본 파일에 다시 저장하면 다음 항목이 손실되므로 Easel 사본에서 편집합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel 可以显示此文稿，但存储回原文件会丢失以下内容，因此编辑会在 Easel 副本中进行。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easel 可以顯示此文件，但儲存回原檔案會遺失以下內容，因此編輯會在 Easel 副本中進行。"
+          }
+        }
+      }
+    },
+    "Notice.UnsupportedFeatures.Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some of this file can’t be saved back"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このファイルには書き戻せない部分があります"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 파일의 일부는 다시 저장할 수 없습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件的部分内容无法存储回原文件"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此檔案的部分內容無法儲存回原檔案"
+          }
+        }
+      }
+    },
     "Options.AddPoint": {
       "extractionState": "manual",
       "localizations": {
@@ -33595,6 +33665,41 @@
           "stringUnit": {
             "state": "translated",
             "value": "還原"
+          }
+        }
+      }
+    },
+    "Toolbar.UnsupportedFeatures": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported Features"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非対応の機能"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지원되지 않는 기능"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持的功能"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支援的功能"
           }
         }
       }

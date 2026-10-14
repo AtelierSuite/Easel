@@ -26,6 +26,7 @@ struct EditorView<Actions: View>: View {
     /// one panel opening from another would otherwise keep its height.
     @State private var panelDetent: PresentationDetent = .medium
     @State private var bottomToolbarInset: CGFloat = 0
+    @State private var isShowingUnsupportedFeatures = false
 
     init(
         composition: Binding<Composition>, copyBeforeEditing: CopyBeforeEditing? = nil,
@@ -116,6 +117,12 @@ struct EditorView<Actions: View>: View {
                 .copyBeforeEditingAlert(state, isActive: true)
             }
             .toolbar { editingToolbar }
+            .sheet(isPresented: $isShowingUnsupportedFeatures) {
+                UnsupportedFeatureNotice(losses: composition.writeBackLosses)
+                    .presentationDetents([.medium])
+                    .presentationDragIndicator(.visible)
+                    .presentationContentInteraction(.scrolls)
+            }
             .fileImporter(
                 isPresented: $state.isImportingFiles, allowedContentTypes: [.image], allowsMultipleSelection: true
             ) { result in
@@ -349,9 +356,15 @@ struct EditorView<Actions: View>: View {
                 Button("Canvas.ClearGuides", systemImage: "xmark.square.fill") { state.clearGuides() }
                     .disabled(composition.guides.isEmpty)
             }
-            // An extension cannot open a link, so the Photos one leaves it out.
-            if Bundle.main.bundleURL.pathExtension != "appex" {
-                Section {
+            Section {
+                if !composition.writeBackLosses.isEmpty {
+                    Button("Toolbar.UnsupportedFeatures", systemImage: "exclamationmark.triangle") {
+                        isShowingUnsupportedFeatures = true
+                    }
+                    .accessibilityIdentifier("unsupportedFeatures")
+                }
+                // An extension cannot open a link, so the Photos one leaves it out.
+                if Bundle.main.bundleURL.pathExtension != "appex" {
                     Link(destination: URL(string: "https://github.com/katagaki/Easel")!) {
                         Label("Toolbar.SourceCode", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
@@ -455,6 +468,32 @@ extension View {
             let reasons = (state.copyBeforeEditing?.reasons ?? []).map { "• \($0)" }
             Text(verbatim: ([String(localized: "CopyToEasel.Message")] + (reasons.isEmpty ? [] : [reasons.joined(separator: "\n")]))
                 .joined(separator: "\n\n"))
+        }
+    }
+}
+
+/// What the "…" menu's Unsupported Features item shows: the parts of a
+/// Photoshop or Pixelmator Pro file that Easel cannot save back into it.
+private struct UnsupportedFeatureNotice: View {
+    var losses: Set<WriteBackLoss>
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Notice.UnsupportedFeatures.Title", systemImage: "exclamationmark.triangle")
+                    .font(.headline)
+                    .labelStyle(.titleAndIcon)
+                Text("Notice.UnsupportedFeatures.Message")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                ForEach(WriteBackLoss.allCases.filter(losses.contains), id: \.self) { loss in
+                    Label(loss.label, systemImage: "minus")
+                        .font(.callout)
+                }
+            }
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(20)
         }
     }
 }
