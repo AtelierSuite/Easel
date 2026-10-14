@@ -82,6 +82,7 @@ struct PXDBuilder {
         var position: CGPoint
         var size: CGSize
         var angle = 0.0
+        var scale = CGPoint(x: 1, y: 1)
         var backingScale: Double?
         var opacity = 100
         var visible = true
@@ -152,7 +153,7 @@ struct PXDBuilder {
                 ("name", Value.makeString(layer.name)),
                 ("position", Value.makePoint("PTPt", layer.position)),
                 ("size", Value.makePoint("PTSz", CGPoint(x: layer.size.width, y: layer.size.height))),
-                ("scale", Value.makePoint("PTPt", CGPoint(x: 1, y: 1))),
+                ("scale", Value.makePoint("PTPt", layer.scale)),
                 ("anchorPoint", Value.makePoint("PTPt", CGPoint(x: 0.5, y: 0.5))),
                 ("angle", Value.makeDouble("PTFl", layer.angle)),
                 ("opacity", Value.makePercent(layer.opacity)),
@@ -316,6 +317,24 @@ struct PXDReaderTests {
     }
 
     /// Retina documents keep places and sizes in points, two pixels each.
+    /// Pixelmator flips a layer after turning it, so a flipped layer's
+    /// angle turns the other way.
+    @Test func flippedLayersTurnTheOtherWay() throws {
+        let wrapper = try PXDBuilder(canvas: (8, 8), layers: [
+            .init(identifier: "FLIPPED", index: 0, type: 1, name: "Flipped", position: CGPoint(x: 4, y: 4),
+                  size: CGSize(width: 4, height: 2), angle: 90, scale: CGPoint(x: -1, y: 1),
+                  pixels: PXDPixels.bgra(0, 0, 255, width: 4, height: 2)),
+            .init(identifier: "TURNED", index: 1, type: 1, name: "Turned", position: CGPoint(x: 4, y: 4),
+                  size: CGSize(width: 4, height: 2), angle: 90, pixels: PXDPixels.bgra(0, 0, 255, width: 4, height: 2)),
+        ]).build()
+        let composition = try PXDReader.composition(from: wrapper)
+        let flipped = try #require(composition.layers.first { $0.name == "Flipped" })
+        #expect(flipped.transform.scaleX == -1)
+        #expect(abs(flipped.transform.rotation - .pi / 2) < 1e-9)
+        let turned = try #require(composition.layers.first { $0.name == "Turned" })
+        #expect(abs(turned.transform.rotation + .pi / 2) < 1e-9)
+    }
+
     @Test func backingScaleTurnsPointsIntoPixels() throws {
         let group = UUID().uuidString
         let wrapper = try PXDBuilder(canvas: (40, 20), layers: [

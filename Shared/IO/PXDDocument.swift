@@ -162,6 +162,24 @@ enum PXDFormat {
         /// Degrees, anticlockwise.
         var angle: Double { values["angle"].flatMap { Value.bigDouble($0) } ?? 0 }
 
+        /// The angle as Easel turns a layer: clockwise radians.
+        var rotation: Double { Info.rotation(angle: angle, scale: scale) }
+
+        /// Pixelmator flips a layer after turning it, across the canvas's
+        /// own axes, so a flipped layer's angle turns the other way.
+        static func rotation(angle: Double, scale: CGPoint) -> Double {
+            -angle * .pi / 180 * (scale.x * scale.y < 0 ? -1 : 1)
+        }
+
+        /// Easel's clockwise radians as Pixelmator's angle for a layer of
+        /// this scale, in degrees from 0 up to 360.
+        static func angle(rotation: Double, scale: CGPoint) -> Double {
+            var angle = (-rotation * 180 / .pi * (scale.x * scale.y < 0 ? -1 : 1)).truncatingRemainder(dividingBy: 360)
+            if angle < 0 { angle += 360 }
+            if abs(angle - 360) < 1e-9 || abs(angle) < 1e-9 { angle = 0 }
+            return angle
+        }
+
         /// Where pixels of this size sit on a canvas of this size.
         ///
         /// Pixelmator measures from the bottom left with angles turning
@@ -176,7 +194,7 @@ enum PXDFormat {
             return LayerTransform(
                 position: CGPoint(x: position.x, y: canvas.height - position.y),
                 scaleX: size.x * scale.x / max(imageSize.width, 1), scaleY: size.y * scale.y / max(imageSize.height, 1),
-                rotation: -angle * .pi / 180
+                rotation: rotation
             )
         }
     }
