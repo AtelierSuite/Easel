@@ -365,7 +365,7 @@ struct EditorView<Actions: View>: View {
                 }
                 // An extension cannot open a link, so the Photos one leaves it out.
                 if Bundle.main.bundleURL.pathExtension != "appex" {
-                    Link(destination: URL(string: "https://github.com/katagaki/Easel")!) {
+                    Link(destination: URL(string: "https://github.com/AtelierSuite/Easel")!) {
                         Label("Toolbar.SourceCode", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
                 }
