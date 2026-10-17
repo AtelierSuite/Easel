@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import UIKit
 
 /// What a composition becomes in a vector file: vector layers as paths,
 /// text as words where the format allows, and everything a vector file
@@ -193,9 +192,8 @@ enum SVGWriter {
         for run in runs {
             var attributes = "x=\"\(number(run.origin.x))\" y=\"\(number(run.origin.y))\""
             attributes += " font-family=\"\(escaped(fontFamily(run.font, design: text.design)))\" font-size=\"\(number(run.font.pointSize))\""
-            let traits = run.font.fontDescriptor.symbolicTraits
-            if traits.contains(.traitBold) { attributes += " font-weight=\"bold\"" }
-            if traits.contains(.traitItalic) { attributes += " font-style=\"italic\"" }
+            if run.font.fontDescriptor.isBold { attributes += " font-weight=\"bold\"" }
+            if run.font.fontDescriptor.isItalic { attributes += " font-style=\"italic\"" }
             if abs(run.spacing) > 0.01 { attributes += " letter-spacing=\"\(number(run.spacing))\"" }
             if !forClipping {
                 let paint = RGBAColor(run.color.cgColor) ?? .black
@@ -212,8 +210,8 @@ enum SVGWriter {
 
     /// A font family a viewer can find: the system font's designs by their
     /// CSS names, with fallbacks.
-    private static func fontFamily(_ font: UIFont, design: TextContent.Design) -> String {
-        guard font.familyName.hasPrefix(".") else { return "'\(font.familyName)'" }
+    private static func fontFamily(_ font: PlatformFont, design: TextContent.Design) -> String {
+        guard font.family.hasPrefix(".") else { return "'\(font.family)'" }
         switch design {
         case .standard: return "system-ui, -apple-system, 'Helvetica Neue', sans-serif"
         case .serif: return "ui-serif, 'New York', Georgia, serif"

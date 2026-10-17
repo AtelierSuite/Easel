@@ -1,35 +1,34 @@
 import CoreText
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Sets a text layer's words into pixels.
 enum TextRenderer {
-    static func font(for text: TextContent) -> UIFont {
+    static func font(for text: TextContent) -> PlatformFont {
         let size = max(1, text.fontSize)
         if let family = text.fontName, let font = font(family: family, text: text, size: size) { return font }
-        var descriptor = UIFont.systemFont(ofSize: size, weight: text.isBold ? .bold : .regular).fontDescriptor
-        let design: UIFontDescriptor.SystemDesign = switch text.design {
+        var descriptor = PlatformFont.systemFont(ofSize: size, weight: text.isBold ? .bold : .regular).fontDescriptor
+        let design: PlatformFontDescriptor.SystemDesign = switch text.design {
         case .standard: .default
         case .serif: .serif
         case .rounded: .rounded
         case .monospaced: .monospaced
         }
         descriptor = descriptor.withDesign(design) ?? descriptor
-        if text.isItalic {
-            descriptor = descriptor.withSymbolicTraits(descriptor.symbolicTraits.union(.traitItalic)) ?? descriptor
-        }
-        return UIFont(descriptor: descriptor, size: size)
+        descriptor = descriptor.adding(italic: text.isItalic)
+        return PlatformFont.described(by: descriptor, size: size)
     }
 
     /// A face of a named family, bold and italic as asked where the family
     /// has them. Nil when no such family is installed.
-    private static func font(family: String, text: TextContent, size: Double) -> UIFont? {
-        guard !UIFont.fontNames(forFamilyName: family).isEmpty else { return nil }
-        var descriptor = UIFontDescriptor(fontAttributes: [.family: family])
-        var traits: UIFontDescriptor.SymbolicTraits = []
-        if text.isBold { traits.insert(.traitBold) }
-        if text.isItalic { traits.insert(.traitItalic) }
-        if !traits.isEmpty { descriptor = descriptor.withSymbolicTraits(traits) ?? descriptor }
-        return UIFont(descriptor: descriptor, size: size)
+    private static func font(family: String, text: TextContent, size: Double) -> PlatformFont? {
+        guard PlatformFont.isInstalled(family: family) else { return nil }
+        let descriptor = PlatformFontDescriptor(fontAttributes: [.family: family])
+            .adding(bold: text.isBold, italic: text.isItalic)
+        return PlatformFont.described(by: descriptor, size: size)
     }
 
     static func attributedString(for text: TextContent) -> NSAttributedString {
@@ -39,7 +38,7 @@ enum TextRenderer {
         case .center: .center
         case .trailing: .right
         }
-        let color = UIColor(
+        let color = PlatformColor(
             red: text.color.red, green: text.color.green, blue: text.color.blue, alpha: text.color.alpha
         )
         if let lineSpacing = text.lineSpacing { paragraph.lineHeightMultiple = max(lineSpacing, 0.1) }
@@ -69,7 +68,7 @@ enum TextRenderer {
             attributes[.font] = font(for: face)
         }
         if let color = style.color {
-            attributes[.foregroundColor] = UIColor(red: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
+            attributes[.foregroundColor] = PlatformColor(red: color.red, green: color.green, blue: color.blue, alpha: color.alpha)
         }
         if style.isUnderlined == true { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
         // Core Text drops a kern where there is tracking, so a run's
@@ -118,8 +117,8 @@ enum TextRenderer {
         var string: String
         /// Where its baseline starts, y running down.
         var origin: CGPoint
-        var font: UIFont
-        var color: UIColor
+        var font: PlatformFont
+        var color: PlatformColor
         /// Extra room after each letter, in pixels.
         var spacing: Double
         var isUnderlined: Bool
@@ -147,13 +146,13 @@ enum TextRenderer {
                 var start = CGPoint.zero
                 CTRunGetPositions(run, CFRange(location: 0, length: 1), &start)
                 let attributes = string.attributes(at: range.location, effectiveRange: nil)
-                let font = attributes[.font] as? UIFont ?? font(for: text)
+                let font = attributes[.font] as? PlatformFont ?? font(for: text)
                 let spacing = (attributes[.tracking] as? Double ?? 0) + (attributes[.kern] as? Double ?? 0)
                 let shift = attributes[.baselineOffset] as? Double ?? 0
                 runs.append(SetRun(
                     string: piece.trimmingCharacters(in: .newlines),
                     origin: CGPoint(x: box.minX + origin.x + start.x, y: size.height - (box.minY + origin.y) - shift),
-                    font: font, color: attributes[.foregroundColor] as? UIColor ?? .black, spacing: spacing,
+                    font: font, color: attributes[.foregroundColor] as? PlatformColor ?? .black, spacing: spacing,
                     isUnderlined: (attributes[.underlineStyle] as? Int ?? 0) != 0
                 ))
             }
@@ -167,27 +166,27 @@ enum TextRenderer {
     static func draw(_ text: TextContent, in context: CGContext, size: CGSize) {
         let (string, _, padding, outlineWidth) = layout(for: text)
         let textRect = CGRect(x: padding, y: padding, width: size.width - padding * 2, height: size.height - padding * 2)
-        UIGraphicsPushContext(context)
-        if let background = text.background {
-            let box = CGRect(origin: .zero, size: size)
-            let radius = min(box.width, box.height) / 2 * min(max(background.cornerRadius, 0), 1)
-            context.setFillColor(background.color.cgColor)
-            context.addPath(CGPath(roundedRect: box, cornerWidth: radius, cornerHeight: radius, transform: nil))
-            context.fillPath()
+        drawing(into: context) {
+            if let background = text.background {
+                let box = CGRect(origin: .zero, size: size)
+                let radius = min(box.width, box.height) / 2 * min(max(background.cornerRadius, 0), 1)
+                context.setFillColor(background.color.cgColor)
+                context.addPath(CGPath(roundedRect: box, cornerWidth: radius, cornerHeight: radius, transform: nil))
+                context.fillPath()
+            }
+            if let outline = text.outline {
+                // Stroked first and filled over, so the outline sits wholly
+                // outside the letters. A stroke width is a percentage of the
+                // font size and straddles the edge, hence the doubling.
+                let stroked = NSMutableAttributedString(attributedString: string)
+                stroked.addAttributes([
+                    .strokeColor: outline.color.platformColor,
+                    .strokeWidth: outlineWidth * 2 / max(text.fontSize, 1) * 100,
+                ], range: NSRange(location: 0, length: stroked.length))
+                context.setLineJoin(.round)
+                stroked.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+            }
+            string.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
         }
-        if let outline = text.outline {
-            // Stroked first and filled over, so the outline sits wholly
-            // outside the letters. A stroke width is a percentage of the
-            // font size and straddles the edge, hence the doubling.
-            let stroked = NSMutableAttributedString(attributedString: string)
-            stroked.addAttributes([
-                .strokeColor: UIColor(cgColor: outline.color.cgColor),
-                .strokeWidth: outlineWidth * 2 / max(text.fontSize, 1) * 100,
-            ], range: NSRange(location: 0, length: stroked.length))
-            context.setLineJoin(.round)
-            stroked.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
-        }
-        string.draw(with: textRect, options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
-        UIGraphicsPopContext()
     }
 }

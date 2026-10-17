@@ -1,6 +1,6 @@
 import CoreGraphics
 import CoreText
-import UIKit
+import Foundation
 
 /// Sets text along a path: each letter placed at its distance along the
 /// path and turned to follow it.
@@ -57,7 +57,7 @@ enum PathTextRenderer {
     }
 
     static func font(for text: PathText) -> CTFont {
-        UIFont.systemFont(ofSize: max(1, text.fontSize), weight: text.isBold ? .bold : .regular) as CTFont
+        PlatformFont.systemFont(ofSize: max(1, text.fontSize), weight: text.isBold ? .bold : .regular) as CTFont
     }
 
     /// Where each letter goes, in order, and the font it is drawn in: a
