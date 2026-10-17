@@ -80,7 +80,7 @@ struct EditorView<Actions: View>: View {
                         .padding(.leading, 12)
                 }
             }
-            .overlay(alignment: .top) { statusBar }
+            .overlay(alignment: .top) { CanvasStatusBar(state: state) }
             .onChange(of: isCompact, initial: true) { _, _ in updateInsets() }
             .onChange(of: state.presentedPanel) { _, panel in
                 panelDetent = panel?.keepsCanvasVisible == false ? .large : .medium
@@ -91,7 +91,7 @@ struct EditorView<Actions: View>: View {
             .animation(.snappy(duration: 0.3), value: state.missingLinkNames + state.missingMapNames)
             .modifier(InspectorPresentation(isEnabled: !isCompact, isPresented: $state.isInspectorPresented) {
                 let panel = state.presentedPanel ?? .layers
-                panelContent(panel)
+                EditorPanelContent(panel: panel, state: state, history: history)
                     .environment(\.panelPlacement, .inspector)
                     .environment(\.panelTitle, panel.title)
                     .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
@@ -101,7 +101,7 @@ struct EditorView<Actions: View>: View {
                 set: { state.presentedPanel = $0 }
             )) { panel in
                 NavigationStack {
-                    panelContent(panel)
+                    EditorPanelContent(panel: panel, state: state, history: history)
                         .navigationTitle(panel.title)
                         .navigationBarTitleDisplayMode(.inline)
                         .navigationBarBackButtonHidden()
@@ -199,64 +199,6 @@ struct EditorView<Actions: View>: View {
         }
         .matchedTransitionSource(id: EditorPanel.layers, in: panelTransition)
         .accessibilityIdentifier("panel.layers")
-    }
-
-    /// The zoom level, and a spinner while edits are being worked on.
-    private var statusBar: some View {
-        HStack(spacing: 8) {
-            if state.zoom != 1 || state.pan != .zero || state.rotation != 0 {
-                Button {
-                    withAnimation(.snappy) { state.fitCanvas() }
-                } label: {
-                    Text(verbatim: "\(Int((state.viewport.scale * displayScale * 100).rounded()))%")
-                        .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                        .padding(.horizontal, 12)
-                        .frame(height: 32)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .capsule)
-                .accessibilityLabel("Canvas.FitToScreen")
-                .accessibilityIdentifier("zoomLevel")
-            }
-            if state.editsAnyMask, state.activeLayer?.isAdjustment != true {
-                Button {
-                    state.isEditingMask = false
-                    state.isEditingFilterMask = false
-                } label: {
-                    Label(state.editsFilterMask ? "FilterMask.Editing" : "Mask.Editing", systemImage: "xmark.circle.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 12)
-                        .frame(height: 32)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.tint(.accentColor.opacity(0.3)).interactive(), in: .capsule)
-                .accessibilityIdentifier("stopEditingMask")
-            }
-            if state.isBusy {
-                ProgressView()
-                    .frame(width: 32, height: 32)
-                    .glassEffect(.regular, in: .circle)
-            }
-        }
-        .padding(.top, 8)
-        .animation(.snappy(duration: 0.2), value: state.isBusy)
-        .animation(.snappy(duration: 0.2), value: state.editsAnyMask)
-    }
-
-    @ViewBuilder
-    private func panelContent(_ panel: EditorPanel) -> some View {
-        switch panel {
-        case .layers: LayersPanel(composition: state.composition, state: state)
-        case .adjustments: AdjustmentsPanel(state: state)
-        case .filters: LayerFiltersPanel(state: state)
-        case .effects: LayerEffectsPanel(state: state)
-        case .looks: LooksPanel(state: state)
-        case .text: TextPanel(state: state)
-        case .imageSize: CanvasSizePanel(state: state)
-        case .history: HistoryPanel(history: history, state: state)
-        case .comps: LayerCompsPanel(state: state)
-        case .artboards: ArtboardsPanel(state: state)
-        }
     }
 
     // MARK: - Toolbar
