@@ -35,7 +35,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         window.center()
         window.titlebarSeparatorStyle = .automatic
         window.toolbarStyle = .unified
-        window.tabbingMode = .preferred
+        window.tabbingMode = .automatic
         super.init(window: window)
         window.delegate = self
 
