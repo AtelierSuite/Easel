@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 import UniformTypeIdentifiers
 

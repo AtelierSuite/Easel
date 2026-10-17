@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// Where a panel is showing, which decides where its Cancel and Done go.

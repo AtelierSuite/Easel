@@ -1,4 +1,5 @@
 import Foundation
+import Paintbrush
 
 /// What Easel keeps in a photo's adjustment data so its layers come back.
 ///

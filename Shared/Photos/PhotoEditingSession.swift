@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 @preconcurrency import Photos
+import Paintbrush
 import UniformTypeIdentifiers
 
 /// Editing a photo where it lies in the library: reading it in, layers and

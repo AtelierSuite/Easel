@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// The Human Interface Guidelines system colours, offered as swatches, as

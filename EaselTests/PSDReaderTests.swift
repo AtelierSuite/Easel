@@ -4,6 +4,7 @@ import ImageIO
 import Testing
 import UniformTypeIdentifiers
 @testable import Easel
+@testable import Paintbrush
 
 
 /// Writes small layered Photoshop files, enough to read back.

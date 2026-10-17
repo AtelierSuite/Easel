@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Paintbrush
 
 /// One path in a vector layer.
 struct VectorPathRef: Equatable, Sendable {

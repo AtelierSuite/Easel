@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// A document window: the editor, with sharing and the file's title menu.

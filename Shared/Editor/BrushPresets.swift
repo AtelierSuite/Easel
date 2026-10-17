@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Paintbrush
 
 /// A brush kept by name: everything about it but its colour, which stays
 /// whatever is in use.

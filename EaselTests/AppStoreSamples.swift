@@ -3,6 +3,7 @@ import Foundation
 import UIKit
 import XCTest
 @testable import Easel
+@testable import Paintbrush
 
 /// Paints the documents the App Store screenshots open, with the app's own
 /// brushes, layers, filters, text and vector paths.

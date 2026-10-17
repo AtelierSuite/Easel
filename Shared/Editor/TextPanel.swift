@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// The words and setting of the active text layer, applied as they change.

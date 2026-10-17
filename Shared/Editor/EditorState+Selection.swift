@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// A change to the whole selection that needs a size: how far to feather,

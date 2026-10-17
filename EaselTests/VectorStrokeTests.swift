@@ -2,6 +2,7 @@ import CoreGraphics
 import Foundation
 import Testing
 @testable import Easel
+@testable import Paintbrush
 
 @Suite("Vector stroke styles")
 struct VectorStrokeTests {

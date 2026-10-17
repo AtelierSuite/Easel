@@ -1,4 +1,5 @@
 import CoreGraphics
+import Paintbrush
 
 /// A line something has snapped to, shown while it holds.
 struct SnapLine: Equatable, Sendable {

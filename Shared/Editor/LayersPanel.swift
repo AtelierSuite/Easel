@@ -1,3 +1,4 @@
+import Paintbrush
 import PhotosUI
 import SwiftUI
 

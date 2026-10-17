@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// The active layer's styles: shadows, glows, an outline, a bevel and

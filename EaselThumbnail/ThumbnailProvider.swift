@@ -1,3 +1,4 @@
+import Paintbrush
 import QuickLookThumbnailing
 import UIKit
 

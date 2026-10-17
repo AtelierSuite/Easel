@@ -1,4 +1,5 @@
 import Foundation
+import Paintbrush
 
 /// Turns a plain picture file, which can only be saved flattened, into an
 /// Easel image that keeps its layers — in place, the way Rename moves a file,

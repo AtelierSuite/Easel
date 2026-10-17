@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// A smart object's contents open in an editor of their own; Done puts them

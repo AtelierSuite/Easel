@@ -1,5 +1,6 @@
 import CoreGraphics
 import CoreTransferable
+import Paintbrush
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers

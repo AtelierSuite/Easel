@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import Observation
+import Paintbrush
 import SwiftUI
 
 /// A way of exporting kept by name: a format, a quality, and the largest

@@ -1,4 +1,5 @@
 @preconcurrency import Photos
+import Paintbrush
 import PhotosUI
 import SwiftUI
 import UIKit

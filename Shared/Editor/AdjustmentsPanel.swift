@@ -1,4 +1,5 @@
 import CoreImage
+import Paintbrush
 import SwiftUI
 
 /// Tone and colour sliders for the active layer, tried on the canvas as they

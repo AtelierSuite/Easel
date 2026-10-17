@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// Names a step for the History panel from what it changed.

@@ -1,4 +1,5 @@
 import CoreGraphics
+import Paintbrush
 import SwiftUI
 
 /// Painting mirrored about the middle of the canvas: each stroke is drawn

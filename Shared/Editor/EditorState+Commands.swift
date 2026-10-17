@@ -1,4 +1,5 @@
 import CoreImage
+import Paintbrush
 import SwiftUI
 
 // MARK: - Layers

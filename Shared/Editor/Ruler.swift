@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// A straightedge laid over the canvas. Fingers move, turn and stretch it;

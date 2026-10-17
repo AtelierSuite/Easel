@@ -1,6 +1,7 @@
 import AppIntents
 import CoreGraphics
 import Foundation
+import Paintbrush
 import UniformTypeIdentifiers
 
 /// The file formats a Shortcuts action can write.

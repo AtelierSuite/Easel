@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// What a finger or pencil does on the canvas.

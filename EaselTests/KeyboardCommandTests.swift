@@ -2,6 +2,7 @@ import CoreGraphics
 import Testing
 import UIKit
 @testable import Easel
+@testable import Paintbrush
 
 @MainActor
 @Suite("Keyboard commands")

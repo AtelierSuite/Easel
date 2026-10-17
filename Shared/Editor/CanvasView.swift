@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// The picture on its workspace: a checkerboard where it is transparent,

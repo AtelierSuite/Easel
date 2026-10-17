@@ -3,6 +3,7 @@ import CoreText
 import Foundation
 import Testing
 @testable import Easel
+@testable import Paintbrush
 
 @Suite("Vector layers")
 struct VectorLayerTests {

@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// What the tool in hand is doing, drawn over the picture: the selection's

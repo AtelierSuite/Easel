@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// A new size for the canvas, and what becomes of the picture on it: kept as

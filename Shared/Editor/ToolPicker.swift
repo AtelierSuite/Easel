@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// Matches the standard navigation toolbar's control size.

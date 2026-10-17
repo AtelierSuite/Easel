@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Paintbrush
 
 /// A layer being bent by the Transform tool, shown on the canvas until it is
 /// applied or cancelled.

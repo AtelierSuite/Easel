@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Paintbrush
 import UniformTypeIdentifiers
 
 /// What the Shortcuts actions do to pictures, kept apart from the actions
