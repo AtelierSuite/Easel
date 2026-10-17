@@ -1,5 +1,18 @@
 import CoreGraphics
 
+/// The ways the Transform tool bends a layer.
+enum TransformMode: String, CaseIterable, Identifiable, Sendable {
+    /// Drag the corners: skew and perspective.
+    case distort
+    /// Drag a grid of points: bend the layer like a sheet.
+    case warp
+    /// Drag the corners and the middle of the top: wrap the layer round a
+    /// cylinder.
+    case cylinder
+
+    var id: String { rawValue }
+}
+
 /// Where each point of a layer goes when it is bent: `point(u, v)` takes a
 /// point given as a fraction of the layer, (0, 0) its top left and (1, 1)
 /// its bottom right, to the canvas.

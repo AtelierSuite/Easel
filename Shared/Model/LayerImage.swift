@@ -59,6 +59,13 @@ final class LayerImage: Sendable {
     }
 }
 
+extension LayerImage {
+    /// A copy no larger than `maxPixelSize` on its longest side.
+    func preview(maxPixelSize: Int) -> CGImage {
+        Bitmap.scaled(cgImage, toFit: maxPixelSize) ?? cgImage
+    }
+}
+
 extension LayerImage: Equatable {
     static func == (lhs: LayerImage, rhs: LayerImage) -> Bool { lhs === rhs }
 }

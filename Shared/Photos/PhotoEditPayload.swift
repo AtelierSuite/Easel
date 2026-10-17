@@ -11,7 +11,6 @@ enum PhotoEditPayload {
     /// Comfortably under the 2 MiB Photos accepts; setting more raises an
     /// exception rather than an error.
     static let inlineLimit = 1_500_000
-    static let appGroup = "group.com.tsubuzaki.Easel"
 
     private enum Stored: Codable {
         case inline(Data)
@@ -60,7 +59,7 @@ enum PhotoEditPayload {
     }
 
     private static var folder: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup)?
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SharedContainer.appGroup)?
             .appending(path: "Photo Edits", directoryHint: .isDirectory)
     }
 }

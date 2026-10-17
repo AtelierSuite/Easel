@@ -11,7 +11,7 @@ enum CustomBrushTips {
     static let size = 128
 
     static var folder: URL? {
-        let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: PhotoEditPayload.appGroup)
+        let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SharedContainer.appGroup)
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         return base?.appending(path: "Brush Tips", directoryHint: .isDirectory)
     }

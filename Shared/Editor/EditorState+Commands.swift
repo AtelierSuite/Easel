@@ -497,13 +497,6 @@ extension EditorState {
     }
 }
 
-extension LayerImage {
-    /// A copy no larger than `maxPixelSize` on its longest side.
-    func preview(maxPixelSize: Int) -> CGImage {
-        Bitmap.scaled(cgImage, toFit: maxPixelSize) ?? cgImage
-    }
-}
-
 extension Painter {
     /// `top` where the selection is, `bottom` everywhere else. `scale` maps
     /// canvas pixels to the images' pixels, for smaller copies.

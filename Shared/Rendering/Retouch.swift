@@ -2,6 +2,15 @@ import CoreGraphics
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
+/// What the Tone tool does where it is dragged.
+enum ToneKind: String, CaseIterable, Identifiable, Sendable {
+    case dodge, burn, saturate, desaturate, sharpen, soften
+    /// Takes the red glare out of eyes lit by a flash.
+    case redEye
+
+    var id: String { rawValue }
+}
+
 /// The blur, mosaic and clone brushes: the whole layer is blurred, tiled or
 /// shifted once, and the stroke decides where that shows through.
 enum RetouchEffect {

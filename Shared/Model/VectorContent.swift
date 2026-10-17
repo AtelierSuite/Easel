@@ -230,3 +230,28 @@ struct PathText: Codable, Equatable, Sendable {
     /// How far along the path the text starts, 0 at its first point.
     var start = 0.0
 }
+
+extension VectorNode {
+    /// The node with its point and handles carried through `transform`.
+    func mapped(_ transform: CGAffineTransform) -> VectorNode {
+        VectorNode(
+            point: point.applying(transform), controlIn: controlIn?.applying(transform),
+            controlOut: controlOut?.applying(transform), isSmooth: isSmooth
+        )
+    }
+
+    /// The segment from `start` to `end` cut in half (de Casteljau): the new
+    /// middle point, and the shortened handles either side of it.
+    static func split(from start: VectorNode, to end: VectorNode) -> (startOut: CGPoint?, middle: VectorNode, endIn: CGPoint?) {
+        func mid(_ a: CGPoint, _ b: CGPoint) -> CGPoint { CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2) }
+        guard start.controlOut != nil || end.controlIn != nil else {
+            return (nil, VectorNode(point: mid(start.point, end.point)), nil)
+        }
+        let p0 = start.point, p1 = start.controlOut ?? start.point
+        let p2 = end.controlIn ?? end.point, p3 = end.point
+        let a = mid(p0, p1), b = mid(p1, p2), c = mid(p2, p3)
+        let d = mid(a, b), e = mid(b, c)
+        let middle = mid(d, e)
+        return (a, VectorNode(point: middle, controlIn: d, controlOut: e, isSmooth: true), c)
+    }
+}
