@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 @MainActor
 final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let session: EditorSession
-    private let editor: EditorViewController
     private var smartObjectSheet: SmartObjectSheetController?
 
     private var imageDocument: ImageDocument? { document as? ImageDocument }
@@ -21,7 +20,6 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let editor = EditorViewController(session: session) { [weak document] in
             document?.displayName ?? String(localized: "Export.DefaultName")
         }
-        self.editor = editor
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
