@@ -1,0 +1,107 @@
+import AppKit
+import Paintbrush
+
+/// The tools in a column down the window's side, grouped as on iPad:
+/// arranging, painting, retouching, adding. The tool in hand stays lit.
+@MainActor
+final class ToolPaletteViewController: NSViewController {
+    private let state: EditorState
+    private var buttons: [Tool: NSButton] = [:]
+
+    static let width: CGFloat = 52
+
+    init(state: EditorState) {
+        self.state = state
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func loadView() {
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 4
+        stack.edgeInsets = NSEdgeInsets(top: 8, left: 0, bottom: 12, right: 0)
+        for (index, tools) in Tool.groups.enumerated() {
+            if index > 0 {
+                let separator = NSBox()
+                separator.boxType = .separator
+                separator.widthAnchor.constraint(equalToConstant: 28).isActive = true
+                stack.addArrangedSubview(separator)
+                stack.setCustomSpacing(8, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
+                stack.setCustomSpacing(8, after: separator)
+            }
+            for tool in tools {
+                let button = toolButton(for: tool)
+                buttons[tool] = button
+                stack.addArrangedSubview(button)
+            }
+        }
+
+        // Short windows scroll the column rather than cut it off.
+        let document = FlippedView()
+        document.translatesAutoresizingMaskIntoConstraints = false
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        document.addSubview(stack)
+        let scroll = NSScrollView()
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = false
+        scroll.automaticallyAdjustsContentInsets = true
+        scroll.documentView = document
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: document.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: document.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: document.trailingAnchor),
+            document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+        ])
+        view = scroll
+        view.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        observeChanges { [weak self] in self?.showTool() }
+    }
+
+    private func toolButton(for tool: Tool) -> NSButton {
+        let name = String(localized: String.LocalizationValue(tool.labelKey))
+        let image = NSImage(systemSymbolName: tool.symbolName, accessibilityDescription: name)?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
+        let button = NSButton(image: image ?? NSImage(), target: self, action: #selector(pickTool(_:)))
+        button.setButtonType(.pushOnPushOff)
+        button.bezelStyle = .toolbar
+        button.showsBorderOnlyWhileMouseInside = true
+        button.imagePosition = .imageOnly
+        button.tag = Tool.allCases.firstIndex(of: tool) ?? 0
+        button.toolTip = "\(name) (\(String(tool.shortcut.character).uppercased()))"
+        button.setAccessibilityIdentifier("tool.\(tool.rawValue)")
+        NSLayoutConstraint.activate([
+            button.widthAnchor.constraint(equalToConstant: 36),
+            button.heightAnchor.constraint(equalToConstant: 32),
+        ])
+        return button
+    }
+
+    private func showTool() {
+        let current = state.tool
+        for (tool, button) in buttons {
+            let isOn = tool == current
+            button.state = isOn ? .on : .off
+            button.contentTintColor = isOn ? .controlAccentColor : nil
+        }
+    }
+
+    @objc private func pickTool(_ sender: NSButton) {
+        state.tool = Tool.allCases[sender.tag]
+        // Clicking an already lit button would unlight it.
+        showTool()
+    }
+}
+
+/// A view whose content starts at the top, for a scroll view's document.
+private final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
