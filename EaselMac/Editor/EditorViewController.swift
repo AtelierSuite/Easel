@@ -133,6 +133,17 @@ final class EditorViewController: NSSplitViewController {
 
     @objc func groupLayer(_ sender: Any?) { state.groupActiveLayer() }
 
+    @objc func rasterizeLayer(_ sender: Any?) {
+        if let id = state.activeLayerID { state.rasterizeLayer(id) }
+    }
+
+    @objc func convertToSmartObject(_ sender: Any?) { state.convertToSmartObject() }
+    @objc func editSmartObjectContents(_ sender: Any?) { state.editSmartObjectContents() }
+    @objc func addMask(_ sender: Any?) { state.addMask() }
+    @objc func applyMask(_ sender: Any?) { state.applyMask() }
+    @objc func invertMask(_ sender: Any?) { state.invertMask() }
+    @objc func deleteMask(_ sender: Any?) { state.deleteMask() }
+
     // MARK: - View
 
     @objc func zoomIn(_ sender: Any?) { state.zoomStep(larger: true) }
@@ -245,6 +256,18 @@ extension EditorViewController: NSMenuItemValidation {
             item.title = state.activeLayer?.isLocked == true
                 ? String(localized: "Layers.Unlock") : String(localized: "Layers.Lock")
             return hasLayer
+        case #selector(rasterizeLayer(_:)):
+            guard let layer = state.activeLayer else { return false }
+            return layer.isText || layer.isVector || layer.isSmartObject
+        case #selector(convertToSmartObject(_:)):
+            guard let layer = state.activeLayer else { return false }
+            return !layer.isSmartObject && !layer.isAdjustment
+        case #selector(editSmartObjectContents(_:)):
+            return state.activeLayer?.isSmartObject == true
+        case #selector(addMask(_:)):
+            return hasLayer && state.activeLayer?.mask == nil
+        case #selector(applyMask(_:)), #selector(invertMask(_:)), #selector(deleteMask(_:)):
+            return state.activeLayer?.mask != nil
         case #selector(flattenImage(_:)):
             return state.composition.layers.count > 1
         case #selector(toggleRulers(_:)):
