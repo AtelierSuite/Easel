@@ -156,7 +156,10 @@
 		EA5E1000000000000000020F /* Exceptions for "Shared" folder in "EaselPhotoEditing" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Automation/ImageAutomation.swift,
+				Automation/ImageIntents.swift,
 				Support/AppIcon.icon,
+				Support/AppShortcuts.xcstrings,
 			);
 			target = EA5E10000000000000000031 /* EaselPhotoEditing */;
 		};
