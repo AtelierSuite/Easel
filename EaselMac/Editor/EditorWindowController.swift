@@ -121,17 +121,10 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         session.sheets.isExportingWithPresets = true
     }
 
-    /// Turns a plain picture, flattened when saved, into an Easel image
-    /// that keeps its layers.
+    /// Saves a plain picture, flattened when saved, as an Easel image that
+    /// keeps its layers.
     @objc func convertToEasel(_ sender: Any?) {
-        guard let imageDocument else { return }
-        Task {
-            do {
-                try await imageDocument.convertToEasel()
-            } catch {
-                session.state.errorMessage = error.localizedDescription
-            }
-        }
+        imageDocument?.convertToEasel()
     }
 
     private var canConvert: Bool {

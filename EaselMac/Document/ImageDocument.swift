@@ -89,14 +89,12 @@ final class ImageDocument: NSDocument {
         )
     }
 
-    /// Turns a plain picture, which is flattened when saved, into an Easel
-    /// image beside it that keeps its layers; the window follows it.
-    func convertToEasel() async throws {
-        guard let fileURL else { return }
-        let destination = try await DocumentConversion.convert(fileAt: fileURL, composition: composition)
-        self.fileURL = destination
-        fileType = UTType.easelImage.identifier
-        fileContents = try? FileWrapper(url: destination)
+    /// Saves a plain picture, which is flattened when saved, as an Easel
+    /// image that keeps its layers; the window follows the new file. On iOS
+    /// the picture is moved aside in place, but a sandboxed Mac app may only
+    /// touch the file that was opened, so the person picks where it goes.
+    func convertToEasel() {
+        saveCopy { _ in /* The window follows the copy, or stays as it was. */ }
     }
 }
 
