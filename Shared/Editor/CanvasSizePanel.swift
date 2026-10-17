@@ -139,6 +139,7 @@ struct CanvasSizePanel: View {
                     }
                 ), format: .number.grouping(.never))
                 .numberKeyboard(.integer)
+                .rowFieldLabelHidden()
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 120)
                 Text("ImageSize.Pixels")

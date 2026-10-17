@@ -70,6 +70,17 @@ extension View {
         #endif
     }
 
+    /// A field inside a row that already names it. A Mac form would show
+    /// the field's own title beside it too; iPhone and iPad show it only as
+    /// the placeholder.
+    func rowFieldLabelHidden() -> some View {
+        #if os(iOS)
+        self
+        #else
+        labelsHidden()
+        #endif
+    }
+
     /// The look of the lists in the editor's panels: inset, grouped rows
     /// on iPhone and iPad, an inset list on the Mac.
     func panelListStyle() -> some View {

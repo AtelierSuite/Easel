@@ -302,6 +302,7 @@ private struct NewExportPresetForm: View {
         LabeledContent(label) {
             TextField("ExportPreset.Any", value: value, format: .number)
                 .numberKeyboard(.integer)
+                .rowFieldLabelHidden()
                 .multilineTextAlignment(.trailing)
         }
     }
