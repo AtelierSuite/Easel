@@ -16,6 +16,7 @@
 		EA5E1000000000000000010D /* Paintbrush.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA5E10000000000000000100 /* Paintbrush.framework */; };
 		EA5E10000000000000000209 /* Paintbrush.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EA5E10000000000000000100 /* Paintbrush.framework */; };
 		EA5E1000000000000000020A /* Paintbrush.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = EA5E10000000000000000100 /* Paintbrush.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		EA5E10000000000000000210 /* EaselThumbnail.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = EA5E10000000000000000013 /* EaselThumbnail.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +76,13 @@
 			remoteGlobalIDString = EA5E10000000000000000102;
 			remoteInfo = Paintbrush;
 		};
+		EA5E10000000000000000212 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = EA5E10000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = EA5E10000000000000000033;
+			remoteInfo = EaselThumbnail;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -110,6 +118,17 @@
 				EA5E1000000000000000020A /* Paintbrush.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EA5E10000000000000000211 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				EA5E10000000000000000210 /* EaselThumbnail.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -456,10 +475,12 @@
 				EA5E10000000000000000204 /* Frameworks */,
 				EA5E10000000000000000205 /* Resources */,
 				EA5E1000000000000000020B /* Embed Frameworks */,
+				EA5E10000000000000000211 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				EA5E10000000000000000213 /* PBXTargetDependency */,
 				EA5E1000000000000000020D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
@@ -681,6 +702,11 @@
 			isa = PBXTargetDependency;
 			target = EA5E10000000000000000102 /* Paintbrush */;
 			targetProxy = EA5E1000000000000000020C /* PBXContainerItemProxy */;
+		};
+		EA5E10000000000000000213 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = EA5E10000000000000000033 /* EaselThumbnail */;
+			targetProxy = EA5E10000000000000000212 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -982,7 +1008,10 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = EaselThumbnail/EaselThumbnail.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "EaselThumbnail/EaselThumbnail-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YYM4Z6MU8F;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -993,11 +1022,16 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.tsubuzaki.Easel.Thumbnail;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
+				SDKROOT = auto;
 				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
@@ -1012,7 +1046,10 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = EaselThumbnail/EaselThumbnail.entitlements;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "EaselThumbnail/EaselThumbnail-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YYM4Z6MU8F;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1023,11 +1060,16 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
+				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.tsubuzaki.Easel.Thumbnail;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
+				SDKROOT = auto;
 				SKIP_INSTALL = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
