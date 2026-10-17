@@ -1,6 +1,21 @@
 import Paintbrush
 import SwiftUI
+#if os(iOS)
 import UIKit
+#endif
+
+/// One point of a stroke as the hand made it, in view coordinates.
+struct StrokeSample {
+    var location: CGPoint
+    var pressure: Double
+    /// The pen's lean and how upright it is; nil for a finger or a mouse.
+    var azimuth: Double?
+    var altitude: Double?
+    /// When the pen was here, in seconds.
+    var time: TimeInterval
+}
+
+#if os(iOS)
 
 /// Turns touches on the canvas into tool strokes and navigation.
 ///
@@ -12,8 +27,8 @@ import UIKit
 /// Fingers that land on the ruler move, turn and stretch it instead, and
 /// leave Apple Pencil free to draw along it.
 struct CanvasInteraction: UIViewRepresentable {
-    var began: (StrokeGestureRecognizer.Sample) -> Void
-    var moved: ([StrokeGestureRecognizer.Sample]) -> Void
+    var began: (StrokeSample) -> Void
+    var moved: ([StrokeSample]) -> Void
     var ended: (Bool, CGPoint) -> Void
     var cancelled: () -> Void
     /// Apple Pencil or a pointer over the canvas without touching it; nil
@@ -261,15 +276,7 @@ private extension UIGestureRecognizer {
 /// sample, with Apple Pencil pressure and tilt. Begins at once so a stroke starts
 /// where the finger landed, and cancels if a second finger arrives.
 final class StrokeGestureRecognizer: UIGestureRecognizer {
-    struct Sample {
-        var location: CGPoint
-        var pressure: Double
-        /// Apple Pencil's lean and how upright it is; nil for a finger.
-        var azimuth: Double?
-        var altitude: Double?
-        /// When the touch was here, in seconds.
-        var time: TimeInterval
-    }
+    typealias Sample = StrokeSample
 
     /// Samples not yet handed on.
     var samples: [Sample] = []
@@ -343,3 +350,4 @@ final class StrokeGestureRecognizer: UIGestureRecognizer {
         )
     }
 }
+#endif

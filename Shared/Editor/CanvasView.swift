@@ -16,7 +16,7 @@ struct CanvasView: View {
     var body: some View {
         let viewport = state.viewport
         ZStack(alignment: .topLeading) {
-            Color(.secondarySystemBackground)
+            Color.workspace
 
             picture(viewport.level)
                 .rotationEffect(.radians(viewport.rotation))

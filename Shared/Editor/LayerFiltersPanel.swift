@@ -43,7 +43,7 @@ struct LayerFiltersPanel: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .panelListStyle()
         .scrollContentBackground(.hidden)
         // Under the same bar as when there are filters: a menu to add one
         // placed in the empty view itself would not open.
@@ -498,7 +498,7 @@ struct FilterRow: View {
             set: { newValue in state.updateFilter(filter.id) { $0.setValue(Double(newValue), at: index) } }
         ), format: .number)
         .multilineTextAlignment(.center)
-        .keyboardType(.numbersAndPunctuation)
+        .numberKeyboard(.signed)
         .textFieldStyle(.roundedBorder)
         .font(.subheadline.monospacedDigit())
         .accessibilityIdentifier("customWeight.\(index)")

@@ -1,6 +1,7 @@
 import Paintbrush
 import SwiftUI
 
+#if os(iOS)
 /// A smart object's contents open in an editor of their own; Done puts them
 /// back into the layer, drawn out afresh.
 struct SmartObjectEditor: View {
@@ -23,7 +24,7 @@ struct SmartObjectEditor: View {
         NavigationStack {
             EditorView(composition: $contents)
                 .navigationTitle(state.composition[layerID]?.name ?? "")
-                .navigationBarTitleDisplayMode(.inline)
+                .inlineNavigationTitle()
                 // Presented over a document, which would otherwise lend it a
                 // back button to the file browser.
                 .navigationBarBackButtonHidden()
@@ -47,3 +48,4 @@ struct SmartObjectEditor: View {
         }
     }
 }
+#endif

@@ -200,17 +200,17 @@ struct TextPanel: View {
                 }
                 .ignoresSafeArea(edges: .bottom)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
+                    ToolbarItem(placement: .barLeading) {
                         Button("Text.Font.System") {
                             state.updateText { $0.fontName = nil }
                             isPickingFont = false
                         }
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItem(placement: .barTrailing) {
                         Button("Common.Cancel", role: .cancel) { isPickingFont = false }
                     }
                 }
-                .navigationBarTitleDisplayMode(.inline)
+                .inlineNavigationTitle()
             }
         }
         .onAppear {

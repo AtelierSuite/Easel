@@ -36,7 +36,7 @@ struct LayersPanel: View {
                 layerSections(layer)
             }
         }
-        .listStyle(.insetGrouped)
+        .panelListStyle()
         .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .bottom) {
             LayerActionsBar(state: state)

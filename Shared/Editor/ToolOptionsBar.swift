@@ -914,10 +914,10 @@ private struct BrushSettingsButton: View {
             Text(String(format: String(localized: "Brush.Tip.CustomNumbered"), number))
         } icon: {
             // Shown at about a symbol's size.
-            Image(uiImage: UIImage(
-                cgImage: BrushTipImage.tinted(.custom, softness: 0, color: .black, custom: id),
-                scale: Double(CustomBrushTips.size) / 22, orientation: .up
-            ))
+            Image(
+                decorative: BrushTipImage.tinted(.custom, softness: 0, color: .black, custom: id),
+                scale: Double(CustomBrushTips.size) / 22
+            )
         }
     }
 
@@ -1152,7 +1152,7 @@ private struct PathOperationsMenu: View {
         .accessibilityIdentifier("pathOperations")
         .alert("Vector.OffsetPath", isPresented: $isAskingOffset) {
             TextField("Vector.OffsetPath.Distance", text: $offsetText)
-                .keyboardType(.numbersAndPunctuation)
+                .numberKeyboard(.signed)
             Button("Common.Cancel", role: .cancel) {}
             Button("Common.OK") {
                 if let distance = Double(offsetText.replacingOccurrences(of: ",", with: ".")) { state.offsetPaths(by: distance) }

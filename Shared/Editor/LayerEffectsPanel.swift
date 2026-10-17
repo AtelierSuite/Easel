@@ -29,7 +29,7 @@ struct LayerEffectsPanel: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .panelListStyle()
         .scrollContentBackground(.hidden)
         .overlay {
             if layer.effects.isEmpty {

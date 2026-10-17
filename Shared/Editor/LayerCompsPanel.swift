@@ -110,7 +110,7 @@ struct LayerCompsPanel: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .panelListStyle()
         .scrollContentBackground(.hidden)
         .onChange(of: state.composition.layerComps) { _, _ in files = [] }
         .alert("Comps.Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {

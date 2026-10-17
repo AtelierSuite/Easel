@@ -138,7 +138,7 @@ struct CanvasSizePanel: View {
                         onEdit(newValue)
                     }
                 ), format: .number.grouping(.never))
-                .keyboardType(.numberPad)
+                .numberKeyboard(.integer)
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 120)
                 Text("ImageSize.Pixels")
