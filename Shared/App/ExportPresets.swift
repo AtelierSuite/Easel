@@ -205,7 +205,7 @@ struct ExportPresetsSheet: View {
                 }
             }
             .navigationTitle("ExportPreset.Title")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             // Presented over a document, which would otherwise lend it a
             // back button to the file browser.
             .navigationBarBackButtonHidden()
@@ -281,7 +281,7 @@ private struct NewExportPresetForm: View {
                 }
             }
             .navigationTitle("ExportPreset.New")
-            .navigationBarTitleDisplayMode(.inline)
+            .inlineNavigationTitle()
             .navigationBarBackButtonHidden()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -301,7 +301,7 @@ private struct NewExportPresetForm: View {
     private func sideField(_ label: LocalizedStringKey, value: Binding<Int?>) -> some View {
         LabeledContent(label) {
             TextField("ExportPreset.Any", value: value, format: .number)
-                .keyboardType(.numberPad)
+                .numberKeyboard(.integer)
                 .multilineTextAlignment(.trailing)
         }
     }

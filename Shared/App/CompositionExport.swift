@@ -77,8 +77,14 @@ struct CompositionExport: Transferable, Sendable {
             .appending(path: "Share-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "\(sanitizedName).\(format.pathExtension)")
+        try write(to: url)
+        return url
+    }
+
+    /// Writes the composition in this format to `url`, replacing what is there.
+    func write(to url: URL) throws {
         if format == .easel {
-            try CompositionArchive.fileWrapper(for: composition).write(to: url, originalContentsURL: nil)
+            try CompositionArchive.fileWrapper(for: composition).write(to: url, options: .atomic, originalContentsURL: nil)
         } else if format == .psd {
             try PSDWriter.data(for: composition).write(to: url, options: .atomic)
         } else if format == .svg {
@@ -89,10 +95,10 @@ struct CompositionExport: Transferable, Sendable {
             try ImageCodec.encode(CompositionRenderer.render(composition), as: format.contentType)
                 .write(to: url, options: .atomic)
         }
-        return url
     }
 
-    private var sanitizedName: String {
+    /// The name, safe to use as a file's.
+    var sanitizedName: String {
         let cleaned = name.components(separatedBy: CharacterSet(charactersIn: "/:\\?%*|\"<>"))
             .joined(separator: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)
