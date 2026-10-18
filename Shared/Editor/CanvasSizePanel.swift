@@ -73,7 +73,7 @@ struct CanvasSizePanel: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .panelFormStyle()
         .animation(.snappy(duration: 0.25), value: mode)
         .onAppear {
             width = Int(original.width)

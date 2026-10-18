@@ -992,6 +992,19 @@ struct LabeledSlider: View {
     @Binding var value: Double
     var range: ClosedRange<Double> = 0...1
     let valueText: String
+    /// How the value is typed in, where it can be.
+    private var entry: Entry?
+    @Environment(\.panelPlacement) private var placement
+
+    /// A value typed in beside the slider in the Mac's inspector, in the
+    /// units its text shows.
+    struct Entry {
+        var value: Binding<Double>
+        var range: ClosedRange<Double>
+        var step: Double = 1
+        var suffix = ""
+        var fractionDigits = 0
+    }
 
     init(
         label: LocalizedStringKey, systemImage: String? = nil, value: Binding<Double>,
@@ -1012,24 +1025,97 @@ struct LabeledSlider: View {
         self.valueText = valueText
     }
 
+    /// Lets the value be typed in where there is room for a field: the
+    /// slider's own value times `scale`, as its text shows it.
+    func typed(scale: Double, suffix: String = "", step: Double = 1, fractionDigits: Int = 0) -> Self {
+        let value = $value
+        return typed(Entry(
+            value: Binding(get: { value.wrappedValue * scale }, set: { value.wrappedValue = $0 / scale }),
+            range: (range.lowerBound * scale)...(range.upperBound * scale),
+            step: step, suffix: suffix, fractionDigits: fractionDigits
+        ))
+    }
+
+    /// Lets the value be typed in, in units of its own.
+    func typed(_ entry: Entry) -> Self {
+        var copy = self
+        copy.entry = entry
+        return copy
+    }
+
     var body: some View {
+        #if os(macOS)
+        if placement == .inspector {
+            inspectorBody
+        } else {
+            standardBody
+        }
+        #else
+        standardBody
+        #endif
+    }
+
+    private var title: some View {
+        Group {
+            if let systemImage {
+                Label {
+                    label
+                } icon: {
+                    // Of one width in the Mac's inspector, so the names line up.
+                    Image(systemName: systemImage)
+                        .frame(width: placement.isMacInspector ? 16 : nil)
+                }
+            } else {
+                label
+            }
+        }
+    }
+
+    private var slider: some View {
+        Slider(value: $value, in: range)
+            .accessibilityLabel(label)
+            .accessibilityValue(valueText)
+    }
+
+    private var standardBody: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                if let systemImage {
-                    Label { label } icon: { Image(systemName: systemImage) }
-                } else {
-                    label
-                }
+                title
                 Spacer()
                 Text(valueText)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
-            Slider(value: $value, in: range)
-                .accessibilityLabel(label)
-                .accessibilityValue(valueText)
+            slider
         }
     }
+
+    #if os(macOS)
+    /// The name above, and the slider beside the number it sets, as in the
+    /// inspectors of Pages, Numbers and Keynote.
+    private var inspectorBody: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                title
+                Spacer()
+                if entry == nil {
+                    Text(valueText)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+            HStack(spacing: 8) {
+                slider
+                if let entry {
+                    InspectorNumberField(
+                        value: entry.value, range: entry.range, step: entry.step,
+                        suffix: entry.suffix, fractionDigits: entry.fractionDigits
+                    )
+                }
+            }
+        }
+    }
+    #endif
 }
 
 /// What can be done with the selection.

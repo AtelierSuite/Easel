@@ -70,6 +70,7 @@ struct HistoryPanel: View {
                 }
             } footer: {
                 Text("History.Footer")
+                    .panelFootnote()
             }
             Section {
                 Toggle("History.Compare", systemImage: "rectangle.lefthalf.inset.filled", isOn: $state.isComparing)

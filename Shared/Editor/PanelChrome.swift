@@ -23,6 +23,18 @@ extension PanelPlacement {
     }
 }
 
+extension PanelPlacement {
+    /// Whether the panel is in the Mac's inspector, which is laid out like
+    /// those in Pages, Numbers and Keynote rather than like iPad's.
+    var isMacInspector: Bool {
+        #if os(macOS)
+        self == .inspector
+        #else
+        false
+        #endif
+    }
+}
+
 extension EnvironmentValues {
     @Entry var panelPlacement: PanelPlacement = .sheet
     @Entry var panelTitle: LocalizedStringKey = ""

@@ -186,7 +186,7 @@ struct TextPanel: View {
                 ContentUnavailableView("Text.NoTextLayer", systemImage: "textformat", description: Text("Text.NoTextLayer.Detail"))
             }
         }
-        .formStyle(.grouped)
+        .panelFormStyle()
         // Characters picked on one layer are not the same ones on another.
         .onChange(of: state.activeLayerID) {
             selection = nil

@@ -106,7 +106,7 @@ struct AdjustmentsPanel: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .panelFormStyle()
     }
 
     private func stopPickingNeutral() {

@@ -88,6 +88,7 @@ struct LayerCompsPanel: View {
                 .accessibilityIdentifier("addComp")
             } footer: {
                 Text("Comps.Footer")
+                    .panelFootnote()
             }
             if !comps.isEmpty {
                 Section {

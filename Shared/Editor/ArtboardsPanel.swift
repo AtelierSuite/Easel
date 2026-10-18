@@ -74,6 +74,7 @@ struct ArtboardsPanel: View {
                     .accessibilityIdentifier("addArtboard")
             } footer: {
                 Text("Artboards.Footer")
+                    .panelFootnote()
             }
             if !artboards.isEmpty {
                 Section {
