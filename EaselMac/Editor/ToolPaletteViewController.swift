@@ -126,6 +126,8 @@ private final class ToolButton: NSButton {
         setButtonType(.pushOnPushOff)
         isBordered = false
         imagePosition = .imageOnly
+        // At its own size: the square frame would stretch it to fill.
+        imageScaling = .scaleNone
         // The circle shows the state and the press, not the cell.
         if let cell = cell as? NSButtonCell {
             cell.highlightsBy = []
