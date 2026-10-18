@@ -27,7 +27,7 @@ struct CanvasArea: View {
             }
             .canvasStatus(state)
             .padding(.leading, state.canvasInsets.leading - 8)
-            .padding(.bottom, 12)
+            .padding(.bottom, CanvasViewController.margin)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                 state.canvasInsets.bottom = height + 8
             }

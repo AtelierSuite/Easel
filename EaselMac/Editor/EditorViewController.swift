@@ -305,11 +305,13 @@ extension EditorViewController: NSToolbarItemValidation {
 /// picture to the view it is given, so it is given only the part that can
 /// be seen, and keeps the picture and its bars clear of the tools.
 @MainActor
-private final class CanvasViewController: NSViewController {
+final class CanvasViewController: NSViewController {
     private let hosting: NSHostingView<CanvasArea>
     private let tools: ToolPaletteViewController
     private var state: EditorState { hosting.rootView.state }
 
+    /// How far the tools, and the bars along the bottom, sit in from the
+    /// canvas's edges.
     static let margin: CGFloat = 8
 
     var showsTools = true {
