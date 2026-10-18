@@ -238,7 +238,9 @@ final class CanvasInputView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        interaction?.hovered(location(of: event))
+        // The brush's outline follows the pointer only over the canvas
+        // itself, not over the bars and tools floating on it.
+        interaction?.hovered(isPointerOverCanvas ? location(of: event) : nil)
         // The ruler may have come or gone from under the pointer, or the
         // pointer onto the tools floating over the canvas, which take no
         // part in the canvas's cursor.
