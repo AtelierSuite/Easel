@@ -21,7 +21,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSWindow.allowsAutomaticWindowTabbing = true
     }
 
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { true }
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        ScreenshotStaging.run()
+        #endif
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        #if DEBUG
+        // A screenshot opens its own document, and nothing else.
+        if ScreenshotStaging.isStaging { return false }
+        #endif
+        return true
+    }
 
     @objc func openSourceCode(_ sender: Any?) {
         NSWorkspace.shared.open(URL(string: "https://github.com/AtelierSuite/Easel")!)

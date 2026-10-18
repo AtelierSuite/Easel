@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 /// that belong to the document — sharing, exporting, keeping layers.
 @MainActor
 final class EditorWindowController: NSWindowController, NSWindowDelegate {
-    private let session: EditorSession
+    let session: EditorSession
     private var smartObjectSheet: SmartObjectSheetController?
 
     private var imageDocument: ImageDocument? { document as? ImageDocument }
