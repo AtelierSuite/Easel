@@ -229,6 +229,7 @@ struct FilterRow: View {
                     range: filter.kind.amountRange,
                     valueText: "\(Int((filter.amount * 100).rounded()))"
                 )
+                .typed(scale: 100)
                 .accessibilityIdentifier("filterAmount.\(filter.kind.rawValue)")
                 }
                 if filter.kind.hasAngle {
@@ -236,22 +237,26 @@ struct FilterRow: View {
                         label: "LayerFilters.Angle", value: binding(\.angle), range: -180...180,
                         valueText: "\(Int(filter.angle.rounded()))°"
                     )
+                    .typed(scale: 1, suffix: "°")
                 }
                 if filter.kind.hasRadius {
                     LabeledSlider(
                         label: "LayerFilters.Radius", value: optionalBinding(\.radius, default: 0.3),
                         valueText: "\(Int(((filter.radius ?? 0.3) * 100).rounded()))"
                     )
+                    .typed(scale: 100)
                 }
                 if filter.kind.hasCenter {
                     LabeledSlider(
                         label: "LayerFilters.CenterX", value: binding(\.centerX),
                         valueText: "\(Int((filter.centerX * 100).rounded()))%"
                     )
+                    .typed(scale: 100, suffix: "%")
                     LabeledSlider(
                         label: "LayerFilters.CenterY", value: binding(\.centerY),
                         valueText: "\(Int((filter.centerY * 100).rounded()))%"
                     )
+                    .typed(scale: 100, suffix: "%")
                 }
             }
             .disabled(!filter.isEnabled)

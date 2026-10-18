@@ -71,6 +71,7 @@ struct AdjustmentsPanel: View {
                             range: key.range,
                             valueText: "\(Int((values.wrappedValue[key] * 100).rounded()))"
                         )
+                        .typed(scale: 100)
                         .accessibilityIdentifier("adjust.\(key.rawValue)")
                     }
                 }

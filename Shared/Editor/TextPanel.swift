@@ -69,6 +69,13 @@ struct TextPanel: View {
                         ),
                         valueText: "\(Int(text.fontSize.rounded())) px"
                     )
+                    .typed(LabeledSlider.Entry(
+                        value: Binding(
+                            get: { text.fontSize.rounded() },
+                            set: { value in state.updateText { $0.fontSize = value } }
+                        ),
+                        range: 4...BrushSettings.sizeRange.upperBound, suffix: "px"
+                    ))
                     LabeledSlider(
                         label: "Text.Tracking",
                         value: Binding(
@@ -78,6 +85,7 @@ struct TextPanel: View {
                         range: -0.2...1,
                         valueText: "\(Int(((text.tracking ?? 0) * 1000).rounded()))"
                     )
+                    .typed(scale: 1000, step: 10)
                     .accessibilityIdentifier("textTracking")
                     LabeledSlider(
                         label: "Text.LineSpacing",
@@ -88,6 +96,7 @@ struct TextPanel: View {
                         range: 0.6...3,
                         valueText: String(format: "%.2f×", text.lineSpacing ?? 1)
                     )
+                    .typed(scale: 1, suffix: "×", step: 0.05, fractionDigits: 2)
                     .accessibilityIdentifier("textLineSpacing")
                     Toggle("Text.Kerning", isOn: Binding(
                         get: { text.usesKerning ?? true },
@@ -120,6 +129,7 @@ struct TextPanel: View {
                             range: max(text.fontSize, 10)...max(state.composition.size.width * 1.5, text.fontSize * 2),
                             valueText: "\(Int(boxWidth.rounded())) px"
                         )
+                        .typed(scale: 1, suffix: "px")
                         .accessibilityIdentifier("textBoxWidth")
                     }
                 } footer: {

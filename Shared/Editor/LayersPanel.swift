@@ -104,6 +104,7 @@ struct LayersPanel: View {
                     ),
                     valueText: "\(Int((layer.opacity * 100).rounded()))%"
                 )
+                .typed(scale: 100, suffix: "%")
                 .accessibilityIdentifier("layerOpacity")
                 if !layer.isAdjustment {
                     LabeledSlider(
@@ -114,6 +115,7 @@ struct LayersPanel: View {
                         ),
                         valueText: "\(Int((layer.fillOpacity * 100).rounded()))%"
                     )
+                    .typed(scale: 100, suffix: "%")
                     .accessibilityIdentifier("layerFill")
                 }
                 Picker("Layers.BlendMode", selection: Binding(
@@ -658,6 +660,7 @@ private struct GroupSection: View {
                 value: Binding(get: { group.opacity }, set: { value in state.updateGroup(group.id) { $0.opacity = value } }),
                 valueText: "\(Int((group.opacity * 100).rounded()))%"
             )
+            .typed(scale: 100, suffix: "%")
             .accessibilityIdentifier("groupOpacity")
             Picker("Layers.BlendMode", selection: Binding(
                 get: { group.blendMode },
