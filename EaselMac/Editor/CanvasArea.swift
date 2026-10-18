@@ -23,9 +23,9 @@ struct CanvasArea: View {
                 LinkedFilesBanner(state: state)
                 ToolOptionsBar(state: state)
             }
+            .canvasStatus(state)
             .padding(.bottom, 12)
         }
-        .overlay(alignment: .top) { CanvasStatusBar(state: state) }
         .animation(.snappy(duration: 0.3), value: state.missingLinkNames + state.missingMapNames)
         .onAppear { state.canvasInsets = EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8) }
         .errorAlert(state, isActive: true)

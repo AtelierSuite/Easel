@@ -61,12 +61,14 @@ struct EditorView<Actions: View>: View {
                         }
                         ToolPicker(layout: .carousel, state: state, namespace: panelTransition)
                     }
+                    .canvasStatus(state)
                     .padding(.bottom, 8 + bottomToolbarInset)
                 } else {
                     VStack(spacing: 8) {
                         LinkedFilesBanner(state: state)
                         ToolOptionsBar(state: state)
                     }
+                    .canvasStatus(state)
                     .padding(.leading, 72)
                     .padding(.bottom, 12 + bottomToolbarInset)
                 }
@@ -80,7 +82,6 @@ struct EditorView<Actions: View>: View {
                         .padding(.leading, 12)
                 }
             }
-            .overlay(alignment: .top) { CanvasStatusBar(state: state) }
             .onChange(of: isCompact, initial: true) { _, _ in updateInsets() }
             .onChange(of: state.presentedPanel) { _, panel in
                 panelDetent = panel?.keepsCanvasVisible == false ? .large : .medium

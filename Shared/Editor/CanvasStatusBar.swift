@@ -1,9 +1,9 @@
 import Paintbrush
 import SwiftUI
 
-/// Over the top of the canvas: the zoom level, which fits the picture again
-/// when clicked, a way out of editing a mask, and a spinner while edits are
-/// being worked on.
+/// Just above the bars along the bottom of the canvas: the zoom level, which
+/// fits the picture again when clicked, a way out of editing a mask, and a
+/// spinner while edits are being worked on.
 struct CanvasStatusBar: View {
     let state: EditorState
     @Environment(\.displayScale) private var displayScale
@@ -44,8 +44,18 @@ struct CanvasStatusBar: View {
                     .glassEffect(.regular, in: .circle)
             }
         }
-        .padding(.top, 8)
         .animation(.snappy(duration: 0.2), value: state.isBusy)
         .animation(.snappy(duration: 0.2), value: state.editsAnyMask)
+    }
+}
+
+extension View {
+    /// Floats the canvas's status just above this view, out of the way of
+    /// the bars along the top, without taking room from the canvas.
+    func canvasStatus(_ state: EditorState) -> some View {
+        overlay(alignment: .top) {
+            CanvasStatusBar(state: state)
+                .alignmentGuide(.top) { $0[.bottom] + 8 }
+        }
     }
 }
