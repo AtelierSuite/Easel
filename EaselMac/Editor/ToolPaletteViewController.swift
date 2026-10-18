@@ -23,7 +23,7 @@ final class ToolPaletteViewController: NSViewController {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .centerX
-        stack.spacing = 4
+        stack.spacing = 2
         stack.edgeInsets = NSEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
         for (index, tools) in Tool.groups.enumerated() {
             if index > 0 {
@@ -79,17 +79,13 @@ final class ToolPaletteViewController: NSViewController {
         let name = String(localized: String.LocalizationValue(tool.labelKey))
         let image = NSImage(systemSymbolName: tool.symbolName, accessibilityDescription: name)?
             .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
-        let button = NSButton(image: image ?? NSImage(), target: self, action: #selector(pickTool(_:)))
-        button.setButtonType(.pushOnPushOff)
-        button.bezelStyle = .toolbar
-        button.showsBorderOnlyWhileMouseInside = true
-        button.imagePosition = .imageOnly
+        let button = ToolButton(image: image ?? NSImage(), target: self, action: #selector(pickTool(_:)))
         button.tag = Tool.allCases.firstIndex(of: tool) ?? 0
         button.toolTip = "\(name) (\(String(tool.shortcut.character).uppercased()))"
         button.setAccessibilityIdentifier("tool.\(tool.rawValue)")
         NSLayoutConstraint.activate([
             button.widthAnchor.constraint(equalToConstant: 36),
-            button.heightAnchor.constraint(equalToConstant: 32),
+            button.heightAnchor.constraint(equalToConstant: 36),
         ])
         return button
     }
@@ -107,6 +103,61 @@ final class ToolPaletteViewController: NSViewController {
         state.tool = Tool.allCases[sender.tag]
         // Clicking an already lit button would unlight it.
         showTool()
+    }
+}
+
+/// A tool's button: its symbol, on a circle that shows under the pointer
+/// and stays, tinted, while the tool is in hand.
+private final class ToolButton: NSButton {
+    private var isHovered = false {
+        didSet { needsDisplay = true }
+    }
+
+    override var state: NSControl.StateValue {
+        didSet { needsDisplay = true }
+    }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        setButtonType(.pushOnPushOff)
+        isBordered = false
+        imagePosition = .imageOnly
+        // The circle shows the state and the press, not the cell.
+        if let cell = cell as? NSButtonCell {
+            cell.highlightsBy = []
+            cell.showsStateBy = []
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(
+            rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self
+        ))
+    }
+
+    override func mouseEntered(with event: NSEvent) { isHovered = true }
+    override func mouseExited(with event: NSEvent) { isHovered = false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let fill: NSColor? = if state == .on {
+            .controlAccentColor.withAlphaComponent(isHighlighted ? 0.3 : 0.2)
+        } else if isHighlighted {
+            .labelColor.withAlphaComponent(0.16)
+        } else if isHovered {
+            .labelColor.withAlphaComponent(0.08)
+        } else {
+            nil
+        }
+        if let fill {
+            fill.setFill()
+            NSBezierPath(ovalIn: bounds).fill()
+        }
+        super.draw(dirtyRect)
     }
 }
 
