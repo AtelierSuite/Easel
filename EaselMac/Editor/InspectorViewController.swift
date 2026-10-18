@@ -38,6 +38,10 @@ final class InspectorViewController: NSViewController {
         tabs.translatesAutoresizingMaskIntoConstraints = false
 
         let content = NSHostingView(rootView: InspectorContent(state: session.state, history: session.history))
+        // The panels scroll; left to size the window by their content, a
+        // long one would hold the window taller than it is and push the
+        // canvas's bars off its bottom.
+        content.sizingOptions = []
         content.translatesAutoresizingMaskIntoConstraints = false
 
         let container = NSView()
