@@ -57,6 +57,9 @@ struct CanvasView: View {
                 rulerTurned: { state.turnRuler(by: $0, around: $1) },
                 rulerResized: { state.resizeRuler(by: $0) }
             )
+            #if os(macOS)
+            .drawingOwnCursor(state.tool.usesStrokes || state.tool == .liquify)
+            #endif
             .accessibilityIdentifier("canvas")
 
             // The scales run along the view's edges, which only line up

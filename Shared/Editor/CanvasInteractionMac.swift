@@ -38,6 +38,17 @@ struct CanvasInteraction: NSViewRepresentable {
     /// under the pointer.
     var rulerTurned: (Double, CGPoint) -> Void = { _, _ in /* Optional. */ }
     var rulerResized: (Double) -> Void = { _ in /* Optional. */ }
+    /// Whether the tool in hand draws its own outline under the pointer, in
+    /// place of the system's cursor.
+    var drawsOwnCursor = false
+
+    /// The same, with the system's cursor left out while the tool in hand
+    /// draws its own outline under the pointer.
+    func drawingOwnCursor(_ draws: Bool) -> Self {
+        var interaction = self
+        interaction.drawsOwnCursor = draws
+        return interaction
+    }
 
     func makeNSView(context: Context) -> CanvasInputView {
         let view = CanvasInputView()
@@ -47,6 +58,8 @@ struct CanvasInteraction: NSViewRepresentable {
 
     func updateNSView(_ view: CanvasInputView, context: Context) {
         view.interaction = self
+        // A tool picked while the pointer rests on the canvas.
+        view.refreshCursor()
     }
 }
 
@@ -91,12 +104,43 @@ final class CanvasInputView: NSView {
         updateCursor()
     }
 
+    /// A cursor with nothing in it, for while the tool draws its own.
+    private static let blankCursor = NSCursor(image: NSImage(size: NSSize(width: 1, height: 1)), hotSpot: .zero)
+
     private func updateCursor() {
         if isSpaceDown || drag.map({ if case .pan = $0 { true } else { false } }) == true {
             (drag == nil ? NSCursor.openHand : NSCursor.closedHand).set()
+            return
+        }
+        let isOverRuler: Bool
+        switch drag {
+        case .ruler: isOverRuler = true
+        case .stroke: isOverRuler = false
+        default:
+            isOverRuler = window.map { interaction?.rulerContains(location(ofWindowPoint: $0.mouseLocationOutsideOfEventStream)) } == true
+        }
+        if interaction?.drawsOwnCursor == true, !isOverRuler {
+            Self.blankCursor.set()
         } else {
             NSCursor.crosshair.set()
         }
+    }
+
+    /// Whether the pointer is over the canvas itself, not the tools
+    /// floating over it.
+    private var isPointerOverCanvas: Bool {
+        guard let window, let hit = window.contentView?.hitTest(window.mouseLocationOutsideOfEventStream) else { return false }
+        return hit === self || hit.isDescendant(of: self)
+    }
+
+    /// Puts the right cursor up if the pointer is over the canvas itself.
+    func refreshCursor() {
+        guard window?.isKeyWindow == true, drag == nil, isPointerOverCanvas else { return }
+        updateCursor()
+    }
+
+    private func location(ofWindowPoint point: NSPoint) -> CGPoint {
+        convert(point, from: nil)
     }
 
     private func location(of event: NSEvent) -> CGPoint {
@@ -165,6 +209,10 @@ final class CanvasInputView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         interaction?.hovered(location(of: event))
+        // The ruler may have come or gone from under the pointer, or the
+        // pointer onto the tools floating over the canvas, which take no
+        // part in the canvas's cursor.
+        if isPointerOverCanvas { updateCursor() } else { NSCursor.arrow.set() }
     }
 
     override func mouseExited(with event: NSEvent) {
