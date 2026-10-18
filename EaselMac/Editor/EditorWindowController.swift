@@ -77,7 +77,13 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    override func windowTitle(forDocumentDisplayName displayName: String) -> String { displayName }
+    /// The document's name without its extension, which the title bar's
+    /// icon already stands for.
+    override func windowTitle(forDocumentDisplayName displayName: String) -> String {
+        guard let pathExtension = imageDocument?.fileURL?.pathExtension, !pathExtension.isEmpty,
+              displayName.hasSuffix(".\(pathExtension)") else { return displayName }
+        return String(displayName.dropLast(pathExtension.count + 1))
+    }
 
     /// Undo and Redo in the toolbar follow the window that is in front.
     func windowDidBecomeKey(_ notification: Notification) {
