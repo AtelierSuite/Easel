@@ -5,8 +5,8 @@ import SwiftUI
 enum PanelPlacement {
     /// A sheet on iPhone, inside a navigation stack with a toolbar of its own.
     case sheet
-    /// The inspector beside the canvas on iPad, which has no toolbar to
-    /// offer: the window's belongs to the document.
+    /// The inspector beside the canvas on iPad and the Mac, which has no
+    /// toolbar to offer: the window's belongs to the document.
     case inspector
 }
 
@@ -53,6 +53,36 @@ private struct PanelActions: ViewModifier {
                 }
             }
         case .inspector:
+            #if os(macOS)
+            // As a Mac inspector: the title at the top, the buttons at the foot.
+            content
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    Text(title)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    if cancel != nil || confirm != nil {
+                        HStack(spacing: 8) {
+                            Spacer()
+                            if let cancel {
+                                Button("Common.Cancel", role: .cancel, action: cancel)
+                            }
+                            if let confirm {
+                                Button("Common.Done", action: confirm)
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(confirmDisabled)
+                                    .accessibilityIdentifier(confirmIdentifier ?? "panelConfirm")
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(.bar)
+                    }
+                }
+            #else
             content.safeAreaInset(edge: .top, spacing: 0) {
                 HStack(spacing: 12) {
                     if let cancel {
@@ -78,6 +108,7 @@ private struct PanelActions: ViewModifier {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
             }
+            #endif
         }
     }
 }
