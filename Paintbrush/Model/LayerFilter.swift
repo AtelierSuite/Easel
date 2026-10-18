@@ -143,6 +143,13 @@ package struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         /// Colours given the spread of another layer's, lighter, stronger
         /// or with a cast taken out, as Photoshop's Match Color does.
         case matchColor
+        /// The Adjustments panel's tone and colour sliders, kept on the layer
+        /// to change later; see `adjustmentValues`. Made from the panel, not
+        /// the add menu.
+        case adjust
+        /// One of the Looks panel's looks, at `amount` intensity; see
+        /// `look`. Made from the panel, not the add menu.
+        case look
 
         package var id: String { rawValue }
 
@@ -202,6 +209,8 @@ package struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .pinch: return String(localized: "LayerFilter.Pinch")
             case .emboss: return String(localized: "LayerFilter.Emboss")
             case .halftone: return String(localized: "LayerFilter.Halftone")
+            case .adjust: return String(localized: "Panel.Adjustments.Title")
+            case .look: return String(localized: "Panel.Looks.Title")
             }
         }
 
@@ -290,6 +299,8 @@ package struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
             case .pinch: return "arrow.down.right.and.arrow.up.left.circle"
             case .emboss: return "square.stack.3d.down.forward"
             case .halftone: return "circle.grid.3x3"
+            case .adjust: return "slider.horizontal.3"
+            case .look: return "wand.and.sparkles"
             }
         }
 
@@ -323,7 +334,8 @@ package struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
                  .median, .minimum, .maximum, .dustAndScratches, .addNoise, .reduceNoise, .despeckle,
                  .offset, .custom, .findEdges, .traceContour, .fragment, .facet, .wind, .diffuse, .tiles, .extrude, .crystallize, .pointillize, .mezzotint,
                  .spherize, .polarCoordinates, .shear, .zigzag, .ripple, .wave, .spinBlur, .deInterlace, .ntscColors, .clouds, .differenceClouds, .fibers, .lensFlare,
-                 .channelMixer, .desaturate, .equalize, .matchColor, .hdrToning, .variations, .displace, .liquify, .shadowsHighlights, .selectiveColor: return 1
+                 .channelMixer, .desaturate, .equalize, .matchColor, .hdrToning, .variations, .displace, .liquify, .shadowsHighlights, .selectiveColor,
+                 .adjust, .look: return 1
             }
         }
 
@@ -349,7 +361,7 @@ package struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         package var hasAngle: Bool { [.motionBlur, .emboss].contains(self) }
         /// Filters set with their own controls rather than one amount.
         package var hasAmount: Bool {
-            ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor].contains(self) && !hasNoSettings
+            ![.levels, .curves, .colorBalance, .lensCorrection, .hsl, .replaceColor, .adjust].contains(self) && !hasNoSettings
                 && (parameters.isEmpty || self == .blackAndWhite || self == .emboss)
         }
         package var hasCenter: Bool { [.zoomBlur, .twirl, .pinch, .spinBlur, .lensFlare].contains(self) }
@@ -408,6 +420,11 @@ package struct LayerFilter: Identifiable, Codable, Hashable, Sendable {
         copy.photoshopFilter = nil
         return copy
     }
+    /// Adjust: the sliders' values in `Adjustments.Key` order, then the
+    /// picked white balance's red, green and blue scales, if any.
+    package var adjustmentValues: [Double]?
+    /// Look: the `FilterPreset` it is, by name.
+    package var look: String?
     /// Colour balance: how far the midtones lean to red, green and blue,
     /// each from -1 (cyan, magenta, yellow) to 1.
     package var balance: [Double]?

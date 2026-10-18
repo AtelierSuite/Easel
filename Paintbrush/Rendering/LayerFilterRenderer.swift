@@ -208,6 +208,10 @@ extension LayerFilter {
             output = applyRender(to: input)
         case .shadowsHighlights, .hdrToning, .matchColor:
             output = applyTone(to: input)
+        case .adjust:
+            output = adjustments.apply(to: input)
+        case .look:
+            output = lookPreset?.apply(to: input, intensity: amount) ?? input
         }
         return output.cropped(to: extent)
     }

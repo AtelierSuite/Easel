@@ -274,3 +274,33 @@ package enum ImageProcessing {
         return rendered
     }
 }
+
+extension LayerFilter {
+    /// An Adjust filter's sliders and picked white balance.
+    package var adjustments: Adjustments {
+        get {
+            var adjustments = Adjustments()
+            let values = adjustmentValues ?? []
+            for (index, key) in Adjustments.Key.allCases.enumerated() where values.indices.contains(index) {
+                adjustments[key] = values[index]
+            }
+            let balance = values.dropFirst(Adjustments.Key.allCases.count)
+            if balance.count == 3 {
+                let scales = Array(balance)
+                adjustments.balance = WhiteBalance(red: scales[0], green: scales[1], blue: scales[2])
+            }
+            return adjustments
+        }
+        set {
+            var values = Adjustments.Key.allCases.map { newValue[$0] }
+            if let balance = newValue.balance { values += [balance.red, balance.green, balance.blue] }
+            adjustmentValues = values
+        }
+    }
+
+    /// A Look filter's look.
+    package var lookPreset: FilterPreset? {
+        get { look.flatMap(FilterPreset.init(rawValue:)) }
+        set { look = newValue?.rawValue }
+    }
+}
