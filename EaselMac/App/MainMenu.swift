@@ -8,7 +8,7 @@ import Paintbrush
 enum MainMenu {
     static func make() -> NSMenu {
         let menu = NSMenu()
-        for submenu in [appMenu(), fileMenu(), editMenu(), imageMenu(), layerMenu(), viewMenu(), toolsMenu(), windowMenu(), helpMenu()] {
+        for submenu in [appMenu(), fileMenu(), editMenu(), imageMenu(), layerMenu(), selectMenu(), filterMenu(), viewMenu(), toolsMenu(), windowMenu(), helpMenu()] {
             let item = NSMenuItem(title: submenu.title, action: nil, keyEquivalent: "")
             item.submenu = submenu
             menu.addItem(item)
@@ -86,11 +86,73 @@ enum MainMenu {
         menu.addItem(item(String(localized: "Select.Clear"), #selector(EditorViewController.delete(_:))))
         menu.addItem(.separator())
         menu.addItem(item(String(localized: "Select.All"), #selector(EditorViewController.selectAll(_:)), "a"))
+        return menu
+    }
+
+    /// Making a selection, changing it, and what can be done with it.
+    private static func selectMenu() -> NSMenu {
+        let menu = NSMenu(title: String(localized: "Menu.Select"))
+        menu.addItem(item(String(localized: "Select.All"), #selector(EditorViewController.selectAll(_:))))
         menu.addItem(item(String(localized: "Select.Deselect"), #selector(EditorViewController.deselect(_:)), "d"))
         menu.addItem(item(String(localized: "Select.Invert"), #selector(EditorViewController.invertSelection(_:)), "i", [.command, .shift]))
         menu.addItem(.separator())
+        menu.addItem(item(String(localized: "Select.Subject"), #selector(EditorViewController.selectSubject(_:))))
+        menu.addItem(item(String(localized: "Select.ColorRange"), #selector(EditorViewController.selectColorRange(_:))))
+        menu.addItem(.separator())
+        let modify = NSMenuItem(title: String(localized: "Select.Modify"), action: nil, keyEquivalent: "")
+        let modifyMenu = NSMenu(title: modify.title)
+        for (index, modification) in SelectionModification.allCases.enumerated() {
+            let entry = item(
+                String(localized: String.LocalizationValue("Select.\(modification.rawValue.capitalized)")) + "…",
+                #selector(EditorViewController.modifySelection(_:))
+            )
+            entry.tag = index
+            modifyMenu.addItem(entry)
+        }
+        modify.submenu = modifyMenu
+        menu.addItem(modify)
+        menu.addItem(item(String(localized: "Select.RefineEdge") + "…", #selector(EditorViewController.refineSelectionEdge(_:))))
+        menu.addItem(item(String(localized: "Select.Stroke") + "…", #selector(EditorViewController.strokeSelection(_:))))
+        menu.addItem(.separator())
+        menu.addItem(item(String(localized: "Select.CopyToLayer"), #selector(EditorViewController.copySelectionToLayer(_:))))
+        menu.addItem(item(String(localized: "Select.CutToLayer"), #selector(EditorViewController.cutSelectionToLayer(_:))))
         menu.addItem(item(String(localized: "Select.Fill"), #selector(EditorViewController.fillSelection(_:))))
+        menu.addItem(item(String(localized: "Select.FillFromSurroundings"), #selector(EditorViewController.fillSelectionFromSurroundings(_:))))
+        menu.addItem(item(String(localized: "Pattern.Define"), #selector(EditorViewController.definePattern(_:))))
+        menu.addItem(.separator())
         menu.addItem(item(String(localized: "Select.CropToSelection"), #selector(EditorViewController.cropToSelection(_:))))
+        return menu
+    }
+
+    /// Every filter to add to the active layer, by kind, and the panels
+    /// that change its colours as a whole.
+    private static func filterMenu() -> NSMenu {
+        let menu = NSMenu(title: String(localized: "Menu.Filter"))
+        for (index, category) in LayerFilter.Kind.categories.enumerated() {
+            let target: NSMenu
+            if let title = category.titleKey {
+                let submenuItem = NSMenuItem(title: String(localized: String.LocalizationValue(title)), action: nil, keyEquivalent: "")
+                target = NSMenu(title: submenuItem.title)
+                submenuItem.submenu = target
+                if index > 0, LayerFilter.Kind.categories[index - 1].titleKey == nil { menu.addItem(.separator()) }
+                menu.addItem(submenuItem)
+            } else {
+                if index > 0 { menu.addItem(.separator()) }
+                target = menu
+            }
+            for kind in category.kinds {
+                let entry = item(kind.label, #selector(EditorViewController.addFilter(_:)))
+                entry.tag = LayerFilter.Kind.allCases.firstIndex(of: kind) ?? 0
+                entry.image = NSImage(systemSymbolName: kind.symbolName, accessibilityDescription: nil)
+                target.addItem(entry)
+            }
+        }
+        menu.addItem(.separator())
+        menu.addItem(item(String(localized: "Panel.Adjustments.Title") + "…", #selector(EditorViewController.showAdjustments(_:))))
+        menu.addItem(item(String(localized: "Panel.Looks.Title") + "…", #selector(EditorViewController.showAdjustments(_:))))
+        menu.addItem(.separator())
+        menu.addItem(item(String(localized: "LayerFilters.ApplyAll"), #selector(EditorViewController.applyFilters(_:))))
+        menu.addItem(item(String(localized: "LayerFilters.RemoveAll"), #selector(EditorViewController.removeFilters(_:))))
         return menu
     }
 
@@ -116,6 +178,17 @@ enum MainMenu {
         menu.addItem(item(String(localized: "Layers.MergeDown"), #selector(EditorViewController.mergeLayerDown(_:)), "e"))
         menu.addItem(item(String(localized: "Groups.Group"), #selector(EditorViewController.groupLayer(_:)), "g"))
         menu.addItem(item(String(localized: "Layers.Rasterize"), #selector(EditorViewController.rasterizeLayer(_:))))
+        menu.addItem(.separator())
+        let styles = NSMenuItem(title: String(localized: "LayerEffects.Add"), action: nil, keyEquivalent: "")
+        let stylesMenu = NSMenu(title: styles.title)
+        for (index, kind) in LayerEffect.Kind.allCases.enumerated() {
+            let entry = item(kind.label, #selector(EditorViewController.addEffect(_:)))
+            entry.tag = index
+            entry.image = NSImage(systemSymbolName: kind.symbolName, accessibilityDescription: nil)
+            stylesMenu.addItem(entry)
+        }
+        styles.submenu = stylesMenu
+        menu.addItem(styles)
         menu.addItem(.separator())
         menu.addItem(item(String(localized: "SmartObject.Convert"), #selector(EditorViewController.convertToSmartObject(_:))))
         menu.addItem(item(String(localized: "SmartObject.Edit"), #selector(EditorViewController.editSmartObjectContents(_:))))

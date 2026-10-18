@@ -121,6 +121,57 @@ final class EditorViewController: NSSplitViewController {
     @objc func fillSelection(_ sender: Any?) { state.fillSelection() }
     @objc func cropToSelection(_ sender: Any?) { state.cropToSelection() }
 
+    // MARK: - Select
+
+    @objc func selectSubject(_ sender: Any?) { state.selectObject(at: nil) }
+    @objc func selectColorRange(_ sender: Any?) { state.selectColorRange(state.color) }
+
+    /// Asks how far to change the selection by the way a menu item's tag
+    /// picks out of `SelectionModification`.
+    @objc func modifySelection(_ sender: NSMenuItem) {
+        guard SelectionModification.allCases.indices.contains(sender.tag) else { return }
+        state.pendingSelectionEdit = .modify(SelectionModification.allCases[sender.tag])
+    }
+
+    @objc func refineSelectionEdge(_ sender: Any?) { state.pendingSelectionEdit = .refine }
+    @objc func strokeSelection(_ sender: Any?) { state.pendingSelectionEdit = .stroke }
+    @objc func copySelectionToLayer(_ sender: Any?) { state.copySelectionToNewLayer(cut: false) }
+    @objc func cutSelectionToLayer(_ sender: Any?) { state.copySelectionToNewLayer(cut: true) }
+    @objc func fillSelectionFromSurroundings(_ sender: Any?) { state.fillSelectionFromSurroundings() }
+    @objc func definePattern(_ sender: Any?) { state.definePattern() }
+
+    // MARK: - Filter
+
+    /// Adds the filter a menu item's tag picks out of `LayerFilter.Kind`,
+    /// and shows it.
+    @objc func addFilter(_ sender: NSMenuItem) {
+        guard LayerFilter.Kind.allCases.indices.contains(sender.tag) else { return }
+        state.addFilter(LayerFilter.Kind.allCases[sender.tag])
+        state.presentedPanel = .filters
+    }
+
+    /// Adds the layer style a menu item's tag picks out of `LayerEffect.Kind`,
+    /// and shows it.
+    @objc func addEffect(_ sender: NSMenuItem) {
+        guard LayerEffect.Kind.allCases.indices.contains(sender.tag) else { return }
+        state.addEffect(LayerEffect.Kind.allCases[sender.tag])
+        state.presentedPanel = .effects
+    }
+
+    @objc func showAdjustments(_ sender: Any?) { state.presentedPanel = .adjustments }
+
+    @objc func applyFilters(_ sender: Any?) {
+        if let id = state.activeLayerID { state.applyFilters(of: id) }
+    }
+
+    @objc func removeFilters(_ sender: Any?) {
+        state.updateActiveLayer { layer in
+            layer.filters = []
+            layer.filterMask = nil
+        }
+        state.isEditingFilterMask = false
+    }
+
     // MARK: - Image
 
     @objc func showImageSize(_ sender: Any?) { state.presentedPanel = .imageSize }
@@ -284,8 +335,17 @@ extension EditorViewController: NSMenuItemValidation {
             item.title = redoTitle
             return history.canRedo
         case #selector(cut(_:)), #selector(deselect(_:)), #selector(invertSelection(_:)), #selector(delete(_:)),
-             #selector(fillSelection(_:)), #selector(cropToSelection(_:)):
+             #selector(fillSelection(_:)), #selector(cropToSelection(_:)), #selector(modifySelection(_:)),
+             #selector(refineSelectionEdge(_:)), #selector(strokeSelection(_:)), #selector(copySelectionToLayer(_:)),
+             #selector(cutSelectionToLayer(_:)), #selector(fillSelectionFromSurroundings(_:)), #selector(definePattern(_:)):
             return hasSelection
+        case #selector(addFilter(_:)), #selector(addEffect(_:)), #selector(showAdjustments(_:)):
+            return state.activeLayer.map { !$0.isAdjustment } ?? false
+        case #selector(applyFilters(_:)):
+            guard let layer = state.activeLayer else { return false }
+            return layer.hasActiveFilters && !layer.isLocked
+        case #selector(removeFilters(_:)):
+            return state.activeLayer?.filters.isEmpty == false
         case #selector(copy(_:)):
             return hasLayer
         case #selector(duplicateLayer(_:)), #selector(groupLayer(_:)), #selector(moveLayerUp(_:)), #selector(moveLayerDown(_:)):
