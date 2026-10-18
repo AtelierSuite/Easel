@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 final class EditorWindowController: NSWindowController, NSWindowDelegate {
     let session: EditorSession
     private var smartObjectSheet: SmartObjectSheetController?
+    private weak var zoomItem: NSMenuToolbarItem?
 
     private var imageDocument: ImageDocument? { document as? ImageDocument }
 
@@ -57,6 +58,20 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             )
         }
         observeChanges { [weak self] in self?.followSmartObjectEditing() }
+        observeChanges { [weak self] in self?.showZoomAndSize() }
+    }
+
+    /// The zoom in the toolbar's pop-up, and the picture's size under the
+    /// window's title.
+    private func showZoomAndSize() {
+        zoomItem?.title = zoomTitle
+        let size = session.state.composition.size
+        window?.subtitle = String(localized: "Window.Subtitle \(Int(size.width)) \(Int(size.height))")
+    }
+
+    private var zoomTitle: String {
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        return "\(session.state.zoomPercent(displayScale: scale))%"
     }
 
     @available(*, unavailable)
@@ -173,13 +188,15 @@ extension EditorWindowController: NSToolbarDelegate {
             group.label = String(localized: "Menu.UndoRedo")
             return group
         case .zoom:
-            let out = button(.zoom, "Menu.ZoomOut", "minus.magnifyingglass", #selector(EditorViewController.zoomOut(_:)))
-            let fit = button(.zoom, "Canvas.FitToScreen", "arrow.down.right.and.arrow.up.left", #selector(EditorViewController.zoomToFit(_:)))
-            let zoomIn = button(.zoom, "Menu.ZoomIn", "plus.magnifyingglass", #selector(EditorViewController.zoomIn(_:)))
-            let group = NSToolbarItemGroup(itemIdentifier: identifier)
-            group.subitems = [out, fit, zoomIn]
-            group.label = String(localized: "Menu.ZoomGroup")
-            return group
+            // The zoom as a pop-up of sizes, as in Preview and Pages.
+            let item = NSMenuToolbarItem(itemIdentifier: identifier)
+            item.label = String(localized: "Menu.ZoomGroup")
+            item.toolTip = item.label
+            item.title = zoomTitle
+            item.menu = MainMenu.zoomMenu()
+            item.showsIndicator = true
+            zoomItem = item
+            return item
         case .inspectorPages:
             // As in Pages, Numbers and Keynote: a button for each page of
             // the inspector, the one showing pressed in, which hides it.

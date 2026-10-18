@@ -160,6 +160,22 @@ enum MainMenu {
         return menu
     }
 
+    /// The toolbar's zoom pop-up: steps, fitting, and set sizes.
+    static func zoomMenu() -> NSMenu {
+        let menu = NSMenu(title: String(localized: "Menu.ZoomGroup"))
+        menu.addItem(item(String(localized: "Menu.ZoomIn"), #selector(EditorViewController.zoomIn(_:))))
+        menu.addItem(item(String(localized: "Menu.ZoomOut"), #selector(EditorViewController.zoomOut(_:))))
+        menu.addItem(.separator())
+        menu.addItem(item(String(localized: "Canvas.FitToScreen"), #selector(EditorViewController.zoomToFit(_:))))
+        menu.addItem(.separator())
+        for percent in [25, 50, 75, 100, 150, 200, 400, 800] {
+            let entry = item("\(percent)%", #selector(EditorViewController.zoomToPercent(_:)))
+            entry.tag = percent
+            menu.addItem(entry)
+        }
+        return menu
+    }
+
     private static func toolsMenu() -> NSMenu {
         let menu = NSMenu(title: String(localized: "Menu.Tools"))
         for (groupIndex, tools) in Tool.groups.enumerated() {

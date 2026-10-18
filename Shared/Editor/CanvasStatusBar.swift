@@ -8,13 +8,20 @@ struct CanvasStatusBar: View {
     let state: EditorState
     @Environment(\.displayScale) private var displayScale
 
+    #if os(macOS)
+    private static let showsZoomInToolbar = true
+    #else
+    private static let showsZoomInToolbar = false
+    #endif
+
     var body: some View {
         HStack(spacing: 8) {
-            if state.zoom != 1 || state.pan != .zero || state.rotation != 0 {
+            // The Mac shows the zoom in its toolbar instead.
+            if !Self.showsZoomInToolbar, state.zoom != 1 || state.pan != .zero || state.rotation != 0 {
                 Button {
                     withAnimation(.snappy) { state.fitCanvas() }
                 } label: {
-                    Text(verbatim: "\(Int((state.viewport.scale * displayScale * 100).rounded()))%")
+                    Text(verbatim: "\(state.zoomPercent(displayScale: displayScale))%")
                         .font(.system(size: 13, weight: .semibold).monospacedDigit())
                         .padding(.horizontal, 12)
                         .frame(height: 32)

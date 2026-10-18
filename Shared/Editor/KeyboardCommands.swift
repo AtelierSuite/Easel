@@ -59,6 +59,20 @@ extension EditorState {
         let center = CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2)
         zoom(by: larger ? 1.25 : 0.8, around: center)
     }
+
+    /// Zooms about the middle of the view until a pixel of the picture
+    /// takes up `percent` percent of a pixel on screen.
+    func zoom(toPercent percent: Double, displayScale: Double) {
+        let current = viewport.scale
+        guard current > 0, displayScale > 0 else { return }
+        let center = CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2)
+        zoom(by: percent / 100 / displayScale / current, around: center)
+    }
+
+    /// How large the picture shows, as a percentage of its pixels.
+    func zoomPercent(displayScale: Double) -> Int {
+        Int((viewport.scale * displayScale * 100).rounded())
+    }
 }
 
 /// The editor's keys: nudging with the arrows, brush size with the

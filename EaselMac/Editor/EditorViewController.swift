@@ -191,6 +191,12 @@ final class EditorViewController: NSSplitViewController {
         withAnimation(.snappy) { state.zoomToActualSize(displayScale: scale) }
     }
 
+    /// Zooms to the percentage in a menu item's tag.
+    @objc func zoomToPercent(_ sender: NSMenuItem) {
+        let scale = view.window?.backingScaleFactor ?? 2
+        withAnimation(.snappy) { state.zoom(toPercent: Double(sender.tag), displayScale: scale) }
+    }
+
     @objc func toggleRulers(_ sender: Any?) { state.showsRulers.toggle() }
 
     @objc func toggleTools(_ sender: Any?) { canvas.showsTools.toggle() }
@@ -311,6 +317,9 @@ extension EditorViewController: NSMenuItemValidation {
             return state.activeLayer?.mask != nil
         case #selector(flattenImage(_:)):
             return state.composition.layers.count > 1
+        case #selector(zoomToPercent(_:)):
+            let scale = view.window?.backingScaleFactor ?? 2
+            item.state = state.zoomPercent(displayScale: scale) == item.tag ? .on : .off
         case #selector(showFonts(_:)):
             return state.activeLayer?.isText == true
         case #selector(toggleRulers(_:)):
