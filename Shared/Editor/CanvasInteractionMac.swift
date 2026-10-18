@@ -104,11 +104,20 @@ final class CanvasInputView: NSView {
         updateCursor()
     }
 
-    /// A cursor with nothing in it, for while the tool draws its own.
-    private static let blankCursor = NSCursor(image: NSImage(size: NSSize(width: 1, height: 1)), hotSpot: .zero)
+    /// Whether the system's pointer is hidden while the tool draws its own.
+    /// Hidden outright rather than swapped for a blank cursor, as the
+    /// SwiftUI views around the canvas set the arrow back as the pointer
+    /// moves. Every hide is matched by an unhide.
+    private var hidesPointer = false {
+        didSet {
+            guard hidesPointer != oldValue else { return }
+            if hidesPointer { NSCursor.hide() } else { NSCursor.unhide() }
+        }
+    }
 
     private func updateCursor() {
         if isSpaceDown || drag.map({ if case .pan = $0 { true } else { false } }) == true {
+            hidesPointer = false
             (drag == nil ? NSCursor.openHand : NSCursor.closedHand).set()
             return
         }
@@ -119,11 +128,30 @@ final class CanvasInputView: NSView {
         default:
             isOverRuler = window.map { interaction?.rulerContains(location(ofWindowPoint: $0.mouseLocationOutsideOfEventStream)) } == true
         }
-        if interaction?.drawsOwnCursor == true, !isOverRuler {
-            Self.blankCursor.set()
-        } else {
-            NSCursor.crosshair.set()
+        hidesPointer = interaction?.drawsOwnCursor == true && !isOverRuler
+        NSCursor.crosshair.set()
+    }
+
+    /// Brings the pointer back as it leaves the canvas.
+    private func leaveCanvas() {
+        hidesPointer = false
+        NSCursor.arrow.set()
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil { hidesPointer = false }
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: nil)
+        if let newWindow {
+            NotificationCenter.default.addObserver(
+                self, selector: #selector(windowResignedKey(_:)), name: NSWindow.didResignKeyNotification, object: newWindow
+            )
         }
+    }
+
+    /// Another window or app in front gets the pointer back.
+    @objc private func windowResignedKey(_ notification: Notification) {
+        hidesPointer = false
     }
 
     /// Whether the pointer is over the canvas itself, not the tools
@@ -133,10 +161,11 @@ final class CanvasInputView: NSView {
         return hit === self || hit.isDescendant(of: self)
     }
 
-    /// Puts the right cursor up if the pointer is over the canvas itself.
+    /// Puts the right cursor up if the pointer is over the canvas itself,
+    /// such as when the tool in hand changes.
     func refreshCursor() {
-        guard window?.isKeyWindow == true, drag == nil, isPointerOverCanvas else { return }
-        updateCursor()
+        guard window?.isKeyWindow == true, drag == nil else { return }
+        if isPointerOverCanvas { updateCursor() } else { hidesPointer = false }
     }
 
     private func location(ofWindowPoint point: NSPoint) -> CGPoint {
@@ -204,7 +233,8 @@ final class CanvasInputView: NSView {
             let isTap = travelled < 4 && event.timestamp - startTime < 0.35
             interaction.ended(isTap, point)
         }
-        updateCursor()
+        // A stroke may end off the canvas.
+        if isPointerOverCanvas { updateCursor() } else { leaveCanvas() }
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -212,11 +242,12 @@ final class CanvasInputView: NSView {
         // The ruler may have come or gone from under the pointer, or the
         // pointer onto the tools floating over the canvas, which take no
         // part in the canvas's cursor.
-        if isPointerOverCanvas { updateCursor() } else { NSCursor.arrow.set() }
+        if isPointerOverCanvas { updateCursor() } else { leaveCanvas() }
     }
 
     override func mouseExited(with event: NSEvent) {
         interaction?.hovered(nil)
+        if drag == nil { leaveCanvas() }
     }
 
     override func tabletProximity(with event: NSEvent) {
