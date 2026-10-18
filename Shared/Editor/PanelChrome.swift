@@ -64,7 +64,11 @@ private struct PanelActions: ViewModifier {
                         .padding(.vertical, 10)
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if cancel != nil || confirm != nil {
+                    // A panel that can only be closed has nothing to put
+                    // here: what it changes already took effect, and is in
+                    // the history to undo. Only a panel trying a change out
+                    // on the canvas has one to keep or throw away.
+                    if cancel != nil {
                         HStack(spacing: 8) {
                             Spacer()
                             if let cancel {
