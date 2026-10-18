@@ -9,7 +9,7 @@ final class ToolPaletteViewController: NSViewController {
     private let state: EditorState
     private var buttons: [Tool: NSButton] = [:]
 
-    static let width: CGFloat = 52
+    static let width: CGFloat = 44
 
     init(state: EditorState) {
         self.state = state
@@ -29,7 +29,7 @@ final class ToolPaletteViewController: NSViewController {
             if index > 0 {
                 let separator = NSBox()
                 separator.boxType = .separator
-                separator.widthAnchor.constraint(equalToConstant: 28).isActive = true
+                separator.widthAnchor.constraint(equalToConstant: 24).isActive = true
                 stack.addArrangedSubview(separator)
                 stack.setCustomSpacing(8, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 2])
                 stack.setCustomSpacing(8, after: separator)
@@ -84,8 +84,8 @@ final class ToolPaletteViewController: NSViewController {
         button.toolTip = "\(name) (\(String(tool.shortcut.character).uppercased()))"
         button.setAccessibilityIdentifier("tool.\(tool.rawValue)")
         NSLayoutConstraint.activate([
-            button.widthAnchor.constraint(equalToConstant: 36),
-            button.heightAnchor.constraint(equalToConstant: 36),
+            button.widthAnchor.constraint(equalToConstant: 32),
+            button.heightAnchor.constraint(equalToConstant: 32),
         ])
         return button
     }

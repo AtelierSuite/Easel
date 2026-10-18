@@ -310,7 +310,7 @@ private final class CanvasViewController: NSViewController {
     private let tools: ToolPaletteViewController
     private var state: EditorState { hosting.rootView.state }
 
-    static let margin: CGFloat = 12
+    static let margin: CGFloat = 8
 
     var showsTools = true {
         didSet {
