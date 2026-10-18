@@ -61,6 +61,14 @@ struct AdjustmentsPanel: View {
     private var form: some View {
         let values = values
         return Form {
+            #if os(macOS)
+            // Looks first, as a table's styles come first in Numbers.
+            if placement.isMacInspector {
+                Section("Panel.Looks.Title") {
+                    LookStrip(state: state)
+                }
+            }
+            #endif
             ForEach(Array(Adjustments.Key.sections.enumerated()), id: \.offset) { _, keys in
                 Section {
                     ForEach(keys) { key in
@@ -273,9 +281,16 @@ struct LooksPanel: View {
     }
 
     private func makeThumbnails() async {
-        guard let layer = state.activeLayer else { return }
+        guard let made = await Self.thumbnails(of: state.activeLayer) else { return }
+        original = made.original
+        thumbnails = made.looks
+    }
+
+    /// A small copy of the layer, and the same with each look on it.
+    static func thumbnails(of layer: Layer?) async -> (original: CGImage, looks: [FilterPreset: CGImage])? {
+        guard let layer else { return nil }
         let source = layer.image
-        let made = await Task.detached(priority: .userInitiated) { () -> (CGImage, [FilterPreset: CGImage]) in
+        return await Task.detached(priority: .userInitiated) { () -> (original: CGImage, looks: [FilterPreset: CGImage]) in
             let small = source.preview(maxPixelSize: 240)
             var results: [FilterPreset: CGImage] = [:]
             for preset in FilterPreset.allCases {
@@ -283,7 +298,85 @@ struct LooksPanel: View {
             }
             return (small, results)
         }.value
-        original = made.0
-        thumbnails = made.1
     }
 }
+
+#if os(macOS)
+/// The looks in the Mac's inspector, at the top of Adjust: a row of small
+/// copies of the layer to scroll through, each kept on the layer as a Look
+/// filter when clicked.
+private struct LookStrip: View {
+    @Bindable var state: EditorState
+    @State private var thumbnails: [FilterPreset: CGImage] = [:]
+    @State private var original: CGImage?
+
+    private static let tileSize: CGFloat = 56
+
+    var body: some View {
+        let picked = state.lookFilter?.lookPreset
+        VStack(alignment: .leading, spacing: 8) {
+            ScrollView(.horizontal) {
+                LazyHGrid(rows: [GridItem(.fixed(Self.tileSize + 18), spacing: 8)], spacing: 8) {
+                    tile(nil, label: String(localized: "Filter.None"), image: original, isSelected: picked == nil)
+                    ForEach(FilterPreset.allCases) { preset in
+                        tile(preset, label: preset.label, image: thumbnails[preset], isSelected: picked == preset)
+                    }
+                }
+                .padding(.bottom, 8)
+            }
+            if picked != nil {
+                LabeledSlider(
+                    label: "Filters.Intensity",
+                    value: Binding(
+                        get: { state.lookFilter?.amount ?? 1 },
+                        set: { state.setLookFilter(state.lookFilter?.lookPreset, intensity: $0) }
+                    ),
+                    valueText: "\(Int(((state.lookFilter?.amount ?? 1) * 100).rounded()))%"
+                )
+                .typed(scale: 100, suffix: "%")
+                .accessibilityIdentifier("filterIntensity")
+            }
+        }
+        .task(id: state.activeLayerID) {
+            guard let made = await LooksPanel.thumbnails(of: state.activeLayer) else { return }
+            original = made.original
+            thumbnails = made.looks
+        }
+    }
+
+    private func tile(_ value: FilterPreset?, label: String, image: CGImage?, isSelected: Bool) -> some View {
+        Button {
+            state.setLookFilter(value, intensity: 1)
+        } label: {
+            VStack(spacing: 4) {
+                ZStack {
+                    Checkerboard(squareSize: 4)
+                    if let image {
+                        Image(decorative: image, scale: 1)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+                .frame(width: Self.tileSize, height: Self.tileSize)
+                .clipShape(.rect(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(isSelected ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: isSelected ? 2 : 1)
+                }
+                Text(label)
+                    .font(.caption2)
+                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                    .lineLimit(1)
+                    .frame(width: Self.tileSize)
+            }
+        }
+        .buttonStyle(.plain)
+        .help(Text(verbatim: label))
+        .accessibilityIdentifier("filter.\(value?.rawValue ?? "none")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+#endif
