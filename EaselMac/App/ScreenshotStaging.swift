@@ -48,6 +48,12 @@ enum ScreenshotStaging {
         guard let visible = screen?.visibleFrame else { return }
         let origin = NSPoint(x: visible.midX - windowSize.width / 2, y: visible.midY - windowSize.height / 2)
         window.setFrame(NSRect(origin: origin, size: windowSize), display: true)
+        // A look at a change while someone works in another app stays
+        // behind it, and out of the way of what they type.
+        guard !defaults.bool(forKey: "ScreenshotStaysBehind") else {
+            window.orderFront(nil)
+            return
+        }
         // In front and key, so the window is drawn as the one being used.
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
