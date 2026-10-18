@@ -2,18 +2,24 @@ import AppKit
 import Paintbrush
 import SwiftUI
 
-/// The panels beside the canvas: a row of tabs along the top, as in other
-/// Mac inspectors, and the panel picked below them.
+/// The panels beside the canvas, after the inspectors in Pages, Numbers and
+/// Keynote: a page for the picked layer and one for the whole document,
+/// picked in the toolbar, each with a row of named tabs along its top.
 @MainActor
 final class InspectorViewController: NSViewController {
     private let session: EditorSession
     private var tabs: NSSegmentedControl!
+    private var shownTabs: [EditorPanel] = []
 
-    /// The panels with a tab. Image Size has none: it comes up from the
-    /// Image menu, with Cancel and Done of its own.
-    static let tabbedPanels: [EditorPanel] = [
-        .layers, .adjustments, .filters, .effects, .looks, .text, .history, .comps, .artboards,
-    ]
+    /// The panels for the picked layer. Looks share Adjust's tab, and Text
+    /// shows only while there is text to set, as a table's tabs do in Numbers.
+    static let formatPanels: [EditorPanel] = [.layers, .adjustments, .filters, .effects, .text]
+    /// The panels for the document as a whole.
+    static let documentPanels: [EditorPanel] = [.history, .comps, .artboards]
+    /// Every panel with a tab, in the order the View menu lists them. Image
+    /// Size has none: it comes up from the Image menu, with Cancel and Done
+    /// of its own.
+    static let tabbedPanels = formatPanels + documentPanels
 
     init(session: EditorSession) {
         self.session = session
@@ -24,16 +30,9 @@ final class InspectorViewController: NSViewController {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func loadView() {
-        let images = Self.tabbedPanels.map { panel in
-            NSImage(systemSymbolName: panel.symbolName, accessibilityDescription: nil) ?? NSImage()
-        }
-        tabs = NSSegmentedControl(images: images, trackingMode: .selectOne, target: self, action: #selector(pickPanel(_:)))
+        tabs = NSSegmentedControl(labels: [], trackingMode: .selectOne, target: self, action: #selector(pickPanel(_:)))
         tabs.segmentStyle = .automatic
         tabs.segmentDistribution = .fillEqually
-        for (index, panel) in Self.tabbedPanels.enumerated() {
-            tabs.setToolTip(panel.titleString, forSegment: index)
-            tabs.setWidth(0, forSegment: index)
-        }
         tabs.setAccessibilityIdentifier("inspectorTabs")
         tabs.translatesAutoresizingMaskIntoConstraints = false
 
@@ -51,7 +50,7 @@ final class InspectorViewController: NSViewController {
             tabs.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor, constant: 8),
             tabs.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
             tabs.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
-            content.topAnchor.constraint(equalTo: tabs.bottomAnchor, constant: 8),
+            content.topAnchor.constraint(equalTo: tabs.bottomAnchor, constant: 4),
             content.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             content.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             content.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -65,13 +64,42 @@ final class InspectorViewController: NSViewController {
     }
 
     private func showPanel() {
-        let panel = session.state.presentedPanel ?? .layers
-        tabs.selectedSegment = Self.tabbedPanels.firstIndex(of: panel) ?? -1
+        let state = session.state
+        let panel = (state.presentedPanel ?? .layers).inspectorPanel
+        let page = Self.documentPanels.contains(panel) ? Self.documentPanels : Self.formatPanels
+        let hasText = state.activeLayer?.isText == true || panel == .text
+        let shown = page.filter { $0 != .text || hasText }
+        if shown != shownTabs {
+            shownTabs = shown
+            tabs.segmentCount = shown.count
+            for (index, tab) in shown.enumerated() {
+                tabs.setLabel(tab.tabTitle, forSegment: index)
+                tabs.setToolTip(tab.titleString, forSegment: index)
+                tabs.setWidth(0, forSegment: index)
+            }
+        }
+        tabs.selectedSegment = shown.firstIndex(of: panel) ?? -1
     }
 
     @objc private func pickPanel(_ sender: NSSegmentedControl) {
-        guard Self.tabbedPanels.indices.contains(sender.selectedSegment) else { return }
-        session.state.presentedPanel = Self.tabbedPanels[sender.selectedSegment]
+        guard shownTabs.indices.contains(sender.selectedSegment) else { return }
+        session.state.presentedPanel = shownTabs[sender.selectedSegment]
+    }
+}
+
+extension EditorPanel {
+    /// The panel that shows this one in the Mac's inspector, where Looks
+    /// sit at the top of Adjust.
+    var inspectorPanel: EditorPanel { self == .looks ? .adjustments : self }
+
+    /// The panel's name on its tab, shortened where the full one would not
+    /// fit beside the others.
+    var tabTitle: String {
+        switch self {
+        case .effects: String(localized: "Inspector.Tab.Styles")
+        case .comps: String(localized: "Inspector.Tab.Comps")
+        default: titleString
+        }
     }
 }
 
@@ -81,7 +109,7 @@ private struct InspectorContent: View {
     let history: CompositionHistory
 
     var body: some View {
-        let panel = state.presentedPanel ?? .layers
+        let panel = (state.presentedPanel ?? .layers).inspectorPanel
         EditorPanelContent(panel: panel, state: state, history: history)
             .environment(\.panelPlacement, .inspector)
             .environment(\.panelTitle, panel.title)
@@ -103,6 +131,31 @@ extension EditorPanel {
         case .history: String(localized: "Panel.History.Title")
         case .comps: String(localized: "Panel.Comps.Title")
         case .artboards: String(localized: "Panel.Artboards.Title")
+        }
+    }
+}
+
+/// A page of the inspector, picked in the toolbar: the picked layer's
+/// settings, or the document's.
+@MainActor
+enum InspectorPage: CaseIterable {
+    case format, document
+
+    init(_ panel: EditorPanel) {
+        self = InspectorViewController.documentPanels.contains(panel) ? .document : .format
+    }
+
+    var label: String {
+        switch self {
+        case .format: String(localized: "Inspector.Format")
+        case .document: String(localized: "Inspector.Document")
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .format: "paintbrush"
+        case .document: "doc.text"
         }
     }
 }

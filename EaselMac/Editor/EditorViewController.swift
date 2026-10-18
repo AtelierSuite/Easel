@@ -13,6 +13,9 @@ final class EditorViewController: NSSplitViewController {
     private var canvas: CanvasViewController!
     private(set) var inspectorItem: NSSplitViewItem!
     private var isFollowingInspector = false
+    /// The panel each page of the inspector last showed, to come back to.
+    private var lastPanels: [InspectorPage: EditorPanel] = [.format: .layers, .document: .history]
+    private var collapseObservation: NSKeyValueObservation?
 
     var state: EditorState { session.state }
     var history: CompositionHistory { session.history }
@@ -48,9 +51,44 @@ final class EditorViewController: NSSplitViewController {
 
         // A panel picked from a menu brings the inspector out.
         observeChanges { [weak self] in
-            guard let self, state.presentedPanel != nil else { return }
+            guard let self, let panel = state.presentedPanel else { return }
+            lastPanels[InspectorPage(panel)] = panel
             if inspectorItem.isCollapsed { inspectorItem.animator().isCollapsed = false }
+            showInspectorPageInToolbar()
         }
+        collapseObservation = inspectorItem.observe(\.isCollapsed) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.showInspectorPageInToolbar() }
+        }
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        showInspectorPageInToolbar()
+    }
+
+    // MARK: - Inspector
+
+    /// Shows a page of the inspector, or hides it when that page is the one
+    /// showing, from the toolbar's buttons.
+    @objc func showInspectorPage(_ sender: NSToolbarItemGroup) {
+        guard InspectorPage.allCases.indices.contains(sender.selectedIndex) else { return }
+        let page = InspectorPage.allCases[sender.selectedIndex]
+        if !inspectorItem.isCollapsed, page == InspectorPage(state.presentedPanel ?? .layers) {
+            inspectorItem.animator().isCollapsed = true
+        } else {
+            state.presentedPanel = lastPanels[page]
+            inspectorItem.animator().isCollapsed = false
+        }
+        showInspectorPageInToolbar()
+    }
+
+    /// Presses in the toolbar button for the page showing, and none while
+    /// the inspector is hidden.
+    private func showInspectorPageInToolbar() {
+        let group = view.window?.toolbar?.items.first { $0.itemIdentifier == .inspectorPages } as? NSToolbarItemGroup
+        guard let group else { return }
+        let page = InspectorPage(state.presentedPanel ?? .layers)
+        group.selectedIndex = inspectorItem.isCollapsed ? -1 : InspectorPage.allCases.firstIndex(of: page) ?? -1
     }
 
     // MARK: - Undo

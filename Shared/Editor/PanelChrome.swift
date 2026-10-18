@@ -79,14 +79,17 @@ private struct PanelActions: ViewModifier {
             }
         case .inspector:
             #if os(macOS)
-            // As a Mac inspector: the title at the top, the buttons at the foot.
+            // As a Mac inspector: its tab names the panel, and only a panel
+            // with no tab, such as Image Size, has a title of its own.
             content
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    Text(title)
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+                    if cancel != nil {
+                        Text(title)
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                    }
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     // A panel that can only be closed has nothing to put

@@ -147,17 +147,18 @@ extension NSToolbarItem.Identifier {
     static let zoom = NSToolbarItem.Identifier("zoom")
     static let share = NSToolbarItem.Identifier("share")
     static let export = NSToolbarItem.Identifier("export")
+    static let inspectorPages = NSToolbarItem.Identifier("inspectorPages")
 }
 
 extension EditorWindowController: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.flexibleSpace, .undoRedo, .space, .zoom, .flexibleSpace,
-         .export, .share, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
+         .export, .share, .inspectorTrackingSeparator, .flexibleSpace, .inspectorPages]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.undoRedo, .zoom, .export, .share,
-         .inspectorTrackingSeparator, .toggleInspector, .space, .flexibleSpace]
+         .inspectorTrackingSeparator, .inspectorPages, .toggleInspector, .space, .flexibleSpace]
     }
 
     func toolbar(
@@ -178,6 +179,21 @@ extension EditorWindowController: NSToolbarDelegate {
             let group = NSToolbarItemGroup(itemIdentifier: identifier)
             group.subitems = [out, fit, zoomIn]
             group.label = String(localized: "Menu.ZoomGroup")
+            return group
+        case .inspectorPages:
+            // As in Pages, Numbers and Keynote: a button for each page of
+            // the inspector, the one showing pressed in, which hides it.
+            let pages = InspectorPage.allCases
+            let group = NSToolbarItemGroup(
+                itemIdentifier: identifier,
+                images: pages.map { NSImage(systemSymbolName: $0.symbolName, accessibilityDescription: $0.label)! },
+                selectionMode: .selectOne,
+                labels: pages.map(\.label),
+                target: nil,
+                action: #selector(EditorViewController.showInspectorPage(_:))
+            )
+            for (subitem, page) in zip(group.subitems, pages) { subitem.toolTip = page.label }
+            group.label = String(localized: "Toolbar.Inspector")
             return group
         case .export:
             let item = NSMenuToolbarItem(itemIdentifier: identifier)
