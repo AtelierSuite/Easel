@@ -253,33 +253,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap Something Gray…"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Click Something Gray…"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tap Something Gray…"
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "グレーのものをタップ…"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "グレーのものをクリック…"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "グレーのものをタップ…"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "회색인 곳을 탭하십시오…"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "회색인 곳을 클릭하십시오…"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "회색인 곳을 탭하십시오…"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻点灰色的地方…"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "点按灰色的地方…"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "轻点灰色的地方…"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點一下灰色的地方…"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "按一下灰色的地方…"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "點一下灰色的地方…"
+                }
+              }
+            }
           }
         }
       }
@@ -323,33 +383,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap something in the picture that should be gray or white to balance its colors."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Click something in the picture that should be gray or white to balance its colors."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tap something in the picture that should be gray or white to balance its colors."
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "グレーや白であるべき箇所をタップすると、色のバランスを整えます。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "グレーや白であるべき箇所をクリックすると、色のバランスを整えます。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "グレーや白であるべき箇所をタップすると、色のバランスを整えます。"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "회색이나 흰색이어야 하는 곳을 탭하여 색상 균형을 맞추십시오."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "회색이나 흰색이어야 하는 곳을 클릭하여 색상 균형을 맞추십시오."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "회색이나 흰색이어야 하는 곳을 탭하여 색상 균형을 맞추십시오."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻点图片中应为灰色或白色的地方以平衡颜色。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "点按图片中应为灰色或白色的地方以平衡颜色。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "轻点图片中应为灰色或白色的地方以平衡颜色。"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點一下圖片中應為灰色或白色的地方以平衡顏色。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "按一下圖片中應為灰色或白色的地方以平衡顏色。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "點一下圖片中應為灰色或白色的地方以平衡顏色。"
+                }
+              }
+            }
           }
         }
       }
@@ -5677,33 +5797,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A comp remembers which layers show, where they sit and how they blend. Tap one to bring it back."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "A comp remembers which layers show, where they sit and how they blend. Click one to bring it back."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "A comp remembers which layers show, where they sit and how they blend. Tap one to bring it back."
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "カンプはレイヤーの表示、位置、描画モードを記憶します。タップすると元に戻ります。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "カンプはレイヤーの表示、位置、描画モードを記憶します。クリックすると元に戻ります。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "カンプはレイヤーの表示、位置、描画モードを記憶します。タップすると元に戻ります。"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "구성은 표시되는 레이어, 위치 및 혼합 방식을 기억합니다. 탭하여 되돌리십시오."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "구성은 표시되는 레이어, 위치 및 혼합 방식을 기억합니다. 클릭하여 되돌리십시오."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "구성은 표시되는 레이어, 위치 및 혼합 방식을 기억합니다. 탭하여 되돌리십시오."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "复合会记住哪些图层可见、它们的位置以及混合方式。轻点即可恢复。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "复合会记住哪些图层可见、它们的位置以及混合方式。点按即可恢复。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "复合会记住哪些图层可见、它们的位置以及混合方式。轻点即可恢复。"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "構圖會記住哪些圖層可見、位置及混合方式。點一下即可恢復。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "構圖會記住哪些圖層可見、位置及混合方式。按一下即可恢復。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "構圖會記住哪些圖層可見、位置及混合方式。點一下即可恢復。"
+                }
+              }
+            }
           }
         }
       }
@@ -6762,33 +6942,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "There is no object there. Tap a person, animal or thing to select it."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "There is no object there. Click a person, animal or thing to select it."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "There is no object there. Tap a person, animal or thing to select it."
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "そこにはオブジェクトがありません。人物、動物、物体をタップして選択してください。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "そこにはオブジェクトがありません。人物、動物、物体をクリックして選択してください。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "そこにはオブジェクトがありません。人物、動物、物体をタップして選択してください。"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "그곳에는 개체가 없습니다. 사람, 동물 또는 사물을 탭하여 선택하십시오."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "그곳에는 개체가 없습니다. 사람, 동물 또는 사물을 클릭하여 선택하십시오."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "그곳에는 개체가 없습니다. 사람, 동물 또는 사물을 탭하여 선택하십시오."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "那里没有对象。请轻点人物、动物或物体以选择。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "那里没有对象。请点按人物、动物或物体以选择。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "那里没有对象。请轻点人物、动物或物体以选择。"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "那裡沒有物件。請點一下人物、動物或物體以選取。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "那裡沒有物件。請按一下人物、動物或物體以選取。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "那裡沒有物件。請點一下人物、動物或物體以選取。"
+                }
+              }
+            }
           }
         }
       }
@@ -9597,33 +9837,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap the bar to add a stop. Drag stops to move them."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Click the bar to add a stop. Drag stops to move them."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tap the bar to add a stop. Drag stops to move them."
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "バーをタップすると分岐点を追加できます。分岐点はドラッグで移動できます。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "バーをクリックすると分岐点を追加できます。分岐点はドラッグで移動できます。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "バーをタップすると分岐点を追加できます。分岐点はドラッグで移動できます。"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "막대를 탭하여 정지점을 추가하십시오. 정지점을 드래그하여 이동하십시오."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "막대를 클릭하여 정지점을 추가하십시오. 정지점을 드래그하여 이동하십시오."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "막대를 탭하여 정지점을 추가하십시오. 정지점을 드래그하여 이동하십시오."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻点渐变条以添加色标。拖移色标以移动它们。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "点按渐变条以添加色标。拖移色标以移动它们。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "轻点渐变条以添加色标。拖移色标以移动它们。"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點一下漸層列以加入色標。拖移色標以移動。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "按一下漸層列以加入色標。拖移色標以移動。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "點一下漸層列以加入色標。拖移色標以移動。"
+                }
+              }
+            }
           }
         }
       }
@@ -10787,33 +11087,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap a step to go back to it. Making a change after going back drops the steps after it."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Click a step to go back to it. Making a change after going back drops the steps after it."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tap a step to go back to it. Making a change after going back drops the steps after it."
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ステップをタップするとその時点に戻ります。戻った後に変更すると、それ以降のステップは消えます。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "ステップをクリックするとその時点に戻ります。戻った後に変更すると、それ以降のステップは消えます。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "ステップをタップするとその時点に戻ります。戻った後に変更すると、それ以降のステップは消えます。"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "단계를 탭하면 해당 시점으로 돌아갑니다. 돌아간 후 변경하면 그 이후의 단계는 사라집니다."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "단계를 클릭하면 해당 시점으로 돌아갑니다. 돌아간 후 변경하면 그 이후의 단계는 사라집니다."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "단계를 탭하면 해당 시점으로 돌아갑니다. 돌아간 후 변경하면 그 이후의 단계는 사라집니다."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻点某一步可返回该步骤。返回后再作更改，会丢弃之后的步骤。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "点按某一步可返回该步骤。返回后再作更改，会丢弃之后的步骤。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "轻点某一步可返回该步骤。返回后再作更改，会丢弃之后的步骤。"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點一下某個步驟即可返回該步驟。返回後再作更改，會捨棄之後的步驟。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "按一下某個步驟即可返回該步驟。返回後再作更改，會捨棄之後的步驟。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "點一下某個步驟即可返回該步驟。返回後再作更改，會捨棄之後的步驟。"
+                }
+              }
+            }
           }
         }
       }
@@ -18312,33 +18672,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Filters run from top to bottom. Touch and hold a filter to drag it into a new place."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Filters run from top to bottom. Move one up or down from its menu."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Filters run from top to bottom. Touch and hold a filter to drag it into a new place."
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "フィルタは上から順に適用されます。フィルタを長押しすると、ドラッグして並べ替えられます。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "フィルタは上から順に適用されます。並べ替えるには、各フィルタのメニューを使います。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "フィルタは上から順に適用されます。フィルタを長押しすると、ドラッグして並べ替えられます。"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "필터는 위에서 아래 순서로 적용됩니다. 필터를 길게 터치하여 드래그하면 순서를 변경할 수 있습니다."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "필터는 위에서 아래 순서로 적용됩니다. 순서를 변경하려면 각 필터의 메뉴를 사용하십시오."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "필터는 위에서 아래 순서로 적용됩니다. 필터를 길게 터치하여 드래그하면 순서를 변경할 수 있습니다."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "滤镜从上到下依次应用。按住滤镜即可拖移以重新排序。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "滤镜从上到下依次应用。可在各滤镜的菜单中上移或下移。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "滤镜从上到下依次应用。按住滤镜即可拖移以重新排序。"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "濾鏡由上至下依序套用。按住濾鏡即可拖移以重新排序。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "濾鏡由上至下依序套用。可在各濾鏡的選單中上移或下移。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "濾鏡由上至下依序套用。按住濾鏡即可拖移以重新排序。"
+                }
+              }
+            }
           }
         }
       }
@@ -27552,33 +27972,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap a shape or path to edit it"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Click a shape or path to edit it"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tap a shape or path to edit it"
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "図形やパスをタップして編集"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "図形やパスをクリックして編集"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "図形やパスをタップして編集"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "도형이나 패스를 탭하여 편집"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "도형이나 패스를 클릭하여 편집"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "도형이나 패스를 탭하여 편집"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻点形状或路径以编辑"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "点按形状或路径以编辑"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "轻点形状或路径以编辑"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點一下形狀或路徑以編輯"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "按一下形狀或路徑以編輯"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "點一下形狀或路徑以編輯"
+                }
+              }
+            }
           }
         }
       }
@@ -28182,33 +28662,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap to add text"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Click to add text"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tap to add text"
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "タップしてテキストを追加"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "クリックしてテキストを追加"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "タップしてテキストを追加"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "탭하여 텍스트 추가"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "클릭하여 텍스트 추가"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "탭하여 텍스트 추가"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻点以添加文本"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "点按以添加文本"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "轻点以添加文本"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點一下以加入文字"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "按一下以加入文字"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "點一下以加入文字"
+                }
+              }
+            }
           }
         }
       }
@@ -28217,33 +28757,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap for corners, drag for curves"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Click for corners, drag for curves"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tap for corners, drag for curves"
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "タップで角、ドラッグで曲線"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "クリックで角、ドラッグで曲線"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "タップで角、ドラッグで曲線"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "탭하여 모서리, 드래그하여 곡선"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "클릭하여 모서리, 드래그하여 곡선"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "탭하여 모서리, 드래그하여 곡선"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻点添加角点，拖移添加曲线"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "点按添加角点，拖移添加曲线"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "轻点添加角点，拖移添加曲线"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點一下加入角點，拖移加入曲線"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "按一下加入角點，拖移加入曲線"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "點一下加入角點，拖移加入曲線"
+                }
+              }
+            }
           }
         }
       }
@@ -30982,33 +31582,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap or drag across regions"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Click or drag across regions"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Tap or drag across regions"
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "領域をタップまたはドラッグ"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "領域をクリックまたはドラッグ"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "領域をタップまたはドラッグ"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "영역을 탭하거나 드래그"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "영역을 클릭하거나 드래그"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "영역을 탭하거나 드래그"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻点或拖过区域"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "点按或拖过区域"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "轻点或拖过区域"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點一下或拖過區域"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "按一下或拖過區域"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "點一下或拖過區域"
+                }
+              }
+            }
           }
         }
       }
@@ -33537,33 +34197,93 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pick the Text tool and tap the canvas to add text."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Pick the Text tool and click the canvas to add text."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Pick the Text tool and tap the canvas to add text."
+                }
+              }
+            }
           }
         },
         "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "テキストツールを選んでカンバスをタップすると、テキストを追加できます。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "テキストツールを選んでカンバスをクリックすると、テキストを追加できます。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "テキストツールを選んでカンバスをタップすると、テキストを追加できます。"
+                }
+              }
+            }
           }
         },
         "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "텍스트 도구를 선택하고 캔버스를 탭하여 텍스트를 추가하십시오."
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "텍스트 도구를 선택하고 캔버스를 클릭하여 텍스트를 추가하십시오."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "텍스트 도구를 선택하고 캔버스를 탭하여 텍스트를 추가하십시오."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择文本工具并轻点画布以添加文本。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "选择文本工具并点按画布以添加文本。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "选择文本工具并轻点画布以添加文本。"
+                }
+              }
+            }
           }
         },
         "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選擇文字工具並點一下畫布以加入文字。"
+          "variations" : {
+            "device" : {
+              "mac" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "選擇文字工具並按一下畫布以加入文字。"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "選擇文字工具並點一下畫布以加入文字。"
+                }
+              }
+            }
           }
         }
       }
