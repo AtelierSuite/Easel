@@ -484,8 +484,8 @@
 				EA5E1000000000000000020D /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				EA5E10000000000000000201 /* EaselMac */,
 				EA5E10000000000000000021 /* Shared */,
+				EA5E10000000000000000201 /* EaselMac */,
 			);
 			name = "Easel for Mac";
 			packageProductDependencies = (
@@ -775,8 +775,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_PACKAGE_NAME = Easel;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_PACKAGE_NAME = Easel;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
@@ -839,8 +839,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_PACKAGE_NAME = Easel;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_PACKAGE_NAME = Easel;
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
@@ -1011,9 +1011,9 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "EaselThumbnail/EaselThumbnail-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YYM4Z6MU8F;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EaselThumbnail/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Easel;
@@ -1049,9 +1049,9 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = "EaselThumbnail/EaselThumbnail-macOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = YYM4Z6MU8F;
+				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EaselThumbnail/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Easel;
