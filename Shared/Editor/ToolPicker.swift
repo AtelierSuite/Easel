@@ -178,6 +178,7 @@ struct GlassIconButton: View {
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
+        .help(label)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
@@ -201,6 +202,7 @@ struct GlassMenuButton<Content: View>: View {
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
+        .help(Text(label))
         .accessibilityLabel(label)
     }
 }

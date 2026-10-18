@@ -718,6 +718,7 @@ struct OptionSlider: View {
         }
         .padding(.horizontal, 10)
         .frame(height: EditorToolbarMetrics.controlSize)
+        .help(Text(label))
     }
 }
 

@@ -76,6 +76,7 @@ struct ColorWell: View {
         .accessibilityLabel("Options.Color")
         .accessibilityValue(state.color.hexString)
         .accessibilityIdentifier("colorWell")
+        .help(Text("Options.Color"))
         .popover(isPresented: $isPresented) {
             SwatchPicker(state: state)
                 .presentationCompactAdaptation(.popover)
