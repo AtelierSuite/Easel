@@ -71,9 +71,12 @@ final class EditorViewController: NSSplitViewController {
     /// Shows a page of the inspector, or hides it when that page is the one
     /// showing, from the toolbar's buttons.
     @objc func showInspectorPage(_ sender: NSToolbarItemGroup) {
-        guard InspectorPage.allCases.indices.contains(sender.selectedIndex) else { return }
-        let page = InspectorPage.allCases[sender.selectedIndex]
-        if !inspectorItem.isCollapsed, page == InspectorPage(state.presentedPanel ?? .layers) {
+        // The button clicked is the one that no longer matches the page shown.
+        let shown = inspectorItem.isCollapsed ? nil : InspectorPage(state.presentedPanel ?? .layers)
+        guard let page = InspectorPage.allCases.enumerated().first(where: { index, page in
+            sender.isSelected(at: index) != (page == shown)
+        })?.element else { return }
+        if page == shown {
             inspectorItem.animator().isCollapsed = true
         } else {
             state.presentedPanel = lastPanels[page]
@@ -88,7 +91,9 @@ final class EditorViewController: NSSplitViewController {
         let group = view.window?.toolbar?.items.first { $0.itemIdentifier == .inspectorPages } as? NSToolbarItemGroup
         guard let group else { return }
         let page = InspectorPage(state.presentedPanel ?? .layers)
-        group.selectedIndex = inspectorItem.isCollapsed ? -1 : InspectorPage.allCases.firstIndex(of: page) ?? -1
+        for (index, each) in InspectorPage.allCases.enumerated() {
+            group.setSelected(!inspectorItem.isCollapsed && each == page, at: index)
+        }
     }
 
     // MARK: - Undo

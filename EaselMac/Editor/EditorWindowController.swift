@@ -210,13 +210,17 @@ extension EditorWindowController: NSToolbarDelegate {
             let group = NSToolbarItemGroup(
                 itemIdentifier: identifier,
                 images: pages.map { NSImage(systemSymbolName: $0.symbolName, accessibilityDescription: $0.label)! },
-                selectionMode: .selectOne,
+                // Either may be pressed, so neither is while the inspector
+                // is hidden; the editor keeps them in step with it.
+                selectionMode: .selectAny,
                 labels: pages.map(\.label),
                 target: nil,
                 action: #selector(EditorViewController.showInspectorPage(_:))
             )
             for (subitem, page) in zip(group.subitems, pages) { subitem.toolTip = page.label }
             group.label = String(localized: "Toolbar.Inspector")
+            // Two buttons always, never folded into a pop-up.
+            group.controlRepresentation = .expanded
             return group
         case .export:
             let item = NSMenuToolbarItem(itemIdentifier: identifier)
