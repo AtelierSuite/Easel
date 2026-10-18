@@ -55,9 +55,11 @@ final class ToolPaletteViewController: NSViewController {
         let glass = NSGlassEffectView()
         glass.cornerRadius = Self.width / 2
         glass.contentView = scroll
-        // As tall as the tools, unless the window is shorter.
+        // As tall as the tools, unless the window is shorter: below the
+        // window's own size, so the capsule gives way and scrolls rather
+        // than holding the window open past where it is resized to.
         let fitsTools = glass.heightAnchor.constraint(equalTo: document.heightAnchor)
-        fitsTools.priority = .defaultHigh
+        fitsTools.priority = NSLayoutConstraint.Priority(NSLayoutConstraint.Priority.windowSizeStayPut.rawValue - 1)
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: document.topAnchor),
             stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
@@ -65,6 +67,7 @@ final class ToolPaletteViewController: NSViewController {
             stack.trailingAnchor.constraint(equalTo: document.trailingAnchor),
             document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
             glass.widthAnchor.constraint(equalToConstant: Self.width),
+            glass.heightAnchor.constraint(lessThanOrEqualTo: document.heightAnchor),
             fitsTools,
         ])
         view = glass
