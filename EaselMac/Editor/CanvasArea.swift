@@ -18,7 +18,9 @@ struct CanvasArea: View {
         )
         .allowsHitTesting(!state.isComparing)
         .background(Color.workspace)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // Over the canvas rather than beside it, so the canvas still takes
+        // the clicks either side of the bars; the picture fits above them.
+        .overlay(alignment: .bottom) {
             VStack(spacing: 8) {
                 LinkedFilesBanner(state: state)
                 ToolOptionsBar(state: state)
@@ -26,6 +28,9 @@ struct CanvasArea: View {
             .canvasStatus(state)
             .padding(.leading, state.canvasInsets.leading - 8)
             .padding(.bottom, 12)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                state.canvasInsets.bottom = height + 8
+            }
         }
         .animation(.snappy(duration: 0.3), value: state.missingLinkNames + state.missingMapNames)
         .errorAlert(state, isActive: true)

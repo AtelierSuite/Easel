@@ -363,7 +363,9 @@ private final class CanvasViewController: NSViewController {
     private func updateInsets() {
         let leading = showsTools ? Self.margin + ToolPaletteViewController.width + 8 : 8
         withAnimation(.snappy(duration: 0.3)) {
-            state.canvasInsets = EdgeInsets(top: 8, leading: leading, bottom: 8, trailing: 8)
+            state.canvasInsets.top = 8
+            state.canvasInsets.leading = leading
+            state.canvasInsets.trailing = 8
         }
     }
 }
