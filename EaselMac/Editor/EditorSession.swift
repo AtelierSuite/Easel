@@ -3,7 +3,7 @@ import Paintbrush
 import SwiftUI
 
 /// One picture being edited: the editor's state and its undo history, tied
-/// to whatever keeps the picture — a document, or a smart object's layer.
+/// to whatever keeps the picture: a document, or a smart object's layer.
 @MainActor
 final class EditorSession {
     let state = EditorState()

@@ -4,7 +4,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// A document's window: the editor, and the toolbar and File menu commands
-/// that belong to the document — sharing, exporting, keeping layers.
+/// that belong to the document: sharing, exporting, keeping layers.
 @MainActor
 final class EditorWindowController: NSWindowController, NSWindowDelegate {
     let session: EditorSession

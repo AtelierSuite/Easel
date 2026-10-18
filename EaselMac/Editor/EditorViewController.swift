@@ -4,7 +4,7 @@ import SwiftUI
 
 /// An editor: the canvas, with the tools floating down its left, and the
 /// inspector on the right. It answers the Edit, Image, Layer, View and Tools menus for the
-/// picture it shows, wherever it is — a document's window or the sheet a
+/// picture it shows, wherever it is: a document's window or the sheet a
 /// smart object's contents open in.
 @MainActor
 final class EditorViewController: NSSplitViewController {

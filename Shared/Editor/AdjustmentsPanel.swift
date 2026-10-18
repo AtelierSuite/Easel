@@ -3,7 +3,7 @@ import Paintbrush
 import SwiftUI
 
 /// Tone and colour sliders for the active layer, tried on the canvas as they
-/// move and kept only when confirmed — or, in the Mac's inspector, kept on
+/// move and kept only when confirmed. In the Mac's inspector they are kept on
 /// the layer as an Adjust filter as they move, to change or undo later.
 struct AdjustmentsPanel: View {
     @Bindable var state: EditorState
@@ -142,7 +142,7 @@ extension AdjustmentsPanel {
 }
 
 /// One-tap looks and effects painted into the active layer, each shown on a
-/// small copy of it — or, in the Mac's inspector, kept on the layer as a Look
+/// small copy of it. In the Mac's inspector a look is kept on the layer as a Look
 /// filter, to change or undo later.
 struct LooksPanel: View {
     @Bindable var state: EditorState
