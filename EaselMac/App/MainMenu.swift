@@ -150,6 +150,9 @@ enum MainMenu {
             menu.addItem(entry)
         }
         menu.addItem(.separator())
+        menu.addItem(item(String(localized: "Text.ShowFonts"), #selector(EditorViewController.showFonts(_:)), "t"))
+        menu.addItem(item(String(localized: "Swatches.ShowColors"), #selector(EditorViewController.showColors(_:)), "c", [.command, .shift]))
+        menu.addItem(.separator())
         menu.addItem(item(String(localized: "Menu.ShowTools"), #selector(EditorViewController.toggleTools(_:)), "t", [.command, .option]))
         menu.addItem(item(String(localized: "Toolbar.Inspector"), #selector(NSSplitViewController.toggleInspector(_:)), "i", [.command, .control, .option]))
         menu.addItem(.separator())

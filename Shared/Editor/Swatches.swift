@@ -118,12 +118,20 @@ private struct SwatchPicker: View {
                     self.swatch(swatch.color, label: Text(swatch.label))
                 }
             }
+            #if os(macOS)
+            // The Colors window stays open after the popover closes, still
+            // setting the brush colour.
+            Button("Swatches.ShowColors", systemImage: "paintpalette") {
+                ColorPanelBridge.shared.show(for: state)
+            }
+            #else
             ColorPicker(
                 "Swatches.MoreColors",
                 selection: Binding(get: { state.color.color }, set: { state.color = RGBAColor($0) }),
                 supportsOpacity: false
             )
             .font(.subheadline)
+            #endif
         }
         .padding(16)
         .frame(width: 8 * 32 + 7 * 8 + 32)
@@ -146,3 +154,28 @@ private struct SwatchPicker: View {
         .accessibilityAddTraits(isChosen ? .isSelected : [])
     }
 }
+
+#if os(macOS)
+/// The Mac's Colors window, setting the brush colour as colours are picked
+/// in it.
+@MainActor
+final class ColorPanelBridge: NSObject {
+    static let shared = ColorPanelBridge()
+    private weak var state: EditorState?
+
+    func show(for state: EditorState) {
+        self.state = state
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.isContinuous = true
+        panel.setTarget(self)
+        panel.setAction(#selector(changeColor(_:)))
+        panel.color = NSColor(state.color.color)
+        panel.orderFront(nil)
+    }
+
+    @objc func changeColor(_ sender: NSColorPanel) {
+        state?.color = RGBAColor(Color(nsColor: sender.color))
+    }
+}
+#endif

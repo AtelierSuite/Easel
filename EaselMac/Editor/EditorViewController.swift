@@ -207,6 +207,12 @@ final class EditorViewController: NSSplitViewController {
         state.presentedPanel = InspectorViewController.tabbedPanels[sender.tag]
     }
 
+    /// The Fonts window, setting the active text layer's font.
+    @objc func showFonts(_ sender: Any?) { FontPanelBridge.shared.show(for: state) }
+
+    /// The Colors window, setting the brush colour.
+    @objc func showColors(_ sender: Any?) { ColorPanelBridge.shared.show(for: state) }
+
     @objc func showUnsupportedFeatures(_ sender: Any?) { session.sheets.isShowingUnsupportedFeatures = true }
 
     // MARK: - Tools
@@ -305,6 +311,8 @@ extension EditorViewController: NSMenuItemValidation {
             return state.activeLayer?.mask != nil
         case #selector(flattenImage(_:)):
             return state.composition.layers.count > 1
+        case #selector(showFonts(_:)):
+            return state.activeLayer?.isText == true
         case #selector(toggleRulers(_:)):
             item.state = state.showsRulers ? .on : .off
         case #selector(toggleTools(_:)):
