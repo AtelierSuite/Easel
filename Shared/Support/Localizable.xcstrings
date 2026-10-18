@@ -179,6 +179,41 @@
         }
       }
     },
+    "Adjust.Live.Footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept on the layer as a filter, so it can be changed or turned off at any time from Filters."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フィルタとしてレイヤーに残るので、「フィルタ」からいつでも変更したりオフにしたりできます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "필터로 레이어에 남아 있어 언제든지 필터에서 변경하거나 끌 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作为滤镜保留在图层上，可随时在“滤镜”中更改或关闭。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作為濾鏡保留在圖層上，可隨時在「濾鏡」中更改或關閉。"
+          }
+        }
+      }
+    },
     "Adjust.PickedBalance" : {
       "extractionState" : "manual",
       "localizations" : {

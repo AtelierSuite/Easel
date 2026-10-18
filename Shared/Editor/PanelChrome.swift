@@ -10,6 +10,19 @@ enum PanelPlacement {
     case inspector
 }
 
+extension PanelPlacement {
+    /// Whether a panel that would try its change out until it is confirmed
+    /// keeps it on the layer as a filter as it is made instead, undone from
+    /// the history: in the Mac's inspector, which has no Done to wait for.
+    var keepsChangesLive: Bool {
+        #if os(macOS)
+        self == .inspector
+        #else
+        false
+        #endif
+    }
+}
+
 extension EnvironmentValues {
     @Entry var panelPlacement: PanelPlacement = .sheet
     @Entry var panelTitle: LocalizedStringKey = ""

@@ -58,4 +58,29 @@ struct LiveFilterTests {
         #expect(!offered.contains(.adjust))
         #expect(!offered.contains(.look))
     }
+
+    @MainActor
+    @Test func slidersKeepOneAdjustFilterUntilTheyAreBackAtRest() {
+        let state = EditorState()
+        state.attach(to: halves()) { _ in }
+        state.setAdjustFilter(Adjustments(contrast: 0.3))
+        state.setAdjustFilter(Adjustments(contrast: 0.3, saturation: -0.5))
+        #expect(state.activeLayer?.filters.count == 1)
+        #expect(state.adjustFilter?.adjustments == Adjustments(contrast: 0.3, saturation: -0.5))
+        state.setAdjustFilter(Adjustments())
+        #expect(state.activeLayer?.filters.isEmpty == true)
+    }
+
+    @MainActor
+    @Test func pickingALookReplacesTheLastAndNoneTakesItAway() {
+        let state = EditorState()
+        state.attach(to: halves()) { _ in }
+        state.setLookFilter(.mono, intensity: 1)
+        state.setLookFilter(.fade, intensity: 0.5)
+        #expect(state.activeLayer?.filters.count == 1)
+        #expect(state.lookFilter?.lookPreset == .fade)
+        #expect(state.lookFilter?.amount == 0.5)
+        state.setLookFilter(nil, intensity: 1)
+        #expect(state.activeLayer?.filters.isEmpty == true)
+    }
 }

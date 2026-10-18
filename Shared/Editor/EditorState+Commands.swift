@@ -561,6 +561,57 @@ extension EditorState {
     func applyFilters(of id: Layer.ID) {
         rasterizeLayer(id)
     }
+
+    /// The active layer's Adjust filter, which the Adjustments panel's
+    /// sliders change where changes are kept as they are made.
+    var adjustFilter: LayerFilter? {
+        activeLayer?.filters.first { $0.kind == .adjust }
+    }
+
+    /// The active layer's Look filter, which the Looks panel picks where
+    /// changes are kept as they are made.
+    var lookFilter: LayerFilter? {
+        activeLayer?.filters.first { $0.kind == .look }
+    }
+
+    /// Keeps the Adjustments panel's sliders on the active layer as its
+    /// Adjust filter: added to the end of its chain the first time, and
+    /// taken away once every slider is back at rest.
+    func setAdjustFilter(_ adjustments: Adjustments) {
+        guard !isActiveLayerLocked else { return }
+        if let filter = adjustFilter {
+            if adjustments.isIdentity {
+                removeFilter(filter.id)
+            } else {
+                updateFilter(filter.id) { $0.adjustments = adjustments }
+            }
+        } else if !adjustments.isIdentity {
+            var filter = LayerFilter(kind: .adjust)
+            filter.adjustments = adjustments
+            updateActiveLayer { $0.filters.append(filter) }
+        }
+    }
+
+    /// Keeps the look picked in the Looks panel on the active layer as its
+    /// Look filter, or takes it away for none.
+    func setLookFilter(_ preset: FilterPreset?, intensity: Double) {
+        guard !isActiveLayerLocked else { return }
+        if let filter = lookFilter {
+            if let preset {
+                updateFilter(filter.id) { filter in
+                    filter.lookPreset = preset
+                    filter.amount = intensity
+                }
+            } else {
+                removeFilter(filter.id)
+            }
+        } else if let preset {
+            var filter = LayerFilter(kind: .look)
+            filter.lookPreset = preset
+            filter.amount = intensity
+            updateActiveLayer { $0.filters.append(filter) }
+        }
+    }
 }
 
 // MARK: - Layer styles
