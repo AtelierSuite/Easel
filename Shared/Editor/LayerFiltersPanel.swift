@@ -21,7 +21,7 @@ struct LayerFiltersPanel: View {
     }
 
     private func filterList(_ layer: Layer) -> some View {
-        List {
+        PanelList {
             Section {
                 ForEach(Array(layer.filters.enumerated()), id: \.element.id) { index, filter in
                     FilterRow(
@@ -43,7 +43,6 @@ struct LayerFiltersPanel: View {
                 }
             }
         }
-        .panelListStyle()
         .scrollContentBackground(.hidden)
         // Under the same bar as when there are filters: a menu to add one
         // placed in the empty view itself would not open.
@@ -59,37 +58,68 @@ struct LayerFiltersPanel: View {
         }
         // At the top, where a half-height sheet still shows them.
         .safeAreaInset(edge: .top, spacing: 0) {
-            HStack(spacing: 10) {
+            addBar(layer)
+        }
+    }
+
+    @Environment(\.panelPlacement) private var placement
+
+    @ViewBuilder
+    private func addBar(_ layer: Layer) -> some View {
+        #if os(macOS)
+        if placement == .inspector {
+            InspectorAddBar {
                 AddFilterMenu(state: state) {
                     Label("LayerFilters.Add", systemImage: "plus")
-                        .font(.system(size: 15, weight: .medium))
-                        .padding(.horizontal, 14)
-                        .frame(height: 40)
-                        .contentShape(.capsule)
                 }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .capsule)
                 .accessibilityIdentifier("addFilter")
-                Spacer()
-                GlassGroup {
-                    GlassMenuButton(symbol: "ellipsis", label: "Layers.More") {
-                        Button("LayerFilters.ApplyAll", systemImage: "square.and.arrow.down.on.square") {
-                            state.applyFilters(of: layer.id)
-                        }
-                        .disabled(!layer.hasActiveFilters || layer.isLocked)
-                        Button("LayerFilters.RemoveAll", systemImage: "trash", role: .destructive) {
-                            state.updateActiveLayer { layer in
-                                layer.filters = []
-                                layer.filterMask = nil
-                            }
-                            state.isEditingFilterMask = false
-                        }
-                    }
-                    .accessibilityIdentifier("filtersMore")
-                }
+            } moreItems: {
+                filterActions(layer)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 4)
+        } else {
+            standardAddBar(layer)
+        }
+        #else
+        standardAddBar(layer)
+        #endif
+    }
+
+    private func standardAddBar(_ layer: Layer) -> some View {
+        HStack(spacing: 10) {
+            AddFilterMenu(state: state) {
+                Label("LayerFilters.Add", systemImage: "plus")
+                    .font(.system(size: 15, weight: .medium))
+                    .padding(.horizontal, 14)
+                    .frame(height: 40)
+                    .contentShape(.capsule)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .accessibilityIdentifier("addFilter")
+            Spacer()
+            GlassGroup {
+                GlassMenuButton(symbol: "ellipsis", label: "Layers.More") {
+                    filterActions(layer)
+                }
+                .accessibilityIdentifier("filtersMore")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private func filterActions(_ layer: Layer) -> some View {
+        Button("LayerFilters.ApplyAll", systemImage: "square.and.arrow.down.on.square") {
+            state.applyFilters(of: layer.id)
+        }
+        .disabled(!layer.hasActiveFilters || layer.isLocked)
+        Button("LayerFilters.RemoveAll", systemImage: "trash", role: .destructive) {
+            state.updateActiveLayer { layer in
+                layer.filters = []
+                layer.filterMask = nil
+            }
+            state.isEditingFilterMask = false
         }
     }
 }
@@ -168,41 +198,7 @@ struct FilterRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: filter.kind.symbolName)
-                    .foregroundStyle(filter.isEnabled ? Color.accentColor : .secondary)
-                    .frame(width: 24)
-                Text(verbatim: filter.kind.label)
-                    .font(.headline)
-                Spacer()
-                if !isAdjustment {
-                Menu {
-                    menuItems
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Layers.More")
-                .accessibilityIdentifier("filterMenu.\(filter.kind.rawValue)")
-                }
-                // An eye, as for layers: a switch in a reorderable row loses
-                // its taps to the row.
-                Button {
-                    state.updateFilter(filter.id) { $0.isEnabled.toggle() }
-                } label: {
-                    Image(systemName: filter.isEnabled ? "eye" : "eye.slash")
-                        .foregroundStyle(filter.isEnabled ? Color.primary : Color.secondary)
-                        .frame(width: 36, height: 32)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(filter.isEnabled ? "LayerFilters.Hide" : "LayerFilters.Show")
-                .accessibilityIdentifier("filterEnabled.\(filter.kind.rawValue)")
-            }
+            header
             Group {
                 if filter.kind == .levels { levelsControls }
                 if filter.kind == .colorBalance { balanceControls }
@@ -272,6 +268,74 @@ struct FilterRow: View {
             let values = await Task.detached(priority: .userInitiated) { source.values() }.value
             guard !Task.isCancelled else { return }
             histogram = values
+        }
+    }
+
+    @Environment(\.panelPlacement) private var placement
+
+    @ViewBuilder
+    private var header: some View {
+        #if os(macOS)
+        if placement == .inspector {
+            if isAdjustment {
+                Text(verbatim: filter.kind.label)
+                    .font(.callout.bold())
+            } else {
+                InspectorItemHeader(
+                    title: Text(verbatim: filter.kind.label),
+                    isOn: Binding(
+                        get: { filter.isEnabled },
+                        set: { value in state.updateFilter(filter.id) { $0.isEnabled = value } }
+                    ),
+                    menuIdentifier: "filterMenu.\(filter.kind.rawValue)"
+                ) {
+                    menuItems
+                }
+                .accessibilityIdentifier("filterEnabled.\(filter.kind.rawValue)")
+            }
+        } else {
+            standardHeader
+        }
+        #else
+        standardHeader
+        #endif
+    }
+
+    private var standardHeader: some View {
+        HStack(spacing: 10) {
+            Image(systemName: filter.kind.symbolName)
+                .foregroundStyle(filter.isEnabled ? Color.accentColor : .secondary)
+                .frame(width: 24)
+            Text(verbatim: filter.kind.label)
+                .font(.headline)
+            Spacer()
+            if !isAdjustment {
+            Menu {
+                menuItems
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Layers.More")
+            .accessibilityIdentifier("filterMenu.\(filter.kind.rawValue)")
+            }
+            // An eye, as for layers: a switch in a reorderable row loses
+            // its taps to the row.
+            Button {
+                state.updateFilter(filter.id) { $0.isEnabled.toggle() }
+            } label: {
+                Image(systemName: filter.isEnabled ? "eye" : "eye.slash")
+                    .foregroundStyle(filter.isEnabled ? Color.primary : Color.secondary)
+                    .frame(width: 36, height: 32)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(filter.isEnabled ? "LayerFilters.Hide" : "LayerFilters.Show")
+            .accessibilityIdentifier("filterEnabled.\(filter.kind.rawValue)")
         }
     }
 
