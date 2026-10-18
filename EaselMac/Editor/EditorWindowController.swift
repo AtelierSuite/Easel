@@ -151,12 +151,12 @@ extension NSToolbarItem.Identifier {
 
 extension EditorWindowController: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.sidebarTrackingSeparator, .flexibleSpace, .undoRedo, .space, .zoom, .flexibleSpace,
+        [.flexibleSpace, .undoRedo, .space, .zoom, .flexibleSpace,
          .export, .share, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .sidebarTrackingSeparator, .undoRedo, .zoom, .export, .share,
+        [.undoRedo, .zoom, .export, .share,
          .inspectorTrackingSeparator, .toggleInspector, .space, .flexibleSpace]
     }
 

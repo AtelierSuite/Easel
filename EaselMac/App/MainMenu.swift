@@ -150,7 +150,7 @@ enum MainMenu {
             menu.addItem(entry)
         }
         menu.addItem(.separator())
-        menu.addItem(item(String(localized: "Menu.ShowTools"), #selector(NSSplitViewController.toggleSidebar(_:)), "t", [.command, .option]))
+        menu.addItem(item(String(localized: "Menu.ShowTools"), #selector(EditorViewController.toggleTools(_:)), "t", [.command, .option]))
         menu.addItem(item(String(localized: "Toolbar.Inspector"), #selector(NSSplitViewController.toggleInspector(_:)), "i", [.command, .control, .option]))
         menu.addItem(.separator())
         menu.addItem(item(String(localized: "Menu.EnterFullScreen"), #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control]))

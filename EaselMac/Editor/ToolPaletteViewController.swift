@@ -1,8 +1,9 @@
 import AppKit
 import Paintbrush
 
-/// The tools in a column down the window's side, grouped as on iPad:
-/// arranging, painting, retouching, adding. The tool in hand stays lit.
+/// The tools in a capsule of glass floating down the canvas's left side,
+/// grouped as on iPad: arranging, painting, retouching, adding. The tool in
+/// hand stays lit.
 @MainActor
 final class ToolPaletteViewController: NSViewController {
     private let state: EditorState
@@ -23,7 +24,7 @@ final class ToolPaletteViewController: NSViewController {
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 4
-        stack.edgeInsets = NSEdgeInsets(top: 8, left: 0, bottom: 12, right: 0)
+        stack.edgeInsets = NSEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
         for (index, tools) in Tool.groups.enumerated() {
             if index > 0 {
                 let separator = NSBox()
@@ -40,7 +41,7 @@ final class ToolPaletteViewController: NSViewController {
             }
         }
 
-        // Short windows scroll the column rather than cut it off.
+        // Short windows scroll the capsule rather than cut it off.
         let document = FlippedView()
         document.translatesAutoresizingMaskIntoConstraints = false
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -48,17 +49,25 @@ final class ToolPaletteViewController: NSViewController {
         let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.hasVerticalScroller = false
-        scroll.automaticallyAdjustsContentInsets = true
+        scroll.automaticallyAdjustsContentInsets = false
         scroll.documentView = document
+
+        let glass = NSGlassEffectView()
+        glass.cornerRadius = Self.width / 2
+        glass.contentView = scroll
+        // As tall as the tools, unless the window is shorter.
+        let fitsTools = glass.heightAnchor.constraint(equalTo: document.heightAnchor)
+        fitsTools.priority = .defaultHigh
         NSLayoutConstraint.activate([
             stack.topAnchor.constraint(equalTo: document.topAnchor),
             stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
             stack.leadingAnchor.constraint(equalTo: document.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: document.trailingAnchor),
             document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+            glass.widthAnchor.constraint(equalToConstant: Self.width),
+            fitsTools,
         ])
-        view = scroll
-        view.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
+        view = glass
     }
 
     override func viewDidLoad() {

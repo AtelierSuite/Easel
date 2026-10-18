@@ -24,10 +24,10 @@ struct CanvasArea: View {
                 ToolOptionsBar(state: state)
             }
             .canvasStatus(state)
+            .padding(.leading, state.canvasInsets.leading - 8)
             .padding(.bottom, 12)
         }
         .animation(.snappy(duration: 0.3), value: state.missingLinkNames + state.missingMapNames)
-        .onAppear { state.canvasInsets = EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8) }
         .errorAlert(state, isActive: true)
         .copyBeforeEditingAlert(state, isActive: true)
         .selectionEditAlert(state)

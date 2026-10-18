@@ -2,15 +2,15 @@ import AppKit
 import Paintbrush
 import SwiftUI
 
-/// An editor: the tools down the left, the canvas, and the inspector on the
-/// right. It answers the Edit, Image, Layer, View and Tools menus for the
+/// An editor: the canvas, with the tools floating down its left, and the
+/// inspector on the right. It answers the Edit, Image, Layer, View and Tools menus for the
 /// picture it shows, wherever it is — a document's window or the sheet a
 /// smart object's contents open in.
 @MainActor
 final class EditorViewController: NSSplitViewController {
     let session: EditorSession
     private let name: () -> String
-    private(set) var toolsItem: NSSplitViewItem!
+    private var canvas: CanvasViewController!
     private(set) var inspectorItem: NSSplitViewItem!
     private var isFollowingInspector = false
 
@@ -31,15 +31,10 @@ final class EditorViewController: NSSplitViewController {
         splitView.isVertical = true
         splitView.dividerStyle = .thin
 
-        toolsItem = NSSplitViewItem(sidebarWithViewController: ToolPaletteViewController(state: state))
-        toolsItem.minimumThickness = ToolPaletteViewController.width
-        toolsItem.maximumThickness = ToolPaletteViewController.width
-        toolsItem.canCollapse = true
-        toolsItem.allowsFullHeightLayout = true
-
-        let canvas = CanvasViewController(rootView: CanvasArea(
-            state: state, history: history, sheets: session.sheets, name: name
-        ))
+        canvas = CanvasViewController(
+            rootView: CanvasArea(state: state, history: history, sheets: session.sheets, name: name),
+            tools: ToolPaletteViewController(state: state)
+        )
         let canvasItem = NSSplitViewItem(viewController: canvas)
         canvasItem.minimumThickness = 360
 
@@ -49,7 +44,7 @@ final class EditorViewController: NSSplitViewController {
         inspectorItem.preferredThicknessFraction = 0.25
         inspectorItem.canCollapse = true
 
-        splitViewItems = [toolsItem, canvasItem, inspectorItem]
+        splitViewItems = [canvasItem, inspectorItem]
 
         // A panel picked from a menu brings the inspector out.
         observeChanges { [weak self] in
@@ -159,6 +154,8 @@ final class EditorViewController: NSSplitViewController {
     }
 
     @objc func toggleRulers(_ sender: Any?) { state.showsRulers.toggle() }
+
+    @objc func toggleTools(_ sender: Any?) { canvas.showsTools.toggle() }
 
     @objc func toggleRotatesWithGestures(_ sender: Any?) {
         withAnimation(.snappy) { state.rotatesWithGestures.toggle() }
@@ -272,6 +269,8 @@ extension EditorViewController: NSMenuItemValidation {
             return state.composition.layers.count > 1
         case #selector(toggleRulers(_:)):
             item.state = state.showsRulers ? .on : .off
+        case #selector(toggleTools(_:)):
+            item.state = canvas.showsTools ? .on : .off
         case #selector(toggleRotatesWithGestures(_:)):
             item.state = state.rotatesWithGestures ? .on : .off
         case #selector(clearGuides(_:)):
@@ -301,18 +300,38 @@ extension EditorViewController: NSToolbarItemValidation {
     }
 }
 
-/// Holds the canvas inside the space the tools, the inspector and the
-/// toolbar leave clear. They float over the middle of the window, and the
-/// canvas fits the picture to the view it is given, so it is given only
-/// the part that can be seen.
+/// Holds the canvas inside the space the inspector and the toolbar leave
+/// clear, with the tools floating over its left side. The canvas fits the
+/// picture to the view it is given, so it is given only the part that can
+/// be seen, and keeps the picture and its bars clear of the tools.
 @MainActor
 private final class CanvasViewController: NSViewController {
     private let hosting: NSHostingView<CanvasArea>
+    private let tools: ToolPaletteViewController
+    private var state: EditorState { hosting.rootView.state }
 
-    init(rootView: CanvasArea) {
+    static let margin: CGFloat = 12
+
+    var showsTools = true {
+        didSet {
+            let palette = tools.view
+            palette.isHidden = false
+            NSAnimationContext.runAnimationGroup { _ in
+                palette.animator().alphaValue = showsTools ? 1 : 0
+            } completionHandler: { [showsTools] in
+                // Hidden once faded, so it no longer takes clicks.
+                MainActor.assumeIsolated { palette.isHidden = !showsTools }
+            }
+            updateInsets()
+        }
+    }
+
+    init(rootView: CanvasArea, tools: ToolPaletteViewController) {
         hosting = NSHostingView(rootView: rootView)
         hosting.sizingOptions = []
+        self.tools = tools
         super.init(nibName: nil, bundle: nil)
+        addChild(tools)
     }
 
     @available(*, unavailable)
@@ -322,14 +341,30 @@ private final class CanvasViewController: NSViewController {
         let container = WorkspaceView()
         hosting.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(hosting)
+        let palette = tools.view
+        palette.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(palette)
         let safe = container.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
             hosting.topAnchor.constraint(equalTo: safe.topAnchor),
             hosting.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             hosting.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
             hosting.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            palette.leadingAnchor.constraint(equalTo: hosting.leadingAnchor, constant: Self.margin),
+            palette.centerYAnchor.constraint(equalTo: hosting.centerYAnchor),
+            palette.topAnchor.constraint(greaterThanOrEqualTo: hosting.topAnchor, constant: Self.margin),
+            palette.bottomAnchor.constraint(lessThanOrEqualTo: hosting.bottomAnchor, constant: -Self.margin),
         ])
         view = container
+        updateInsets()
+    }
+
+    /// The picture fits, and the bars along the bottom sit, beside the tools.
+    private func updateInsets() {
+        let leading = showsTools ? Self.margin + ToolPaletteViewController.width + 8 : 8
+        withAnimation(.snappy(duration: 0.3)) {
+            state.canvasInsets = EdgeInsets(top: 8, leading: leading, bottom: 8, trailing: 8)
+        }
     }
 }
 
