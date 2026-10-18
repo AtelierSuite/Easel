@@ -113,6 +113,10 @@ private final class ToolButton: NSButton {
         didSet { needsDisplay = true }
     }
 
+    /// The frame is the circle: a button's own insets would make it taller
+    /// than the square it is laid out in.
+    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsetsZero }
+
     override var state: NSControl.StateValue {
         didSet { needsDisplay = true }
     }
@@ -155,7 +159,11 @@ private final class ToolButton: NSButton {
         }
         if let fill {
             fill.setFill()
-            NSBezierPath(ovalIn: bounds).fill()
+            // A circle, whatever shape the stack leaves the button.
+            let diameter = min(bounds.width, bounds.height)
+            NSBezierPath(ovalIn: NSRect(
+                x: bounds.midX - diameter / 2, y: bounds.midY - diameter / 2, width: diameter, height: diameter
+            )).fill()
         }
         super.draw(dirtyRect)
     }
