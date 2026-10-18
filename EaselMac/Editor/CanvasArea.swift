@@ -18,6 +18,7 @@ struct CanvasArea: View {
         )
         .allowsHitTesting(!state.isComparing)
         .background(Color.workspace)
+        .overlay { CanvasScrollers(state: state) }
         // Over the canvas rather than beside it, so the canvas still takes
         // the clicks either side of the bars; the picture fits above them.
         .overlay(alignment: .bottom) {
