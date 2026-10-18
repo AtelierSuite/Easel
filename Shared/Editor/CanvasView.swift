@@ -68,6 +68,11 @@ struct CanvasView: View {
                 Rulers(state: state, viewport: viewport)
             }
         }
+        // Exactly the size it is offered. The picture is framed to the size
+        // last measured, which would otherwise hold the view at least that
+        // big, so a window made smaller pushed the bars over the canvas off
+        // its edge.
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
         .coordinateSpace(.named(Rulers.coordinateSpace))
         .clipped()
         .onGeometryChange(for: CGSize.self) { $0.size } action: { state.viewportSize = $0 }
