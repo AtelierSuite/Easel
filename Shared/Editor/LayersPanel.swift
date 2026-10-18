@@ -12,29 +12,39 @@ struct LayersPanel: View {
     @State private var newName = ""
 
     var body: some View {
+        layout
+            .modifier(LayersPanelChrome(state: state))
+            .alert("Layers.Rename.Title", isPresented: Binding(
+                get: { renaming != nil }, set: { if !$0 { renaming = nil } }
+            )) {
+                TextField("Layers.Rename.Placeholder", text: $newName)
+                Button("Common.Cancel", role: .cancel) { renaming = nil }
+                Button("Layers.Rename.Confirm") {
+                    if let renaming { state.rename(renaming.id, to: newName) }
+                    renaming = nil
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var layout: some View {
+        #if os(macOS)
+        if placement.isMacInspector {
+            inspectorLayout
+        } else {
+            standardLayout
+        }
+        #else
+        standardLayout
+        #endif
+    }
+
+    private var standardLayout: some View {
         List {
             Section {
-                ForEach(composition.layerListRows) { row in
-                    switch row {
-                    case .group(let group, let depth):
-                        GroupRow(group: group, state: state)
-                            .padding(.leading, CGFloat(depth) * 16)
-                            .moveDisabled(true)
-                    case .layer(let layer, let depth):
-                        layerRow(layer)
-                            .padding(.leading, CGFloat(depth) * 16)
-                    }
-                }
-                .onMove { source, destination in
-                    state.moveLayers(fromDisplayed: source, toDisplayed: destination)
-                }
+                layerRows
             }
-
-            if let groupID = state.activeGroupID, let group = composition.group(groupID) {
-                GroupSection(group: group, state: state)
-            } else if let layer = state.activeLayer {
-                layerSections(layer)
-            }
+            settings
         }
         .panelListStyle()
         .scrollContentBackground(.hidden)
@@ -42,16 +52,73 @@ struct LayersPanel: View {
             LayerActionsBar(state: state)
                 .padding(.bottom, 8)
         }
-        .modifier(LayersPanelChrome(state: state))
-        .alert("Layers.Rename.Title", isPresented: Binding(
-            get: { renaming != nil }, set: { if !$0 { renaming = nil } }
-        )) {
-            TextField("Layers.Rename.Placeholder", text: $newName)
-            Button("Common.Cancel", role: .cancel) { renaming = nil }
-            Button("Layers.Rename.Confirm") {
-                if let renaming { state.rename(renaming.id, to: newName) }
-                renaming = nil
+    }
+
+    #if os(macOS)
+    /// The layers in a list of their own above the picked one's settings,
+    /// with the buttons that act on them beneath it, as in other Mac editors.
+    /// The line between them can be dragged.
+    private var inspectorLayout: some View {
+        VSplitView {
+            VStack(spacing: 0) {
+                List(selection: listSelection) {
+                    layerRows
+                        .listRowSeparator(.hidden)
+                }
+                .listStyle(.inset)
+                .scrollContentBackground(.hidden)
+                Divider()
+                LayerActionsBar(state: state)
             }
+            .frame(minHeight: 150, idealHeight: 320)
+            Form {
+                settings
+            }
+            .formStyle(InspectorFormStyle())
+            .frame(minHeight: 120)
+        }
+    }
+
+    /// The list's own selection, which is the active layer or group.
+    private var listSelection: Binding<UUID?> {
+        Binding(
+            get: { state.activeGroupID ?? state.activeLayerID },
+            set: { id in
+                guard let id else { return }
+                if composition.group(id) != nil {
+                    state.activeGroupID = id
+                } else {
+                    state.activeLayerID = id
+                    state.isEditingMask = false
+                }
+            }
+        )
+    }
+    #endif
+
+    private var layerRows: some View {
+        ForEach(composition.layerListRows) { row in
+            switch row {
+            case .group(let group, let depth):
+                GroupRow(group: group, state: state)
+                    .padding(.leading, CGFloat(depth) * 16)
+                    .moveDisabled(true)
+            case .layer(let layer, let depth):
+                layerRow(layer)
+                    .padding(.leading, CGFloat(depth) * 16)
+            }
+        }
+        .onMove { source, destination in
+            state.moveLayers(fromDisplayed: source, toDisplayed: destination)
+        }
+    }
+
+    @ViewBuilder
+    private var settings: some View {
+        if let groupID = state.activeGroupID, let group = composition.group(groupID) {
+            GroupSection(group: group, state: state)
+        } else if let layer = state.activeLayer {
+            layerSections(layer)
         }
     }
 
@@ -66,12 +133,20 @@ struct LayersPanel: View {
                         }
                     )
                     .contentShape(.rect)
-                    .onTapGesture {
-                        state.activeLayerID = layer.id
-                        state.isEditingMask = false
+                    // Double-clicked on the Mac, the name can be changed.
+                    .onTapGesture(count: placement.isMacInspector ? 2 : 1) {
+                        if placement.isMacInspector {
+                            newName = layer.name
+                            renaming = layer
+                        } else {
+                            state.activeLayerID = layer.id
+                            state.isEditingMask = false
+                        }
                     }
+                    // The Mac's list shows its own selection.
                     .listRowBackground(
-                        layer.id == state.activeLayerID && state.activeGroupID == nil ? Color.accentColor.opacity(0.18) : nil
+                        layer.id == state.activeLayerID && state.activeGroupID == nil && !placement.isMacInspector
+                            ? Color.accentColor.opacity(0.18) : nil
                     )
                     .contextMenu { menuItems(for: layer) }
                     .swipeActions(edge: .trailing) {
@@ -141,7 +216,8 @@ struct LayersPanel: View {
                 ))
                 .disabled(!layer.isClipped && !composition.canClip(layer.id))
                 .accessibilityIdentifier("clipToBelow")
-                if !layer.isAdjustment {
+                // The Mac's inspector has tabs for these.
+                if !layer.isAdjustment && !placement.isMacInspector {
                 Button {
                     open(.filters)
                 } label: {
@@ -272,9 +348,15 @@ private struct LayerRow: View {
     let isEditingMask: Bool
     let toggleVisibility: () -> Void
     let editMask: () -> Void
+    @Environment(\.panelPlacement) private var placement
+
+    /// Smaller in the Mac's inspector, where a pointer is more precise
+    /// than a finger and more of the layers fit.
+    private var thumbnailSize: CGFloat { placement.isMacInspector ? 32 : 44 }
+    private var buttonSize: CGFloat { placement.isMacInspector ? 24 : 36 }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: placement.isMacInspector ? 8 : 12) {
             if layer.isClipped {
                 // Pointing down at the layer it clips to, as in Photoshop.
                 Image(systemName: "arrow.turn.left.down")
@@ -296,7 +378,7 @@ private struct LayerRow: View {
                         .aspectRatio(contentMode: .fit)
                 }
             }
-            .frame(width: 44, height: 44)
+            .frame(width: thumbnailSize, height: thumbnailSize)
             .clipShape(.rect(cornerRadius: 6))
             .overlay {
                 // Outlined is what painting goes into: the layer or its mask.
@@ -309,7 +391,7 @@ private struct LayerRow: View {
                     Image(decorative: mask.preview(), scale: 1)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 44, height: 44)
+                        .frame(width: thumbnailSize, height: thumbnailSize)
                         .background(Color.black)
                         .clipShape(.rect(cornerRadius: 6))
                         .opacity(mask.isEnabled ? 1 : 0.4)
@@ -379,7 +461,7 @@ private struct LayerRow: View {
             Button(action: toggleVisibility) {
                 Image(systemName: layer.isVisible ? "eye" : "eye.slash")
                     .foregroundStyle(layer.isVisible ? Color.primary : Color.secondary)
-                    .frame(width: 36, height: 36)
+                    .frame(width: buttonSize, height: buttonSize)
                     .contentShape(.rect)
             }
             .buttonStyle(.borderless)
@@ -406,37 +488,39 @@ struct LayerActionsBar: View {
     @State private var isPickingPhotos = false
 
     var body: some View {
+        buttons
+            .photosPicker(isPresented: $isPickingPhotos, selection: $photoItems, matching: .images, photoLibrary: .shared())
+            .onChange(of: photoItems) { _, items in
+                guard !items.isEmpty else { return }
+                photoItems = []
+                Task {
+                    let result = await ImageImport.load(items)
+                    state.addImageLayers(result.images)
+                    if result.failed { state.errorMessage = String(localized: "Error.ImportFailed") }
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var buttons: some View {
+        #if os(macOS)
+        if placement.isMacInspector {
+            inspectorButtons
+        } else {
+            glassButtons
+        }
+        #else
+        glassButtons
+        #endif
+    }
+
+    private var glassButtons: some View {
         let active = state.activeLayer
-        GlassEffectContainer(spacing: 10) {
+        return GlassEffectContainer(spacing: 10) {
             HStack(spacing: 10) {
                 GlassGroup {
                     GlassMenuButton(symbol: "plus", label: "Layers.Add") {
-                        Button("Layers.NewLayer", systemImage: "square.badge.plus") { state.addEmptyLayer() }
-                        Menu("Layers.NewAdjustment", systemImage: "circle.lefthalf.filled") {
-                            ForEach(LayerFilter.Kind.allCases.filter(\.isPerPixel)) { kind in
-                                Button {
-                                    state.addAdjustmentLayer(kind)
-                                } label: {
-                                    Label {
-                                        Text(verbatim: kind.label)
-                                    } icon: {
-                                        Image(systemName: kind.symbolName)
-                                    }
-                                }
-                                .accessibilityIdentifier("addAdjustment.\(kind.rawValue)")
-                            }
-                        }
-                        // The picker is presented from outside the menu,
-                        // which is gone by the time a picker inside it would show.
-                        Button("Layers.ImportPhotos", systemImage: "photo.on.rectangle") { isPickingPhotos = true }
-                        Button("Layers.ImportFiles", systemImage: "folder") { state.isImportingFiles = true }
-                        Button("Layers.Paste", systemImage: "doc.on.clipboard") {
-                            if let item = ImageImport.pasteboardImage() {
-                                state.addImageLayers([item])
-                            } else {
-                                state.errorMessage = String(localized: "Error.NothingToPaste")
-                            }
-                        }
+                        addItems
                     }
                     .accessibilityIdentifier("addLayer")
                     GlassIconButton(symbol: "plus.square.on.square", label: "Layers.Duplicate") {
@@ -455,33 +539,108 @@ struct LayerActionsBar: View {
                 }
                 GlassGroup {
                     GlassMenuButton(symbol: "ellipsis", label: "Layers.More") {
-                        Button("Layers.Copy", systemImage: "doc.on.doc") {
-                            if let image = state.copiedImage() { ImageImport.copyToPasteboard(image) }
-                        }
-                        .disabled(active == nil)
-                        Button("Groups.Group", systemImage: "folder.badge.plus") { state.groupActiveLayer() }
-                            .disabled(active == nil)
-                        Button("Layers.Flatten", systemImage: "square.3.layers.3d.down.right") { state.flatten() }
-                            .disabled(state.composition.layers.count < 2)
-                        Button("Panel.Comps.Title", systemImage: EditorPanel.comps.symbolName) { openComps() }
-                            .accessibilityIdentifier("layerComps")
+                        moreItems
                     }
                 }
             }
         }
-        .photosPicker(isPresented: $isPickingPhotos, selection: $photoItems, matching: .images, photoLibrary: .shared())
-        .onChange(of: photoItems) { _, items in
-            guard !items.isEmpty else { return }
-            photoItems = []
-            Task {
-                let result = await ImageImport.load(items)
-                state.addImageLayers(result.images)
-                if result.failed { state.errorMessage = String(localized: "Error.ImportFailed") }
+    }
+
+    #if os(macOS)
+    /// Small buttons along the foot of the layer list, as under the lists
+    /// in other Mac apps.
+    private var inspectorButtons: some View {
+        let active = state.activeLayer
+        return HStack(spacing: 10) {
+            Menu {
+                addItems
+            } label: {
+                Image(systemName: "plus")
             }
+            .menuIndicator(.hidden)
+            .help(Text("Layers.Add"))
+            .accessibilityLabel("Layers.Add")
+            .accessibilityIdentifier("addLayer")
+            Button("Layers.Duplicate", systemImage: "plus.square.on.square") {
+                if let active { state.duplicateLayer(active.id) }
+            }
+            .help(Text("Layers.Duplicate"))
+            .disabled(active == nil)
+            Button("Layers.MergeDown", systemImage: "square.2.layers.3d.bottom.filled") {
+                if let active { state.mergeDown(active.id) }
+            }
+            .help(Text("Layers.MergeDown"))
+            .disabled(active.map { !state.composition.canMergeDown($0.id) } ?? true)
+            Button("Layers.Delete", systemImage: "trash") {
+                if let active { state.deleteLayer(active.id) }
+            }
+            .help(Text("Layers.Delete"))
+            .disabled(active.map { !state.canDelete($0.id) } ?? true)
+            .accessibilityIdentifier("deleteLayer")
+            Spacer()
+            Menu {
+                moreItems
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuIndicator(.hidden)
+            .help(Text("Layers.More"))
+            .accessibilityLabel("Layers.More")
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .menuStyle(.button)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
+    #endif
+
+    @ViewBuilder
+    private var addItems: some View {
+            Button("Layers.NewLayer", systemImage: "square.badge.plus") { state.addEmptyLayer() }
+            Menu("Layers.NewAdjustment", systemImage: "circle.lefthalf.filled") {
+                ForEach(LayerFilter.Kind.allCases.filter(\.isPerPixel)) { kind in
+                    Button {
+                        state.addAdjustmentLayer(kind)
+                    } label: {
+                        Label {
+                            Text(verbatim: kind.label)
+                        } icon: {
+                            Image(systemName: kind.symbolName)
+                        }
+                    }
+                    .accessibilityIdentifier("addAdjustment.\(kind.rawValue)")
+                }
+            }
+            // The picker is presented from outside the menu,
+            // which is gone by the time a picker inside it would show.
+            Button("Layers.ImportPhotos", systemImage: "photo.on.rectangle") { isPickingPhotos = true }
+            Button("Layers.ImportFiles", systemImage: "folder") { state.isImportingFiles = true }
+            Button("Layers.Paste", systemImage: "doc.on.clipboard") {
+                if let item = ImageImport.pasteboardImage() {
+                    state.addImageLayers([item])
+                } else {
+                    state.errorMessage = String(localized: "Error.NothingToPaste")
+                }
+            }
+    }
+
+    @ViewBuilder
+    private var moreItems: some View {
+        let active = state.activeLayer
+            Button("Layers.Copy", systemImage: "doc.on.doc") {
+                if let image = state.copiedImage() { ImageImport.copyToPasteboard(image) }
+            }
+            .disabled(active == nil)
+            Button("Groups.Group", systemImage: "folder.badge.plus") { state.groupActiveLayer() }
+                .disabled(active == nil)
+            Button("Layers.Flatten", systemImage: "square.3.layers.3d.down.right") { state.flatten() }
+                .disabled(state.composition.layers.count < 2)
+            Button("Panel.Comps.Title", systemImage: EditorPanel.comps.symbolName) { openComps() }
+                .accessibilityIdentifier("layerComps")
     }
 }
-
 extension LayerActionsBar {
     /// On iPhone, the layers sheet goes down before the comps one comes up.
     private func openComps() {
@@ -574,6 +733,9 @@ private struct MaskSection: View {
 private struct GroupRow: View {
     let group: LayerGroup
     let state: EditorState
+    @Environment(\.panelPlacement) private var placement
+
+    private var rowHeight: CGFloat { placement.isMacInspector ? 32 : 36 }
 
     var body: some View {
         let isActive = state.activeGroupID == group.id
@@ -583,7 +745,7 @@ private struct GroupRow: View {
             } label: {
                 Image(systemName: "chevron.right")
                     .rotationEffect(.degrees(group.isExpanded ? 90 : 0))
-                    .frame(width: 24, height: 36)
+                    .frame(width: 24, height: rowHeight)
                     .contentShape(.rect)
             }
             .buttonStyle(.borderless)
@@ -616,7 +778,7 @@ private struct GroupRow: View {
             } label: {
                 Image(systemName: group.isVisible ? "eye" : "eye.slash")
                     .foregroundStyle(group.isVisible ? Color.primary : Color.secondary)
-                    .frame(width: 36, height: 36)
+                    .frame(width: placement.isMacInspector ? 24 : 36, height: rowHeight)
                     .contentShape(.rect)
             }
             .buttonStyle(.borderless)
@@ -624,7 +786,7 @@ private struct GroupRow: View {
         }
         .contentShape(.rect)
         .onTapGesture { state.activeGroupID = group.id }
-        .listRowBackground(isActive ? Color.accentColor.opacity(0.18) : nil)
+        .listRowBackground(isActive && !placement.isMacInspector ? Color.accentColor.opacity(0.18) : nil)
         .contextMenu {
             Button("Groups.Ungroup", systemImage: "folder.badge.minus") { state.ungroup(group.id) }
             Button("Groups.Merge", systemImage: "square.2.layers.3d.bottom.filled") { state.mergeGroup(group.id) }
