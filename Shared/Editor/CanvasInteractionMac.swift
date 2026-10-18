@@ -85,8 +85,13 @@ final class CanvasInputView: NSView {
     private static let rotationThreshold = Double.pi / 18
     private var trackingArea: NSTrackingArea?
 
+    /// The menu a right-click on the canvas brings up, which the app sets.
+    static var contextMenu: (@MainActor () -> NSMenu)?
+
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+
+    override func menu(for event: NSEvent) -> NSMenu? { Self.contextMenu?() }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func updateTrackingAreas() {
@@ -196,6 +201,11 @@ final class CanvasInputView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        // A Control-click is a right-click, not a stroke.
+        if event.modifierFlags.contains(.control), let menu = menu(for: event) {
+            NSMenu.popUpContextMenu(menu, with: event, for: self)
+            return
+        }
         guard let interaction else { return }
         let point = location(of: event)
         if isSpaceDown {

@@ -156,6 +156,30 @@ enum MainMenu {
         return menu
     }
 
+    /// What a right-click on the canvas offers: the clipboard, the
+    /// selection, the layer and the view.
+    static func canvasMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(item(String(localized: "Edit.Cut"), #selector(EditorViewController.cut(_:))))
+        menu.addItem(item(String(localized: "Edit.Copy"), #selector(EditorViewController.copy(_:))))
+        menu.addItem(item(String(localized: "Edit.Paste"), #selector(EditorViewController.paste(_:))))
+        menu.addItem(.separator())
+        menu.addItem(item(String(localized: "Select.All"), #selector(EditorViewController.selectAll(_:))))
+        menu.addItem(item(String(localized: "Select.Deselect"), #selector(EditorViewController.deselect(_:))))
+        menu.addItem(item(String(localized: "Select.Invert"), #selector(EditorViewController.invertSelection(_:))))
+        menu.addItem(item(String(localized: "Select.CopyToLayer"), #selector(EditorViewController.copySelectionToLayer(_:))))
+        menu.addItem(item(String(localized: "Select.Fill"), #selector(EditorViewController.fillSelection(_:))))
+        menu.addItem(item(String(localized: "Select.CropToSelection"), #selector(EditorViewController.cropToSelection(_:))))
+        menu.addItem(.separator())
+        menu.addItem(item(String(localized: "Layers.NewLayer"), #selector(EditorViewController.newLayer(_:))))
+        menu.addItem(item(String(localized: "Layers.Duplicate"), #selector(EditorViewController.duplicateLayer(_:))))
+        menu.addItem(item(String(localized: "Layers.MergeDown"), #selector(EditorViewController.mergeLayerDown(_:))))
+        menu.addItem(.separator())
+        menu.addItem(item(String(localized: "Canvas.FitToScreen"), #selector(EditorViewController.zoomToFit(_:))))
+        menu.addItem(item(String(localized: "Canvas.ActualSize"), #selector(EditorViewController.zoomToActualSize(_:))))
+        return menu
+    }
+
     private static func imageMenu() -> NSMenu {
         let menu = NSMenu(title: String(localized: "Menu.Image"))
         menu.addItem(item(String(localized: "Canvas.ImageSize"), #selector(EditorViewController.showImageSize(_:)), "i", [.command, .control]))

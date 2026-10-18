@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Tabs come from the documents' windows, and full screen from the
         // View menu; leave AppKit's own items to them.
         NSWindow.allowsAutomaticWindowTabbing = true
+        CanvasInputView.contextMenu = { MainMenu.canvasMenu() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
