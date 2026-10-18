@@ -3,8 +3,14 @@ import SwiftUI
 
 /// Matches the standard navigation toolbar's control size.
 enum EditorToolbarMetrics {
+    #if os(macOS)
+    /// As tall as the window's toolbar buttons, for a pointer.
+    static let controlSize: CGFloat = 36
+    static let rowHeight: CGFloat = 48
+    #else
     static let controlSize: CGFloat = 44
     static let rowHeight: CGFloat = 60
+    #endif
 }
 
 /// The tools, as a Liquid Glass carousel along the bottom of an iPhone and
