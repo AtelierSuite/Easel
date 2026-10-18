@@ -6,7 +6,9 @@ enum EditorToolbarMetrics {
     #if os(macOS)
     /// As tall as the window's toolbar buttons, for a pointer.
     static let controlSize: CGFloat = 36
-    static let rowHeight: CGFloat = 48
+    /// No taller than its controls, so the bars sit exactly as far in from
+    /// the canvas's edge as they are placed.
+    static let rowHeight: CGFloat = controlSize
     #else
     static let controlSize: CGFloat = 44
     static let rowHeight: CGFloat = 60
