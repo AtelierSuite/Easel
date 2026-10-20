@@ -54,6 +54,17 @@ extension EditorState {
         currentBrush.size = max(BrushSettings.sizeRange.lowerBound, BrushSizeScale.size(at: min(max(position, 0), 1)))
     }
 
+    /// Picks the layer above or below the active one in the stack.
+    func selectLayer(above: Bool) {
+        let layers = composition.layers
+        guard let id = activeLayerID, let index = layers.firstIndex(where: { $0.id == id }) else {
+            activeLayerID = above ? layers.last?.id : layers.first?.id
+            return
+        }
+        let next = index + (above ? 1 : -1)
+        if layers.indices.contains(next) { activeLayerID = layers[next].id }
+    }
+
     /// Zooms around the middle of the canvas's room.
     func zoomStep(larger: Bool) {
         let center = CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2)
@@ -120,6 +131,8 @@ struct KeyboardCommands: View {
             key("e", .command) {
                 if let id = state.activeLayerID { state.mergeDown(id) }
             }
+            key("]", .option) { state.selectLayer(above: true) }
+            key("[", .option) { state.selectLayer(above: false) }
         }
         .frame(width: 0, height: 0)
         .opacity(0)

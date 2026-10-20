@@ -224,6 +224,8 @@ enum MainMenu {
         menu.addItem(.separator())
         menu.addItem(item(String(localized: "Layers.MoveUp"), #selector(EditorViewController.moveLayerUp(_:)), "]"))
         menu.addItem(item(String(localized: "Layers.MoveDown"), #selector(EditorViewController.moveLayerDown(_:)), "["))
+        menu.addItem(item(String(localized: "Layers.SelectAbove"), #selector(EditorViewController.selectLayerAbove(_:)), "]", [.option]))
+        menu.addItem(item(String(localized: "Layers.SelectBelow"), #selector(EditorViewController.selectLayerBelow(_:)), "[", [.option]))
         menu.addItem(.separator())
         menu.addItem(item(String(localized: "Layers.Hide"), #selector(EditorViewController.toggleLayerVisibility(_:)), ",", [.command]))
         menu.addItem(item(String(localized: "Layers.Lock"), #selector(EditorViewController.toggleLayerLock(_:)), "/", [.command]))

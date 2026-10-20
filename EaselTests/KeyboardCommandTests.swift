@@ -38,6 +38,21 @@ struct KeyboardCommandTests {
         #expect(state.currentBrush.size == BrushSettings.sizeRange.lowerBound)
     }
 
+    @Test func optionBracketsStepThroughTheLayers() {
+        let (state, published) = host()
+        let bottom = published().layers[0].id
+        state.addEmptyLayer()
+        let top = state.activeLayerID
+        state.selectLayer(above: true)
+        #expect(state.activeLayerID == top)
+        state.selectLayer(above: false)
+        #expect(state.activeLayerID == bottom)
+        state.selectLayer(above: false)
+        #expect(state.activeLayerID == bottom)
+        state.selectLayer(above: true)
+        #expect(state.activeLayerID == top)
+    }
+
     @Test func cuttingCopiesTheSelectionAndClearsIt() async throws {
         let (state, published) = host()
         state.selection = Selection(shape: .rectangle(CGRect(x: 0, y: 0, width: 10, height: 20)))

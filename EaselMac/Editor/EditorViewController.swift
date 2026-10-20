@@ -212,6 +212,9 @@ final class EditorViewController: NSSplitViewController {
         if let id = state.activeLayerID { state.moveLayer(id, by: -1) }
     }
 
+    @objc func selectLayerAbove(_ sender: Any?) { state.selectLayer(above: true) }
+    @objc func selectLayerBelow(_ sender: Any?) { state.selectLayer(above: false) }
+
     @objc func toggleLayerVisibility(_ sender: Any?) {
         if let layer = state.activeLayer { state.setVisibility(!layer.isVisible, of: layer.id) }
     }
@@ -355,6 +358,12 @@ extension EditorViewController: NSMenuItemValidation {
             return hasLayer
         case #selector(duplicateLayer(_:)), #selector(groupLayer(_:)), #selector(moveLayerUp(_:)), #selector(moveLayerDown(_:)):
             return hasLayer
+        case #selector(selectLayerAbove(_:)):
+            guard let id = state.activeLayerID else { return !state.composition.layers.isEmpty }
+            return state.composition.layers.last?.id != id
+        case #selector(selectLayerBelow(_:)):
+            guard let id = state.activeLayerID else { return !state.composition.layers.isEmpty }
+            return state.composition.layers.first?.id != id
         case #selector(mergeLayerDown(_:)):
             guard let id = state.activeLayerID, let index = state.composition.index(of: id) else { return false }
             return index > 0
