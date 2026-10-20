@@ -36,6 +36,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// With no picture open, at launch or from the Dock, the open panel
+    /// rather than a blank canvas, as in other Mac document apps; New Image
+    /// stays in the File menu.
+    func applicationOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        NSDocumentController.shared.openDocument(nil)
+        return true
+    }
+
     @objc func showKeyboardShortcuts(_ sender: Any?) {
         KeyboardShortcutsWindowController.shared.showWindow(sender)
     }
