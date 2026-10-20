@@ -109,6 +109,7 @@ struct KeyboardCommands: View {
                 key(.downArrow, .shift) { state.nudge(dx: 0, dy: 10) }
                 key("[") { state.stepBrushSize(larger: false) }
                 key("]") { state.stepBrushSize(larger: true) }
+                key(.delete, .option) { state.fillSelection() }
                 key("x", .command) { state.cutToClipboard() }
                 key("c", .command) { state.copyToClipboard() }
                 key("v", .command) { state.pasteFromClipboard() }

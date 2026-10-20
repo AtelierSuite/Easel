@@ -294,14 +294,18 @@ final class EditorViewController: NSSplitViewController {
     // MARK: - Keys
 
     /// Keys the canvas leaves alone reach here: the arrows nudge the layer,
-    /// the brackets size the brush and a tool's letter picks it, as in other
-    /// desktop editors.
+    /// the brackets size the brush, Option-Delete fills the selection and a
+    /// tool's letter picks it, as in other desktop editors.
     override func keyDown(with event: NSEvent) {
         if !handleKey(event) { super.keyDown(with: event) }
     }
 
     func handleKey(_ event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        if modifiers == .option, event.specialKey == .delete {
+            state.fillSelection()
+            return true
+        }
         guard !modifiers.contains(.command), !modifiers.contains(.control), !modifiers.contains(.option) else { return false }
         let step: Double = modifiers.contains(.shift) ? 10 : 1
         switch event.specialKey {
