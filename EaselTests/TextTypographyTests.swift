@@ -3,6 +3,7 @@ import Foundation
 import Testing
 import UIKit
 @testable import Easel
+@testable import Paintbrush
 
 @Suite("Text typography")
 struct TextTypographyTests {

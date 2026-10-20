@@ -1,6 +1,7 @@
 import CoreGraphics
 import Testing
 @testable import Easel
+@testable import Paintbrush
 
 /// Gradient and pattern fill layers drawn from their settings, for those
 /// Photoshop kept no pixels for.

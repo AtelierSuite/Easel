@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// The words and setting of the active text layer, applied as they change.
@@ -9,6 +10,7 @@ struct TextPanel: View {
     /// The characters picked for styling, kept while a control is used
     /// and the text field gives up its selection.
     @State private var pickedRange: NSRange?
+    @Environment(\.panelPlacement) private var placement
 
     var body: some View {
         Form {
@@ -31,16 +33,7 @@ struct TextPanel: View {
                     CharacterStyleSection(text: text, range: range, state: state) { pickedRange = nil }
                 }
                 Section {
-                    Button {
-                        isPickingFont = true
-                    } label: {
-                        LabeledContent("Text.Font") {
-                            Text(text.fontName ?? String(localized: "Text.Font.System"))
-                                .font(text.fontName.map { .custom($0, size: 17) } ?? .body)
-                        }
-                    }
-                    .tint(.primary)
-                    .accessibilityIdentifier("textFont")
+                    fontRow(text)
                     if text.fontName == nil {
                         Picker("Text.Design", selection: binding(\.design)) {
                             ForEach(TextContent.Design.allCases) { design in
@@ -48,12 +41,7 @@ struct TextPanel: View {
                             }
                         }
                     }
-                    HStack {
-                        Toggle("Text.Bold", systemImage: "bold", isOn: binding(\.isBold))
-                        Toggle("Text.Italic", systemImage: "italic", isOn: binding(\.isItalic))
-                    }
-                    .toggleStyle(.button)
-                    .labelStyle(.iconOnly)
+                    styleToggles
                     Picker("Text.Alignment", selection: binding(\.alignment)) {
                         ForEach(TextContent.Alignment.allCases) { alignment in
                             Label(alignment.label, systemImage: alignment.symbolName).tag(alignment)
@@ -68,6 +56,13 @@ struct TextPanel: View {
                         ),
                         valueText: "\(Int(text.fontSize.rounded())) px"
                     )
+                    .typed(LabeledSlider.Entry(
+                        value: Binding(
+                            get: { text.fontSize.rounded() },
+                            set: { value in state.updateText { $0.fontSize = value } }
+                        ),
+                        range: 4...BrushSettings.sizeRange.upperBound, suffix: "px"
+                    ))
                     LabeledSlider(
                         label: "Text.Tracking",
                         value: Binding(
@@ -77,6 +72,7 @@ struct TextPanel: View {
                         range: -0.2...1,
                         valueText: "\(Int(((text.tracking ?? 0) * 1000).rounded()))"
                     )
+                    .typed(scale: 1000, step: 10)
                     .accessibilityIdentifier("textTracking")
                     LabeledSlider(
                         label: "Text.LineSpacing",
@@ -87,6 +83,7 @@ struct TextPanel: View {
                         range: 0.6...3,
                         valueText: String(format: "%.2f×", text.lineSpacing ?? 1)
                     )
+                    .typed(scale: 1, suffix: "×", step: 0.05, fractionDigits: 2)
                     .accessibilityIdentifier("textLineSpacing")
                     Toggle("Text.Kerning", isOn: Binding(
                         get: { text.usesKerning ?? true },
@@ -119,6 +116,7 @@ struct TextPanel: View {
                             range: max(text.fontSize, 10)...max(state.composition.size.width * 1.5, text.fontSize * 2),
                             valueText: "\(Int(boxWidth.rounded())) px"
                         )
+                        .typed(scale: 1, suffix: "px")
                         .accessibilityIdentifier("textBoxWidth")
                     }
                 } footer: {
@@ -185,7 +183,7 @@ struct TextPanel: View {
                 ContentUnavailableView("Text.NoTextLayer", systemImage: "textformat", description: Text("Text.NoTextLayer.Detail"))
             }
         }
-        .formStyle(.grouped)
+        .panelFormStyle()
         // Characters picked on one layer are not the same ones on another.
         .onChange(of: state.activeLayerID) {
             selection = nil
@@ -199,17 +197,17 @@ struct TextPanel: View {
                 }
                 .ignoresSafeArea(edges: .bottom)
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
+                    ToolbarItem(placement: .barLeading) {
                         Button("Text.Font.System") {
                             state.updateText { $0.fontName = nil }
                             isPickingFont = false
                         }
                     }
-                    ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItem(placement: .barTrailing) {
                         Button("Common.Cancel", role: .cancel) { isPickingFont = false }
                     }
                 }
-                .navigationBarTitleDisplayMode(.inline)
+                .inlineNavigationTitle()
             }
         }
         .onAppear {
@@ -227,6 +225,83 @@ struct TextPanel: View {
             }
         }
         .panelActions(confirm: { state.presentedPanel = nil })
+    }
+
+    /// The text's family: a pop-up of them on the Mac, with the Fonts
+    /// window a click away, and a list of them in a sheet elsewhere.
+    @ViewBuilder
+    private func fontRow(_ text: TextContent) -> some View {
+        #if os(macOS)
+        if placement.isMacInspector {
+            LabeledContent("Text.Font") {
+                HStack(spacing: 4) {
+                    Picker("Text.Font", selection: binding(\.fontName)) {
+                        Text("Text.Font.System").tag(String?.none)
+                        Divider()
+                        ForEach(FontPicker.families, id: \.self) { family in
+                            Text(verbatim: family).tag(String?.some(family))
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 150)
+                    .accessibilityIdentifier("textFont")
+                    Button("Text.ShowFonts", systemImage: "textformat") {
+                        FontPanelBridge.shared.show(for: state)
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(Text("Text.ShowFonts"))
+                }
+            }
+        } else {
+            fontButton(text)
+        }
+        #else
+        fontButton(text)
+        #endif
+    }
+
+    private func fontButton(_ text: TextContent) -> some View {
+        Button {
+            isPickingFont = true
+        } label: {
+            LabeledContent("Text.Font") {
+                Text(text.fontName ?? String(localized: "Text.Font.System"))
+                    .font(text.fontName.map { .custom($0, size: 17) } ?? .body)
+            }
+        }
+        .tint(.primary)
+        .accessibilityIdentifier("textFont")
+    }
+
+    /// Bold and italic: joined into one control on the Mac, as in its text
+    /// inspectors, and buttons side by side elsewhere.
+    @ViewBuilder
+    private var styleToggles: some View {
+        #if os(macOS)
+        if placement.isMacInspector {
+            ControlGroup {
+                Toggle("Text.Bold", systemImage: "bold", isOn: binding(\.isBold))
+                Toggle("Text.Italic", systemImage: "italic", isOn: binding(\.isItalic))
+            }
+            .toggleStyle(.button)
+            .labelStyle(.iconOnly)
+            .fixedSize()
+        } else {
+            standardStyleToggles
+        }
+        #else
+        standardStyleToggles
+        #endif
+    }
+
+    private var standardStyleToggles: some View {
+        HStack {
+            Toggle("Text.Bold", systemImage: "bold", isOn: binding(\.isBold))
+            Toggle("Text.Italic", systemImage: "italic", isOn: binding(\.isItalic))
+        }
+        .toggleStyle(.button)
+        .labelStyle(.iconOnly)
     }
 
     /// Picks characters for styling when some are selected; a caret alone

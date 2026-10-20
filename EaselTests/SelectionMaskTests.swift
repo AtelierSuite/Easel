@@ -1,6 +1,7 @@
 import CoreGraphics
 import Testing
 @testable import Easel
+@testable import Paintbrush
 
 @Suite("Pixel selections")
 struct SelectionMaskTests {

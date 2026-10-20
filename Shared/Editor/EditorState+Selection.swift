@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// A change to the whole selection that needs a size: how far to feather,
@@ -112,7 +113,7 @@ private struct SelectionEditAlert: ViewModifier {
                 isPresented: Binding(get: { shown != nil }, set: { if !$0 { close() } })
             ) {
                 TextField(shown?.fieldLabel ?? "", text: $text)
-                    .keyboardType(.decimalPad)
+                    .numberKeyboard(.decimal)
                 Button("Common.Cancel", role: .cancel) { close() }
                 Button("Common.OK") {
                     if let shown, let size = Double(text.replacingOccurrences(of: ",", with: ".")), size > 0 {

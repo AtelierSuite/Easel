@@ -3,6 +3,7 @@ import Foundation
 import ImageIO
 import Testing
 @testable import Easel
+@testable import Paintbrush
 
 @Suite("Saving Photoshop documents")
 struct PSDWriterTests {

@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// The active layer's styles: shadows, glows, an outline, a bevel and
@@ -18,7 +19,7 @@ struct LayerEffectsPanel: View {
     }
 
     private func effectList(_ layer: Layer) -> some View {
-        List {
+        PanelList {
             // In the order they stack, top first, as in the Layers panel.
             ForEach(LayerEffect.Kind.allCases.reversed()) { kind in
                 if let effect = layer.effects.first(where: { $0.kind == kind }) {
@@ -28,7 +29,6 @@ struct LayerEffectsPanel: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .overlay {
             if layer.effects.isEmpty {
@@ -41,49 +41,86 @@ struct LayerEffectsPanel: View {
             }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            HStack(spacing: 10) {
+            addBar(layer)
+        }
+    }
+
+    @Environment(\.panelPlacement) private var placement
+
+    @ViewBuilder
+    private func addBar(_ layer: Layer) -> some View {
+        #if os(macOS)
+        if placement == .inspector {
+            InspectorAddBar {
                 Menu {
-                    ForEach(LayerEffect.Kind.allCases) { kind in
-                        Button {
-                            state.addEffect(kind)
-                        } label: {
-                            Label {
-                                Text(verbatim: kind.label)
-                            } icon: {
-                                Image(systemName: kind.symbolName)
-                            }
-                        }
-                        .disabled(layer.effects.contains { $0.kind == kind && $0.isEnabled })
-                        .accessibilityIdentifier("addEffect.\(kind.rawValue)")
-                    }
+                    addItems(layer)
                 } label: {
                     Label("LayerEffects.Add", systemImage: "plus")
-                        .font(.system(size: 15, weight: .medium))
-                        .padding(.horizontal, 14)
-                        .frame(height: 40)
-                        .contentShape(.capsule)
                 }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .capsule)
                 .accessibilityIdentifier("addEffect")
-                Spacer()
-                GlassGroup {
-                    GlassMenuButton(symbol: "ellipsis", label: "Layers.More") {
-                        Button("LayerEffects.Apply", systemImage: "square.and.arrow.down.on.square") {
-                            state.applyFilters(of: layer.id)
-                        }
-                        .disabled(!layer.hasActiveEffects || layer.isLocked)
-                        Button("LayerEffects.RemoveAll", systemImage: "trash", role: .destructive) {
-                            state.updateActiveLayer { $0.effects = [] }
-                        }
-                        .disabled(layer.effects.isEmpty)
-                    }
-                    .accessibilityIdentifier("effectsMore")
+            } moreItems: {
+                effectActions(layer)
+            }
+        } else {
+            standardAddBar(layer)
+        }
+        #else
+        standardAddBar(layer)
+        #endif
+    }
+
+    private func standardAddBar(_ layer: Layer) -> some View {
+        HStack(spacing: 10) {
+            Menu {
+                addItems(layer)
+            } label: {
+                Label("LayerEffects.Add", systemImage: "plus")
+                    .font(.system(size: 15, weight: .medium))
+                    .padding(.horizontal, 14)
+                    .frame(height: 40)
+                    .contentShape(.capsule)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .capsule)
+            .accessibilityIdentifier("addEffect")
+            Spacer()
+            GlassGroup {
+                GlassMenuButton(symbol: "ellipsis", label: "Layers.More") {
+                    effectActions(layer)
+                }
+                .accessibilityIdentifier("effectsMore")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
+    }
+
+    private func addItems(_ layer: Layer) -> some View {
+        ForEach(LayerEffect.Kind.allCases) { kind in
+            Button {
+                state.addEffect(kind)
+            } label: {
+                Label {
+                    Text(verbatim: kind.label)
+                } icon: {
+                    Image(systemName: kind.symbolName)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 4)
+            .disabled(layer.effects.contains { $0.kind == kind && $0.isEnabled })
+            .accessibilityIdentifier("addEffect.\(kind.rawValue)")
         }
+    }
+
+    @ViewBuilder
+    private func effectActions(_ layer: Layer) -> some View {
+        Button("LayerEffects.Apply", systemImage: "square.and.arrow.down.on.square") {
+            state.applyFilters(of: layer.id)
+        }
+        .disabled(!layer.hasActiveEffects || layer.isLocked)
+        Button("LayerEffects.RemoveAll", systemImage: "trash", role: .destructive) {
+            state.updateActiveLayer { $0.effects = [] }
+        }
+        .disabled(layer.effects.isEmpty)
     }
 }
 
@@ -92,39 +129,72 @@ private struct EffectRow: View {
     let effect: LayerEffect
     let state: EditorState
 
+    @Environment(\.panelPlacement) private var placement
+
+    @ViewBuilder
+    private var header: some View {
+        #if os(macOS)
+        if placement == .inspector {
+            InspectorItemHeader(
+                title: Text(verbatim: effect.kind.label),
+                isOn: Binding(
+                    get: { effect.isEnabled },
+                    set: { value in state.updateEffect(effect.id) { $0.isEnabled = value } }
+                ),
+                menuIdentifier: "effectMenu.\(effect.kind.rawValue)"
+            ) {
+                Button("LayerEffects.Remove", systemImage: "trash", role: .destructive) {
+                    state.removeEffect(effect.id)
+                }
+                .accessibilityIdentifier("removeEffect.\(effect.kind.rawValue)")
+            }
+            .accessibilityIdentifier("effectEnabled.\(effect.kind.rawValue)")
+        } else {
+            standardHeader
+        }
+        #else
+        standardHeader
+        #endif
+    }
+
+    private var standardHeader: some View {
+        let kind = effect.kind
+        return HStack(spacing: 10) {
+            Image(systemName: kind.symbolName)
+                .foregroundStyle(effect.isEnabled ? Color.accentColor : .secondary)
+                .frame(width: 24)
+            Text(verbatim: kind.label)
+                .font(.headline)
+            Spacer()
+            Button(role: .destructive) {
+                state.removeEffect(effect.id)
+            } label: {
+                Image(systemName: "trash")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("LayerEffects.Remove")
+            .accessibilityIdentifier("removeEffect.\(kind.rawValue)")
+            Button {
+                state.updateEffect(effect.id) { $0.isEnabled.toggle() }
+            } label: {
+                Image(systemName: effect.isEnabled ? "eye" : "eye.slash")
+                    .foregroundStyle(effect.isEnabled ? Color.primary : Color.secondary)
+                    .frame(width: 36, height: 32)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(effect.isEnabled ? "LayerFilters.Hide" : "LayerFilters.Show")
+            .accessibilityIdentifier("effectEnabled.\(kind.rawValue)")
+        }
+    }
+
     var body: some View {
         let kind = effect.kind
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: kind.symbolName)
-                    .foregroundStyle(effect.isEnabled ? Color.accentColor : .secondary)
-                    .frame(width: 24)
-                Text(verbatim: kind.label)
-                    .font(.headline)
-                Spacer()
-                Button(role: .destructive) {
-                    state.removeEffect(effect.id)
-                } label: {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("LayerEffects.Remove")
-                .accessibilityIdentifier("removeEffect.\(kind.rawValue)")
-                Button {
-                    state.updateEffect(effect.id) { $0.isEnabled.toggle() }
-                } label: {
-                    Image(systemName: effect.isEnabled ? "eye" : "eye.slash")
-                        .foregroundStyle(effect.isEnabled ? Color.primary : Color.secondary)
-                        .frame(width: 36, height: 32)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(effect.isEnabled ? "LayerFilters.Hide" : "LayerFilters.Show")
-                .accessibilityIdentifier("effectEnabled.\(kind.rawValue)")
-            }
+            header
             Group {
                 if kind.hasColor || (kind.hasPattern && effect.pattern.preset != nil) {
                     HStack(spacing: 16) {

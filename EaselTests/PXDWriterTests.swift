@@ -3,6 +3,7 @@ import Foundation
 import SQLite3
 import Testing
 @testable import Easel
+@testable import Paintbrush
 
 @Suite("Writing Pixelmator Pro documents")
 struct PXDWriterTests {

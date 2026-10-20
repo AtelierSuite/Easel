@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// The picture on its workspace: a checkerboard where it is transparent,
@@ -15,7 +16,7 @@ struct CanvasView: View {
     var body: some View {
         let viewport = state.viewport
         ZStack(alignment: .topLeading) {
-            Color(.secondarySystemBackground)
+            Color.workspace
 
             picture(viewport.level)
                 .rotationEffect(.radians(viewport.rotation))
@@ -56,6 +57,9 @@ struct CanvasView: View {
                 rulerTurned: { state.turnRuler(by: $0, around: $1) },
                 rulerResized: { state.resizeRuler(by: $0) }
             )
+            #if os(macOS)
+            .drawingOwnCursor(state.tool.usesStrokes || state.tool == .liquify)
+            #endif
             .accessibilityIdentifier("canvas")
 
             // The scales run along the view's edges, which only line up
@@ -64,6 +68,11 @@ struct CanvasView: View {
                 Rulers(state: state, viewport: viewport)
             }
         }
+        // Exactly the size it is offered. The picture is framed to the size
+        // last measured, which would otherwise hold the view at least that
+        // big, so a window made smaller pushed the bars over the canvas off
+        // its edge.
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
         .coordinateSpace(.named(Rulers.coordinateSpace))
         .clipped()
         .onGeometryChange(for: CGSize.self) { $0.size } action: { state.viewportSize = $0 }

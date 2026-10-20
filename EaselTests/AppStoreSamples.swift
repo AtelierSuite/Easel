@@ -3,6 +3,7 @@ import Foundation
 import UIKit
 import XCTest
 @testable import Easel
+@testable import Paintbrush
 
 /// Paints the documents the App Store screenshots open, with the app's own
 /// brushes, layers, filters, text and vector paths.
@@ -478,7 +479,7 @@ final class AppStoreSamples: XCTestCase {
         )
         let date = text(
             TextContent(
-                string: words.t("Aug 24 · Riverside Park", "8月24日 ・ 河川敷公園"), design: .rounded, isBold: true,
+                string: words.t("Wildhunt Academy", "ワイルドハント学園"), design: .rounded, isBold: true,
                 fontSize: 72, color: RGBAColor(red: 0.04, green: 0.22, blue: 0.52),
                 background: TextContent.Background(color: RGBAColor(red: 1, green: 0.95, blue: 0.82), padding: 0.45, cornerRadius: 1)
             ),

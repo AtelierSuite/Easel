@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// A file that must be saved as a copy before it is edited: whether it still

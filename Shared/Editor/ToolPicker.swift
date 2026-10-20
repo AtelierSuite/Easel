@@ -1,9 +1,18 @@
+import Paintbrush
 import SwiftUI
 
 /// Matches the standard navigation toolbar's control size.
 enum EditorToolbarMetrics {
+    #if os(macOS)
+    /// As tall as the window's toolbar buttons, for a pointer.
+    static let controlSize: CGFloat = 36
+    /// No taller than its controls, so the bars sit exactly as far in from
+    /// the canvas's edge as they are placed.
+    static let rowHeight: CGFloat = controlSize
+    #else
     static let controlSize: CGFloat = 44
     static let rowHeight: CGFloat = 60
+    #endif
 }
 
 /// The tools, as a Liquid Glass carousel along the bottom of an iPhone and
@@ -169,6 +178,7 @@ struct GlassIconButton: View {
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)
+        .help(label)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
@@ -192,6 +202,7 @@ struct GlassMenuButton<Content: View>: View {
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
+        .help(Text(label))
         .accessibilityLabel(label)
     }
 }

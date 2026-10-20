@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// Gradients to start from: the brush colour fading out, or fixed runs of

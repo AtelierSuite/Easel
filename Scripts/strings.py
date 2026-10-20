@@ -1016,6 +1016,6 @@ for key in sorted(SHORTCUTS):
     phrases[key] = {"extractionState": "manual", "localizations": {
         lang: {"stringSet": {"state": "translated", "values": [value]}}
         for lang, value in zip(LANGS, SHORTCUTS[key])}}
-with open(os.path.join(root, "Easel/Support/AppShortcuts.xcstrings"), "w") as f:
+with open(os.path.join(root, "Shared/Support/AppShortcuts.xcstrings"), "w") as f:
     json.dump({"sourceLanguage": "en", "strings": phrases, "version": "1.0"}, f, ensure_ascii=False, indent=2)
 print(len(S), "strings")

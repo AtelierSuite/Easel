@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// Undo and redo for a composition.

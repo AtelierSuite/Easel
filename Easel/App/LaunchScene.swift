@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// The pieces of the document picker's top area: a sheet of pink-tinted

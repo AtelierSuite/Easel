@@ -3,6 +3,7 @@ import Foundation
 import Testing
 import zlib
 @testable import Easel
+@testable import Paintbrush
 
 @Suite("Document previews")
 struct DocumentPreviewTests {

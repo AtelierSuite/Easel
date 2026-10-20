@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// A new size for the canvas, and what becomes of the picture on it: kept as
@@ -72,7 +73,7 @@ struct CanvasSizePanel: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .panelFormStyle()
         .animation(.snappy(duration: 0.25), value: mode)
         .onAppear {
             width = Int(original.width)
@@ -137,7 +138,8 @@ struct CanvasSizePanel: View {
                         onEdit(newValue)
                     }
                 ), format: .number.grouping(.never))
-                .keyboardType(.numberPad)
+                .numberKeyboard(.integer)
+                .rowFieldLabelHidden()
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 120)
                 Text("ImageSize.Pixels")

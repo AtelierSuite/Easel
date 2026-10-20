@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 extension EditorState {
@@ -73,6 +74,7 @@ struct ArtboardsPanel: View {
                     .accessibilityIdentifier("addArtboard")
             } footer: {
                 Text("Artboards.Footer")
+                    .panelFootnote()
             }
             if !artboards.isEmpty {
                 Section {
@@ -95,7 +97,7 @@ struct ArtboardsPanel: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .panelListStyle()
         .scrollContentBackground(.hidden)
         .onChange(of: state.composition) { _, _ in files = [] }
         .alert("Artboards.Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {

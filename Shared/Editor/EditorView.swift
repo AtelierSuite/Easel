@@ -1,6 +1,8 @@
+import Paintbrush
 import SwiftUI
 import UniformTypeIdentifiers
 
+#if os(iOS)
 /// The editor: the canvas, the tools over it, and the panels beside it.
 ///
 /// On iPhone the tools are a carousel along the bottom, with the settings
@@ -46,7 +48,7 @@ struct EditorView<Actions: View>: View {
             state: state, history: history
         )
         .allowsHitTesting(!state.isComparing)
-            .background(Color(.secondarySystemBackground).ignoresSafeArea())
+            .background(Color.workspace.ignoresSafeArea())
             .background { KeyboardCommands(state: state) }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if isCompact {
@@ -59,12 +61,14 @@ struct EditorView<Actions: View>: View {
                         }
                         ToolPicker(layout: .carousel, state: state, namespace: panelTransition)
                     }
+                    .canvasStatus(state)
                     .padding(.bottom, 8 + bottomToolbarInset)
                 } else {
                     VStack(spacing: 8) {
                         LinkedFilesBanner(state: state)
                         ToolOptionsBar(state: state)
                     }
+                    .canvasStatus(state)
                     .padding(.leading, 72)
                     .padding(.bottom, 12 + bottomToolbarInset)
                 }
@@ -78,7 +82,6 @@ struct EditorView<Actions: View>: View {
                         .padding(.leading, 12)
                 }
             }
-            .overlay(alignment: .top) { statusBar }
             .onChange(of: isCompact, initial: true) { _, _ in updateInsets() }
             .onChange(of: state.presentedPanel) { _, panel in
                 panelDetent = panel?.keepsCanvasVisible == false ? .large : .medium
@@ -89,7 +92,7 @@ struct EditorView<Actions: View>: View {
             .animation(.snappy(duration: 0.3), value: state.missingLinkNames + state.missingMapNames)
             .modifier(InspectorPresentation(isEnabled: !isCompact, isPresented: $state.isInspectorPresented) {
                 let panel = state.presentedPanel ?? .layers
-                panelContent(panel)
+                EditorPanelContent(panel: panel, state: state, history: history)
                     .environment(\.panelPlacement, .inspector)
                     .environment(\.panelTitle, panel.title)
                     .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
@@ -99,7 +102,7 @@ struct EditorView<Actions: View>: View {
                 set: { state.presentedPanel = $0 }
             )) { panel in
                 NavigationStack {
-                    panelContent(panel)
+                    EditorPanelContent(panel: panel, state: state, history: history)
                         .navigationTitle(panel.title)
                         .navigationBarTitleDisplayMode(.inline)
                         .navigationBarBackButtonHidden()
@@ -197,64 +200,6 @@ struct EditorView<Actions: View>: View {
         }
         .matchedTransitionSource(id: EditorPanel.layers, in: panelTransition)
         .accessibilityIdentifier("panel.layers")
-    }
-
-    /// The zoom level, and a spinner while edits are being worked on.
-    private var statusBar: some View {
-        HStack(spacing: 8) {
-            if state.zoom != 1 || state.pan != .zero || state.rotation != 0 {
-                Button {
-                    withAnimation(.snappy) { state.fitCanvas() }
-                } label: {
-                    Text(verbatim: "\(Int((state.viewport.scale * displayScale * 100).rounded()))%")
-                        .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                        .padding(.horizontal, 12)
-                        .frame(height: 32)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .capsule)
-                .accessibilityLabel("Canvas.FitToScreen")
-                .accessibilityIdentifier("zoomLevel")
-            }
-            if state.editsAnyMask, state.activeLayer?.isAdjustment != true {
-                Button {
-                    state.isEditingMask = false
-                    state.isEditingFilterMask = false
-                } label: {
-                    Label(state.editsFilterMask ? "FilterMask.Editing" : "Mask.Editing", systemImage: "xmark.circle.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 12)
-                        .frame(height: 32)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.tint(.accentColor.opacity(0.3)).interactive(), in: .capsule)
-                .accessibilityIdentifier("stopEditingMask")
-            }
-            if state.isBusy {
-                ProgressView()
-                    .frame(width: 32, height: 32)
-                    .glassEffect(.regular, in: .circle)
-            }
-        }
-        .padding(.top, 8)
-        .animation(.snappy(duration: 0.2), value: state.isBusy)
-        .animation(.snappy(duration: 0.2), value: state.editsAnyMask)
-    }
-
-    @ViewBuilder
-    private func panelContent(_ panel: EditorPanel) -> some View {
-        switch panel {
-        case .layers: LayersPanel(composition: state.composition, state: state)
-        case .adjustments: AdjustmentsPanel(state: state)
-        case .filters: LayerFiltersPanel(state: state)
-        case .effects: LayerEffectsPanel(state: state)
-        case .looks: LooksPanel(state: state)
-        case .text: TextPanel(state: state)
-        case .imageSize: CanvasSizePanel(state: state)
-        case .history: HistoryPanel(history: history, state: state)
-        case .comps: LayerCompsPanel(state: state)
-        case .artboards: ArtboardsPanel(state: state)
-        }
     }
 
     // MARK: - Toolbar
@@ -435,69 +380,6 @@ private struct InspectorPresentation<Inspector: View>: ViewModifier {
     }
 }
 
-extension View {
-    /// What went wrong, if anything, shown from this view while `isActive`.
-    func errorAlert(_ state: EditorState, isActive: Bool) -> some View {
-        alert(
-            "Alert.Error.Title",
-            isPresented: Binding(
-                get: { isActive && state.errorMessage != nil },
-                set: { if !$0 { state.errorMessage = nil } }
-            )
-        ) {
-            Button("Common.OK", role: .cancel) { state.errorMessage = nil }
-        } message: {
-            Text(state.errorMessage ?? "")
-        }
-    }
-
-    /// Asks, while an edit is held, whether to save the file as a copy and
-    /// make the edit there, shown from this view while `isActive`.
-    func copyBeforeEditingAlert(_ state: EditorState, isActive: Bool) -> some View {
-        alert(
-            "CopyToEasel.Title",
-            isPresented: Binding(
-                get: { isActive && state.isAskingToCopy },
-                set: { if !$0 { state.isAskingToCopy = false } }
-            )
-        ) {
-            Button("CopyToEasel.SaveAndEdit") { state.saveCopyForHeldEdit() }
-            Button("CopyToEasel.CancelEdit", role: .cancel) { state.cancelHeldEdit() }
-        } message: {
-            // What would be lost, one to a line, after the explanation.
-            let reasons = (state.copyBeforeEditing?.reasons ?? []).map { "• \($0)" }
-            Text(verbatim: ([String(localized: "CopyToEasel.Message")] + (reasons.isEmpty ? [] : [reasons.joined(separator: "\n")]))
-                .joined(separator: "\n\n"))
-        }
-    }
-}
-
-/// What the "…" menu's Unsupported Features item shows: the parts of a
-/// Photoshop or Pixelmator Pro file that Easel cannot save back into it.
-private struct UnsupportedFeatureNotice: View {
-    var losses: Set<WriteBackLoss>
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Label("Notice.UnsupportedFeatures.Title", systemImage: "exclamationmark.triangle")
-                    .font(.headline)
-                    .labelStyle(.titleAndIcon)
-                Text("Notice.UnsupportedFeatures.Message")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                ForEach(WriteBackLoss.allCases.filter(losses.contains), id: \.self) { loss in
-                    Label(loss.label, systemImage: "minus")
-                        .font(.callout)
-                }
-            }
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
-        }
-    }
-}
-
 /// The document host can extend past the window's bottom safe area even
 /// when SwiftUI reports a smaller inset. Measure that overlap in the
 /// editor's own window, including when embedded in the Photos extension.
@@ -543,3 +425,4 @@ private struct EditorBottomSafeAreaReader: UIViewRepresentable {
         }
     }
 }
+#endif

@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// What a finger or pencil does on the canvas.
@@ -292,14 +293,8 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
     }
 }
 
-/// What the Tone tool does where it is dragged.
-enum ToneKind: String, CaseIterable, Identifiable, Sendable {
-    case dodge, burn, saturate, desaturate, sharpen, soften
-    /// Takes the red glare out of eyes lit by a flash.
-    case redEye
-
-    var id: String { rawValue }
-
+/// How the Tone tool shows each of its kinds.
+extension ToneKind {
     var label: LocalizedStringKey {
         switch self {
         case .dodge: return "Tone.Dodge"

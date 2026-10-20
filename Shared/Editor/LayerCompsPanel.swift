@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 extension EditorState {
@@ -87,6 +88,7 @@ struct LayerCompsPanel: View {
                 .accessibilityIdentifier("addComp")
             } footer: {
                 Text("Comps.Footer")
+                    .panelFootnote()
             }
             if !comps.isEmpty {
                 Section {
@@ -109,7 +111,7 @@ struct LayerCompsPanel: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .panelListStyle()
         .scrollContentBackground(.hidden)
         .onChange(of: state.composition.layerComps) { _, _ in files = [] }
         .alert("Comps.Rename", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {

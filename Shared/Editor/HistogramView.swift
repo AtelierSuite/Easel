@@ -1,3 +1,4 @@
+import Paintbrush
 import SwiftUI
 
 /// How many of a picture's pixels fall at each shade, from black to white.

@@ -2,6 +2,7 @@ import CoreGraphics
 import Testing
 import UIKit
 @testable import Easel
+@testable import Paintbrush
 
 @MainActor
 @Suite("Keyboard commands")
@@ -35,6 +36,46 @@ struct KeyboardCommandTests {
         #expect(state.currentBrush.size > size)
         for _ in 0..<200 { state.stepBrushSize(larger: false) }
         #expect(state.currentBrush.size == BrushSettings.sizeRange.lowerBound)
+    }
+
+    @Test func shiftBracketsStepTheSoftnessByQuarters() {
+        let (state, _) = host()
+        state.tool = .eraser
+        state.currentBrush.softness = 0.3
+        state.stepBrushSoftness(softer: true)
+        #expect(state.eraser.softness == 0.5)
+        for _ in 0..<10 { state.stepBrushSoftness(softer: false) }
+        #expect(state.eraser.softness == 0)
+        for _ in 0..<10 { state.stepBrushSoftness(softer: true) }
+        #expect(state.eraser.softness == 1)
+    }
+
+    @Test func numbersSetTheBrushOpacityOrElseTheLayers() {
+        let (state, published) = host()
+        state.tool = .brush
+        state.setOpacity(fromDigit: 4)
+        #expect(state.brush.opacity == 0.4)
+        state.setOpacity(fromDigit: 0)
+        #expect(state.brush.opacity == 1)
+        state.tool = .move
+        state.setOpacity(fromDigit: 7)
+        #expect(published().layers[0].opacity == 0.7)
+        #expect(state.brush.opacity == 1)
+    }
+
+    @Test func optionBracketsStepThroughTheLayers() {
+        let (state, published) = host()
+        let bottom = published().layers[0].id
+        state.addEmptyLayer()
+        let top = state.activeLayerID
+        state.selectLayer(above: true)
+        #expect(state.activeLayerID == top)
+        state.selectLayer(above: false)
+        #expect(state.activeLayerID == bottom)
+        state.selectLayer(above: false)
+        #expect(state.activeLayerID == bottom)
+        state.selectLayer(above: true)
+        #expect(state.activeLayerID == top)
     }
 
     @Test func cuttingCopiesTheSelectionAndClearsIt() async throws {

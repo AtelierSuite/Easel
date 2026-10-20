@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Paintbrush
 
 /// The blurred or tiled copy of a layer the blur and mosaic brushes reveal,
 /// worked out when a stroke starts so it can be shown under the finger.

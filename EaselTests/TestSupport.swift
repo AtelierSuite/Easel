@@ -1,5 +1,6 @@
 import CoreGraphics
 @testable import Easel
+@testable import Paintbrush
 
 /// Small pictures with known pixels, for checking what edits do to them.
 enum TestImages {

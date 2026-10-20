@@ -6,6 +6,7 @@ import Testing
 import UniformTypeIdentifiers
 import zlib
 @testable import Easel
+@testable import Paintbrush
 
 /// Pixels for a test layer or mask, as Pixelmator saves them.
 struct PXDPixels {

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Paintbrush
 
 /// A brush kept by name: everything about it but its colour, which stays
 /// whatever is in use.
@@ -160,7 +161,7 @@ struct BrushPreset: Codable, Hashable, Identifiable, Sendable {
 @MainActor
 @Observable
 final class BrushLibrary {
-    static let shared = BrushLibrary(defaults: UserDefaults(suiteName: PhotoEditPayload.appGroup) ?? .standard)
+    static let shared = BrushLibrary(defaults: UserDefaults(suiteName: SharedContainer.appGroup) ?? .standard)
 
     private(set) var saved: [BrushPreset]
     @ObservationIgnored private let defaults: UserDefaults

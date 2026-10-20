@@ -3,6 +3,7 @@ import CoreImage
 import Foundation
 import Testing
 @testable import Easel
+@testable import Paintbrush
 
 @Suite("Distort and stylize filters")
 struct StylizeFilterTests {

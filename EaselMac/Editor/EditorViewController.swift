@@ -1,0 +1,527 @@
+import AppKit
+import Paintbrush
+import SwiftUI
+
+/// An editor: the canvas, with the tools floating down its left, and the
+/// inspector on the right. It answers the Edit, Image, Layer, View and Tools menus for the
+/// picture it shows, wherever it is: a document's window or the sheet a
+/// smart object's contents open in.
+@MainActor
+final class EditorViewController: NSSplitViewController {
+    let session: EditorSession
+    private let name: () -> String
+    private var canvas: CanvasViewController!
+    private(set) var inspectorItem: NSSplitViewItem!
+    private var isFollowingInspector = false
+    /// The panel each page of the inspector last showed, to come back to.
+    private var lastPanels: [InspectorPage: EditorPanel] = [.format: .layers, .document: .history]
+    private var collapseObservation: NSKeyValueObservation?
+
+    var state: EditorState { session.state }
+    var history: CompositionHistory { session.history }
+
+    init(session: EditorSession, name: @escaping () -> String) {
+        self.session = session
+        self.name = name
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        splitView.isVertical = true
+        splitView.dividerStyle = .thin
+
+        canvas = CanvasViewController(
+            rootView: CanvasArea(state: state, history: history, sheets: session.sheets, name: name),
+            tools: ToolPaletteViewController(state: state)
+        )
+        let canvasItem = NSSplitViewItem(viewController: canvas)
+        canvasItem.minimumThickness = 360
+
+        inspectorItem = NSSplitViewItem(inspectorWithViewController: InspectorViewController(session: session))
+        inspectorItem.minimumThickness = 300
+        inspectorItem.maximumThickness = 420
+        inspectorItem.preferredThicknessFraction = 0.25
+        inspectorItem.canCollapse = true
+
+        splitViewItems = [canvasItem, inspectorItem]
+
+        // A panel picked from a menu brings the inspector out.
+        observeChanges { [weak self] in
+            guard let self, let panel = state.presentedPanel else { return }
+            lastPanels[InspectorPage(panel)] = panel
+            if inspectorItem.isCollapsed { inspectorItem.animator().isCollapsed = false }
+            showInspectorPageInToolbar()
+        }
+        collapseObservation = inspectorItem.observe(\.isCollapsed) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.showInspectorPageInToolbar() }
+        }
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        showInspectorPageInToolbar()
+    }
+
+    // MARK: - Inspector
+
+    /// Shows a page of the inspector, or hides it when that page is the one
+    /// showing, from the toolbar's buttons.
+    @objc func showInspectorPage(_ sender: NSToolbarItemGroup) {
+        // The button clicked is the one that no longer matches the page shown.
+        let shown = inspectorItem.isCollapsed ? nil : InspectorPage(state.presentedPanel ?? .layers)
+        guard let page = InspectorPage.allCases.enumerated().first(where: { index, page in
+            sender.isSelected(at: index) != (page == shown)
+        })?.element else { return }
+        if page == shown {
+            inspectorItem.animator().isCollapsed = true
+        } else {
+            state.presentedPanel = lastPanels[page]
+            inspectorItem.animator().isCollapsed = false
+        }
+        showInspectorPageInToolbar()
+    }
+
+    /// Presses in the toolbar button for the page showing, and none while
+    /// the inspector is hidden.
+    private func showInspectorPageInToolbar() {
+        let group = view.window?.toolbar?.items.first { $0.itemIdentifier == .inspectorPages } as? NSToolbarItemGroup
+        guard let group else { return }
+        let page = InspectorPage(state.presentedPanel ?? .layers)
+        for (index, each) in InspectorPage.allCases.enumerated() {
+            group.setSelected(!inspectorItem.isCollapsed && each == page, at: index)
+        }
+    }
+
+    // MARK: - Undo
+
+    /// Undo and Redo step through the picture's history. Text being typed
+    /// in a panel is undone by its field first, which comes before this in
+    /// the responder chain.
+    @objc func undo(_ sender: Any?) { history.undo() }
+    @objc func redo(_ sender: Any?) { history.redo() }
+
+    private var undoTitle: String {
+        guard history.canUndo, history.steps.indices.contains(history.position) else { return String(localized: "Toolbar.Undo") }
+        return String(localized: "Menu.Undo \(history.steps[history.position])")
+    }
+
+    private var redoTitle: String {
+        guard history.canRedo, history.steps.indices.contains(history.position + 1) else { return String(localized: "Toolbar.Redo") }
+        return String(localized: "Menu.Redo \(history.steps[history.position + 1])")
+    }
+
+    // MARK: - Edit
+
+    @objc func cut(_ sender: Any?) { state.cutToClipboard() }
+    @objc func copy(_ sender: Any?) { state.copyToClipboard() }
+    @objc func paste(_ sender: Any?) { state.pasteFromClipboard() }
+    @objc override func selectAll(_ sender: Any?) { state.selectAll() }
+    @objc func delete(_ sender: Any?) { state.clearSelection() }
+    @objc func deselect(_ sender: Any?) { state.deselect() }
+    @objc func invertSelection(_ sender: Any?) { state.invertSelection() }
+    @objc func fillSelection(_ sender: Any?) { state.fillSelection() }
+    @objc func cropToSelection(_ sender: Any?) { state.cropToSelection() }
+
+    // MARK: - Select
+
+    @objc func selectSubject(_ sender: Any?) { state.selectObject(at: nil) }
+    @objc func selectColorRange(_ sender: Any?) { state.selectColorRange(state.color) }
+
+    /// Asks how far to change the selection by the way a menu item's tag
+    /// picks out of `SelectionModification`.
+    @objc func modifySelection(_ sender: NSMenuItem) {
+        guard SelectionModification.allCases.indices.contains(sender.tag) else { return }
+        state.pendingSelectionEdit = .modify(SelectionModification.allCases[sender.tag])
+    }
+
+    @objc func refineSelectionEdge(_ sender: Any?) { state.pendingSelectionEdit = .refine }
+    @objc func strokeSelection(_ sender: Any?) { state.pendingSelectionEdit = .stroke }
+    @objc func copySelectionToLayer(_ sender: Any?) { state.copySelectionToNewLayer(cut: false) }
+    @objc func cutSelectionToLayer(_ sender: Any?) { state.copySelectionToNewLayer(cut: true) }
+    @objc func fillSelectionFromSurroundings(_ sender: Any?) { state.fillSelectionFromSurroundings() }
+    @objc func definePattern(_ sender: Any?) { state.definePattern() }
+
+    // MARK: - Filter
+
+    /// Adds the filter a menu item's tag picks out of `LayerFilter.Kind`,
+    /// and shows it.
+    @objc func addFilter(_ sender: NSMenuItem) {
+        guard LayerFilter.Kind.allCases.indices.contains(sender.tag) else { return }
+        state.addFilter(LayerFilter.Kind.allCases[sender.tag])
+        state.presentedPanel = .filters
+    }
+
+    /// Adds the layer style a menu item's tag picks out of `LayerEffect.Kind`,
+    /// and shows it.
+    @objc func addEffect(_ sender: NSMenuItem) {
+        guard LayerEffect.Kind.allCases.indices.contains(sender.tag) else { return }
+        state.addEffect(LayerEffect.Kind.allCases[sender.tag])
+        state.presentedPanel = .effects
+    }
+
+    @objc func showAdjustments(_ sender: Any?) { state.presentedPanel = .adjustments }
+
+    @objc func applyFilters(_ sender: Any?) {
+        if let id = state.activeLayerID { state.applyFilters(of: id) }
+    }
+
+    @objc func removeFilters(_ sender: Any?) {
+        state.updateActiveLayer { layer in
+            layer.filters = []
+            layer.filterMask = nil
+        }
+        state.isEditingFilterMask = false
+    }
+
+    // MARK: - Image
+
+    @objc func showImageSize(_ sender: Any?) { state.presentedPanel = .imageSize }
+    @objc func rotateCanvasLeft(_ sender: Any?) { state.rotateCanvas(clockwise: false) }
+    @objc func rotateCanvasRight(_ sender: Any?) { state.rotateCanvas(clockwise: true) }
+    @objc func flipCanvasHorizontally(_ sender: Any?) { state.flipCanvas(horizontal: true) }
+    @objc func flipCanvasVertically(_ sender: Any?) { state.flipCanvas(horizontal: false) }
+    @objc func importImage(_ sender: Any?) { state.isImportingFiles = true }
+
+    // MARK: - Layer
+
+    @objc func newLayer(_ sender: Any?) { state.addEmptyLayer() }
+
+    @objc func duplicateLayer(_ sender: Any?) {
+        if let id = state.activeLayerID { state.duplicateLayer(id) }
+    }
+
+    @objc func mergeLayerDown(_ sender: Any?) {
+        if let id = state.activeLayerID { state.mergeDown(id) }
+    }
+
+    @objc func deleteLayer(_ sender: Any?) {
+        if let id = state.activeLayerID, state.canDelete(id) { state.deleteLayer(id) }
+    }
+
+    @objc func flattenImage(_ sender: Any?) { state.flatten() }
+
+    @objc func moveLayerUp(_ sender: Any?) {
+        if let id = state.activeLayerID { state.moveLayer(id, by: 1) }
+    }
+
+    @objc func moveLayerDown(_ sender: Any?) {
+        if let id = state.activeLayerID { state.moveLayer(id, by: -1) }
+    }
+
+    @objc func selectLayerAbove(_ sender: Any?) { state.selectLayer(above: true) }
+    @objc func selectLayerBelow(_ sender: Any?) { state.selectLayer(above: false) }
+
+    @objc func toggleLayerVisibility(_ sender: Any?) {
+        if let layer = state.activeLayer { state.setVisibility(!layer.isVisible, of: layer.id) }
+    }
+
+    @objc func toggleLayerLock(_ sender: Any?) {
+        if let layer = state.activeLayer { state.setLocked(!layer.isLocked, of: layer.id) }
+    }
+
+    @objc func groupLayer(_ sender: Any?) { state.groupActiveLayer() }
+
+    @objc func rasterizeLayer(_ sender: Any?) {
+        if let id = state.activeLayerID { state.rasterizeLayer(id) }
+    }
+
+    @objc func convertToSmartObject(_ sender: Any?) { state.convertToSmartObject() }
+    @objc func editSmartObjectContents(_ sender: Any?) { state.editSmartObjectContents() }
+    @objc func addMask(_ sender: Any?) { state.addMask() }
+    @objc func applyMask(_ sender: Any?) { state.applyMask() }
+    @objc func invertMask(_ sender: Any?) { state.invertMask() }
+    @objc func deleteMask(_ sender: Any?) { state.deleteMask() }
+
+    // MARK: - View
+
+    @objc func zoomIn(_ sender: Any?) { state.zoomStep(larger: true) }
+    @objc func zoomOut(_ sender: Any?) { state.zoomStep(larger: false) }
+
+    @objc func zoomToFit(_ sender: Any?) {
+        withAnimation(.snappy) { state.fitCanvas() }
+    }
+
+    @objc func zoomToActualSize(_ sender: Any?) {
+        let scale = view.window?.backingScaleFactor ?? 2
+        withAnimation(.snappy) { state.zoomToActualSize(displayScale: scale) }
+    }
+
+    /// Zooms to the percentage in a menu item's tag.
+    @objc func zoomToPercent(_ sender: NSMenuItem) {
+        let scale = view.window?.backingScaleFactor ?? 2
+        withAnimation(.snappy) { state.zoom(toPercent: Double(sender.tag), displayScale: scale) }
+    }
+
+    @objc func toggleRulers(_ sender: Any?) { state.showsRulers.toggle() }
+
+    @objc func toggleTools(_ sender: Any?) { canvas.showsTools.toggle() }
+
+    @objc func toggleRotatesWithGestures(_ sender: Any?) {
+        withAnimation(.snappy) { state.rotatesWithGestures.toggle() }
+    }
+
+    @objc func clearGuides(_ sender: Any?) { state.clearGuides() }
+
+    /// Shows the panel a menu item's tag picks out of `EditorPanel`'s tabs.
+    @objc func showPanel(_ sender: NSMenuItem) {
+        guard InspectorViewController.tabbedPanels.indices.contains(sender.tag) else { return }
+        state.presentedPanel = InspectorViewController.tabbedPanels[sender.tag]
+    }
+
+    /// The Fonts window, setting the active text layer's font.
+    @objc func showFonts(_ sender: Any?) { FontPanelBridge.shared.show(for: state) }
+
+    /// The Colors window, setting the brush colour.
+    @objc func showColors(_ sender: Any?) { ColorPanelBridge.shared.show(for: state) }
+
+    @objc func showUnsupportedFeatures(_ sender: Any?) { session.sheets.isShowingUnsupportedFeatures = true }
+
+    // MARK: - Tools
+
+    /// Picks the tool a menu item's tag picks out of `Tool.allCases`.
+    @objc func pickTool(_ sender: NSMenuItem) {
+        guard Tool.allCases.indices.contains(sender.tag) else { return }
+        state.tool = Tool.allCases[sender.tag]
+    }
+
+    @objc func smallerBrush(_ sender: Any?) { state.stepBrushSize(larger: false) }
+    @objc func largerBrush(_ sender: Any?) { state.stepBrushSize(larger: true) }
+    @objc func softerBrush(_ sender: Any?) { state.stepBrushSoftness(softer: true) }
+    @objc func harderBrush(_ sender: Any?) { state.stepBrushSoftness(softer: false) }
+
+    // MARK: - Keys
+
+    /// Keys the canvas leaves alone reach here: the arrows nudge the layer,
+    /// the brackets size the brush and soften it with Shift, the numbers set
+    /// opacity, Option-Delete fills the selection and a tool's letter picks
+    /// it, as in other desktop editors.
+    override func keyDown(with event: NSEvent) {
+        if !handleKey(event) { super.keyDown(with: event) }
+    }
+
+    func handleKey(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        if modifiers == .option, event.specialKey == .delete {
+            state.fillSelection()
+            return true
+        }
+        guard !modifiers.contains(.command), !modifiers.contains(.control), !modifiers.contains(.option) else { return false }
+        let step: Double = modifiers.contains(.shift) ? 10 : 1
+        switch event.specialKey {
+        case .leftArrow?: state.nudge(dx: -step, dy: 0); return true
+        case .rightArrow?: state.nudge(dx: step, dy: 0); return true
+        case .upArrow?: state.nudge(dx: 0, dy: -step); return true
+        case .downArrow?: state.nudge(dx: 0, dy: step); return true
+        case .delete?, .deleteForward?:
+            state.clearSelection()
+            return true
+        default: break
+        }
+        // The key's own character, the bracket under Shift rather than the
+        // brace, whatever the keyboard's layout.
+        guard let key = event.characters(byApplyingModifiers: [])?.lowercased(), key.count == 1 else { return false }
+        // Single keys, and so not in the menus, where they would take the
+        // letters typed into fields.
+        if key == "[" || key == "]" {
+            if modifiers.contains(.shift) {
+                state.stepBrushSoftness(softer: key == "[")
+            } else {
+                state.stepBrushSize(larger: key == "]")
+            }
+            return true
+        }
+        guard !modifiers.contains(.shift) else { return false }
+        if let digit = Int(key) {
+            state.setOpacity(fromDigit: digit)
+            return true
+        }
+        if let tool = Tool.allCases.first(where: { String($0.shortcut.character) == key }) {
+            state.tool = tool
+            return true
+        }
+        return false
+    }
+}
+
+extension EditorViewController: NSMenuItemValidation {
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        let hasLayer = state.activeLayer != nil
+        let hasSelection = state.selection != nil
+        switch item.action {
+        case #selector(undo(_:)):
+            item.title = undoTitle
+            return history.canUndo
+        case #selector(redo(_:)):
+            item.title = redoTitle
+            return history.canRedo
+        case #selector(cut(_:)), #selector(deselect(_:)), #selector(invertSelection(_:)), #selector(delete(_:)),
+             #selector(fillSelection(_:)), #selector(cropToSelection(_:)), #selector(modifySelection(_:)),
+             #selector(refineSelectionEdge(_:)), #selector(strokeSelection(_:)), #selector(copySelectionToLayer(_:)),
+             #selector(cutSelectionToLayer(_:)), #selector(fillSelectionFromSurroundings(_:)), #selector(definePattern(_:)):
+            return hasSelection
+        case #selector(addFilter(_:)), #selector(addEffect(_:)), #selector(showAdjustments(_:)):
+            return state.activeLayer.map { !$0.isAdjustment } ?? false
+        case #selector(applyFilters(_:)):
+            guard let layer = state.activeLayer else { return false }
+            return layer.hasActiveFilters && !layer.isLocked
+        case #selector(removeFilters(_:)):
+            return state.activeLayer?.filters.isEmpty == false
+        case #selector(copy(_:)):
+            return hasLayer
+        case #selector(duplicateLayer(_:)), #selector(groupLayer(_:)), #selector(moveLayerUp(_:)), #selector(moveLayerDown(_:)):
+            return hasLayer
+        case #selector(selectLayerAbove(_:)):
+            guard let id = state.activeLayerID else { return !state.composition.layers.isEmpty }
+            return state.composition.layers.last?.id != id
+        case #selector(selectLayerBelow(_:)):
+            guard let id = state.activeLayerID else { return !state.composition.layers.isEmpty }
+            return state.composition.layers.first?.id != id
+        case #selector(mergeLayerDown(_:)):
+            guard let id = state.activeLayerID, let index = state.composition.index(of: id) else { return false }
+            return index > 0
+        case #selector(deleteLayer(_:)):
+            return state.activeLayerID.map(state.canDelete) ?? false
+        case #selector(toggleLayerVisibility(_:)):
+            item.title = state.activeLayer?.isVisible == false
+                ? String(localized: "Layers.Show") : String(localized: "Layers.Hide")
+            return hasLayer
+        case #selector(toggleLayerLock(_:)):
+            item.title = state.activeLayer?.isLocked == true
+                ? String(localized: "Layers.Unlock") : String(localized: "Layers.Lock")
+            return hasLayer
+        case #selector(rasterizeLayer(_:)):
+            guard let layer = state.activeLayer else { return false }
+            return layer.isText || layer.isVector || layer.isSmartObject
+        case #selector(convertToSmartObject(_:)):
+            guard let layer = state.activeLayer else { return false }
+            return !layer.isSmartObject && !layer.isAdjustment
+        case #selector(editSmartObjectContents(_:)):
+            return state.activeLayer?.isSmartObject == true
+        case #selector(addMask(_:)):
+            return hasLayer && state.activeLayer?.mask == nil
+        case #selector(applyMask(_:)), #selector(invertMask(_:)), #selector(deleteMask(_:)):
+            return state.activeLayer?.mask != nil
+        case #selector(flattenImage(_:)):
+            return state.composition.layers.count > 1
+        case #selector(zoomToPercent(_:)):
+            let scale = view.window?.backingScaleFactor ?? 2
+            item.state = state.zoomPercent(displayScale: scale) == item.tag ? .on : .off
+        case #selector(showFonts(_:)):
+            return state.activeLayer?.isText == true
+        case #selector(toggleRulers(_:)):
+            item.state = state.showsRulers ? .on : .off
+        case #selector(toggleTools(_:)):
+            item.state = canvas.showsTools ? .on : .off
+        case #selector(toggleRotatesWithGestures(_:)):
+            item.state = state.rotatesWithGestures ? .on : .off
+        case #selector(clearGuides(_:)):
+            return !state.composition.guides.isEmpty
+        case #selector(showPanel(_:)):
+            let panel = InspectorViewController.tabbedPanels.indices.contains(item.tag)
+                ? InspectorViewController.tabbedPanels[item.tag] : nil
+            item.state = panel != nil && panel == (state.presentedPanel ?? .layers) && !inspectorItem.isCollapsed ? .on : .off
+        case #selector(pickTool(_:)):
+            item.state = Tool.allCases.indices.contains(item.tag) && Tool.allCases[item.tag] == state.tool ? .on : .off
+        case #selector(showUnsupportedFeatures(_:)):
+            return !state.composition.writeBackLosses.isEmpty
+        default:
+            break
+        }
+        return true
+    }
+}
+
+extension EditorViewController: NSToolbarItemValidation {
+    func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
+        switch item.action {
+        case #selector(undo(_:)): history.canUndo
+        case #selector(redo(_:)): history.canRedo
+        default: true
+        }
+    }
+}
+
+/// Holds the canvas inside the space the inspector and the toolbar leave
+/// clear, with the tools floating over its left side. The canvas fits the
+/// picture to the view it is given, so it is given only the part that can
+/// be seen, and keeps the picture and its bars clear of the tools.
+@MainActor
+final class CanvasViewController: NSViewController {
+    private let hosting: NSHostingView<CanvasArea>
+    private let tools: ToolPaletteViewController
+    private var state: EditorState { hosting.rootView.state }
+
+    /// How far the tools, and the bars along the bottom, sit in from the
+    /// canvas's edges.
+    static let margin: CGFloat = 8
+
+    var showsTools = true {
+        didSet {
+            let palette = tools.view
+            palette.isHidden = false
+            NSAnimationContext.runAnimationGroup { _ in
+                palette.animator().alphaValue = showsTools ? 1 : 0
+            } completionHandler: { [showsTools] in
+                // Hidden once faded, so it no longer takes clicks.
+                MainActor.assumeIsolated { palette.isHidden = !showsTools }
+            }
+            updateInsets()
+        }
+    }
+
+    init(rootView: CanvasArea, tools: ToolPaletteViewController) {
+        hosting = NSHostingView(rootView: rootView)
+        hosting.sizingOptions = []
+        self.tools = tools
+        super.init(nibName: nil, bundle: nil)
+        addChild(tools)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func loadView() {
+        let container = WorkspaceView()
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(hosting)
+        let palette = tools.view
+        palette.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(palette)
+        let safe = container.safeAreaLayoutGuide
+        NSLayoutConstraint.activate([
+            hosting.topAnchor.constraint(equalTo: safe.topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            hosting.leadingAnchor.constraint(equalTo: safe.leadingAnchor),
+            hosting.trailingAnchor.constraint(equalTo: safe.trailingAnchor),
+            palette.leadingAnchor.constraint(equalTo: hosting.leadingAnchor, constant: Self.margin),
+            palette.centerYAnchor.constraint(equalTo: hosting.centerYAnchor),
+            palette.topAnchor.constraint(greaterThanOrEqualTo: hosting.topAnchor, constant: Self.margin),
+            palette.bottomAnchor.constraint(lessThanOrEqualTo: hosting.bottomAnchor, constant: -Self.margin),
+        ])
+        view = container
+        updateInsets()
+    }
+
+    /// The picture fits, and the bars along the bottom sit, beside the tools.
+    private func updateInsets() {
+        let leading = showsTools ? Self.margin + ToolPaletteViewController.width + 8 : 8
+        withAnimation(.snappy(duration: 0.3)) {
+            state.canvasInsets.top = 8
+            state.canvasInsets.leading = leading
+            state.canvasInsets.trailing = 8
+        }
+    }
+}
+
+/// The workspace colour, under the bars that float over the canvas.
+private final class WorkspaceView: NSView {
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        layer?.backgroundColor = NSColor.underPageBackgroundColor.cgColor
+    }
+}
