@@ -36,6 +36,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    @objc func showKeyboardShortcuts(_ sender: Any?) {
+        KeyboardShortcutsWindowController.shared.showWindow(sender)
+    }
+
     @objc func openSourceCode(_ sender: Any?) {
         NSWorkspace.shared.open(URL(string: "https://github.com/AtelierSuite/Easel")!)
     }

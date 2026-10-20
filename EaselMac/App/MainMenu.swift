@@ -306,6 +306,8 @@ enum MainMenu {
 
     private static func helpMenu() -> NSMenu {
         let menu = NSMenu(title: String(localized: "Menu.Help"))
+        menu.addItem(item(String(localized: "Shortcuts.Title"), #selector(AppDelegate.showKeyboardShortcuts(_:)), "/", [.command, .option]))
+        menu.addItem(.separator())
         menu.addItem(item(String(localized: "Toolbar.SourceCode"), #selector(AppDelegate.openSourceCode(_:))))
         NSApplication.shared.helpMenu = menu
         return menu
