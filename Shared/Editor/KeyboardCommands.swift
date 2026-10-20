@@ -54,6 +54,25 @@ extension EditorState {
         currentBrush.size = max(BrushSettings.sizeRange.lowerBound, BrushSizeScale.size(at: min(max(position, 0), 1)))
     }
 
+    /// Feathers the brush in hand's edge more or less, as Shift with the
+    /// brackets does on the desktop: by quarters, from hard to soft.
+    func stepBrushSoftness(softer: Bool) {
+        let quarters = (currentBrush.softness * 4).rounded() + (softer ? 1 : -1)
+        currentBrush.softness = min(max(quarters, 0), 4) / 4
+    }
+
+    /// Sets the opacity a number key stands for, 1 for 10% up to 0 for all
+    /// of it, as on the desktop: the brush's while one is in hand, and
+    /// otherwise the active layer's.
+    func setOpacity(fromDigit digit: Int) {
+        let opacity = digit == 0 ? 1 : Double(digit) / 10
+        if tool.usesStrokes || tool == .liquify {
+            currentBrush.opacity = opacity
+        } else if activeLayer != nil {
+            updateActiveLayer { $0.opacity = opacity }
+        }
+    }
+
     /// Picks the layer above or below the active one in the stack.
     func selectLayer(above: Bool) {
         let layers = composition.layers
@@ -87,7 +106,8 @@ extension EditorState {
 }
 
 /// The editor's keys: nudging with the arrows, brush size with the
-/// brackets, zoom, and the commands whose buttons are in the "…" menu or
+/// brackets and softness with Shift and them, opacity with the numbers,
+/// zoom, and the commands whose buttons are in the "…" menu or
 /// the layers panel, where a shortcut only answers while the menu is open.
 /// Plain keys, and the clipboard's, stand down while text is being typed,
 /// when they are the text's.
@@ -109,6 +129,11 @@ struct KeyboardCommands: View {
                 key(.downArrow, .shift) { state.nudge(dx: 0, dy: 10) }
                 key("[") { state.stepBrushSize(larger: false) }
                 key("]") { state.stepBrushSize(larger: true) }
+                key("[", .shift) { state.stepBrushSoftness(softer: true) }
+                key("]", .shift) { state.stepBrushSoftness(softer: false) }
+                ForEach(0..<10) { digit in
+                    key(KeyEquivalent(Character(String(digit)))) { state.setOpacity(fromDigit: digit) }
+                }
                 key(.delete, .option) { state.fillSelection() }
                 key("x", .command) { state.cutToClipboard() }
                 key("c", .command) { state.copyToClipboard() }

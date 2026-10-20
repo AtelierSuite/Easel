@@ -290,12 +290,15 @@ final class EditorViewController: NSSplitViewController {
 
     @objc func smallerBrush(_ sender: Any?) { state.stepBrushSize(larger: false) }
     @objc func largerBrush(_ sender: Any?) { state.stepBrushSize(larger: true) }
+    @objc func softerBrush(_ sender: Any?) { state.stepBrushSoftness(softer: true) }
+    @objc func harderBrush(_ sender: Any?) { state.stepBrushSoftness(softer: false) }
 
     // MARK: - Keys
 
     /// Keys the canvas leaves alone reach here: the arrows nudge the layer,
-    /// the brackets size the brush, Option-Delete fills the selection and a
-    /// tool's letter picks it, as in other desktop editors.
+    /// the brackets size the brush and soften it with Shift, the numbers set
+    /// opacity, Option-Delete fills the selection and a tool's letter picks
+    /// it, as in other desktop editors.
     override func keyDown(with event: NSEvent) {
         if !handleKey(event) { super.keyDown(with: event) }
     }
@@ -318,13 +321,22 @@ final class EditorViewController: NSSplitViewController {
             return true
         default: break
         }
-        guard !modifiers.contains(.shift), let key = event.charactersIgnoringModifiers?.lowercased(), key.count == 1 else {
-            return false
-        }
+        // The key's own character, the bracket under Shift rather than the
+        // brace, whatever the keyboard's layout.
+        guard let key = event.characters(byApplyingModifiers: [])?.lowercased(), key.count == 1 else { return false }
         // Single keys, and so not in the menus, where they would take the
         // letters typed into fields.
         if key == "[" || key == "]" {
-            state.stepBrushSize(larger: key == "]")
+            if modifiers.contains(.shift) {
+                state.stepBrushSoftness(softer: key == "[")
+            } else {
+                state.stepBrushSize(larger: key == "]")
+            }
+            return true
+        }
+        guard !modifiers.contains(.shift) else { return false }
+        if let digit = Int(key) {
+            state.setOpacity(fromDigit: digit)
             return true
         }
         if let tool = Tool.allCases.first(where: { String($0.shortcut.character) == key }) {

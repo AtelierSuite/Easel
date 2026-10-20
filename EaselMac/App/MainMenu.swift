@@ -289,6 +289,8 @@ enum MainMenu {
         menu.addItem(.separator())
         menu.addItem(item(String(localized: "Menu.SmallerBrush"), #selector(EditorViewController.smallerBrush(_:))))
         menu.addItem(item(String(localized: "Menu.LargerBrush"), #selector(EditorViewController.largerBrush(_:))))
+        menu.addItem(item(String(localized: "Menu.SofterBrush"), #selector(EditorViewController.softerBrush(_:))))
+        menu.addItem(item(String(localized: "Menu.HarderBrush"), #selector(EditorViewController.harderBrush(_:))))
         return menu
     }
 
