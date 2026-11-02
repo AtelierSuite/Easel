@@ -91,6 +91,16 @@ struct ToolOptionsBar: View {
                     set: { state.currentBrush.size = BrushSizeScale.size(at: $0) }
                 ),
                 label: "Options.Size", valueText: "\(Int(state.currentBrush.size.rounded())) px",
+                entry: (
+                    value: Binding(
+                        get: { state.currentBrush.size },
+                        set: {
+                            state.currentBrush.size = $0
+                            state.flashBrushSizePreview()
+                        }
+                    ),
+                    range: BrushSettings.sizeRange, suffix: "px"
+                ),
                 onEditingChanged: { state.previewBrushSize($0) }
             )
             .accessibilityIdentifier("brushSize")
@@ -705,6 +715,9 @@ struct OptionSlider: View {
     var range: ClosedRange<Double> = 0...1
     let label: LocalizedStringKey
     let valueText: String
+    /// Where the value can be typed in instead of shown: the value in the
+    /// units it is typed in, and their name.
+    var entry: (value: Binding<Double>, range: ClosedRange<Double>, suffix: String)?
     /// Told when the slider is taken hold of, and let go.
     var onEditingChanged: (Bool) -> Void = { _ in }
 
@@ -714,14 +727,55 @@ struct OptionSlider: View {
                 .frame(width: 120)
                 .accessibilityLabel(label)
                 .accessibilityValue(valueText)
-            Text(valueText)
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(minWidth: 46, alignment: .trailing)
+            if let entry {
+                BarNumberField(value: entry.value, range: entry.range, suffix: entry.suffix, label: label)
+            } else {
+                Text(valueText)
+                    .font(.system(size: 13, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 46, alignment: .trailing)
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: EditorToolbarMetrics.controlSize)
         .help(Text(label))
+    }
+}
+
+/// A number typed into a glass bar, kept within `range`, with its unit
+/// after it.
+private struct BarNumberField: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let suffix: String
+    let label: LocalizedStringKey
+
+    var body: some View {
+        HStack(spacing: 2) {
+            TextField(
+                value: Binding(
+                    get: { value.rounded() },
+                    set: { value = min(max($0.rounded(), range.lowerBound), range.upperBound) }
+                ),
+                format: .number.grouping(.never)
+            ) {
+                Text(label)
+            }
+            .labelsHidden()
+            // The punctuation keyboard, for its return key to finish with.
+            .numberKeyboard(.signed)
+            .textFieldStyle(.plain)
+            .multilineTextAlignment(.trailing)
+            .font(.system(size: 13, weight: .medium).monospacedDigit())
+            .frame(width: 40)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 4)
+            .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+            Text(verbatim: suffix)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .fixedSize()
     }
 }
 
