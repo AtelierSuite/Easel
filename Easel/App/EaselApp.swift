@@ -14,6 +14,18 @@ struct EaselApp: App {
         // With no title at all, the scene falls back to the app's name.
         DocumentGroupLaunchScene(Text(verbatim: "")) {
             NewDocumentButton("Launch.NewImage")
+            // A new image made from the picture on the clipboard. With
+            // nothing there, no document is made and the launch screen says so.
+            NewDocumentButton(Text("Launch.FromClipboard")) { @MainActor in
+                guard let item = ImageImport.pasteboardImage() else {
+                    photoEditLauncher.errorMessage = String(localized: "Error.NothingToPaste")
+                    return nil
+                }
+                return EaselDocument(composition: Composition(
+                    image: item.image, name: String(localized: "Layer.DefaultName.Background")
+                ))
+            }
+            .accessibilityIdentifier("newFromClipboard")
             // Text only: with an icon, the scene splits the label into two
             // actions and tucks them behind a "Show More" menu, the icon's empty.
             Button("Launch.EditPhoto") {
