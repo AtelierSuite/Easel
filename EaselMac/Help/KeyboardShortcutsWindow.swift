@@ -846,7 +846,7 @@ private struct ToolsDemo: View {
             Label {
                 Text(LocalizedStringKey(demo.tool.labelKey))
             } icon: {
-                Image(systemName: demo.tool.symbolName)
+                demo.tool.image
             }
             .font(.title3.weight(.semibold))
             .contentTransition(.symbolEffect(.replace))
@@ -859,7 +859,7 @@ private struct ToolsDemo: View {
         return Button {
             if let row = ShortcutCategory.tools.rows.first(where: { $0.id == "tool.\(tool.rawValue)" }) { demo.run(row) }
         } label: {
-            Image(systemName: tool.symbolName)
+            tool.image
                 .font(.system(size: 15))
                 .frame(width: 38, height: 38)
                 .background(isActive ? Color.accentColor : Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 8))

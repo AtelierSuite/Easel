@@ -80,7 +80,7 @@ final class ToolPaletteViewController: NSViewController {
 
     private func toolButton(for tool: Tool) -> NSButton {
         let name = String(localized: String.LocalizationValue(tool.labelKey))
-        let image = NSImage(systemSymbolName: tool.symbolName, accessibilityDescription: name)?
+        let image = tool.nsImage(accessibilityDescription: name)?
             .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
         let button = ToolButton(image: image ?? NSImage(), target: self, action: #selector(pickTool(_:)))
         button.tag = Tool.allCases.firstIndex(of: tool) ?? 0
@@ -177,4 +177,17 @@ private final class ToolButton: NSButton {
 /// A view whose content starts at the top, for a scroll view's document.
 private final class FlippedView: NSView {
     override var isFlipped: Bool { true }
+}
+
+extension Tool {
+    /// The tool's symbol for AppKit, from the asset catalog when it is one of
+    /// Easel's own.
+    func nsImage(accessibilityDescription: String? = nil) -> NSImage? {
+        guard hasCustomSymbol else {
+            return NSImage(systemSymbolName: symbolName, accessibilityDescription: accessibilityDescription)
+        }
+        let image = NSImage(symbolName: symbolName, bundle: .main, variableValue: 0)
+        image?.accessibilityDescription = accessibilityDescription
+        return image
+    }
 }
