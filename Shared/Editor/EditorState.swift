@@ -43,7 +43,7 @@ final class EditorState {
     var isEditingFilterMask = false {
         didSet { if isEditingFilterMask { isEditingMask = false } }
     }
-    var brush = BrushSettings(size: 24, color: .black)
+    var brush = BrushSettings(size: 12, color: .black)
     var eraser = BrushSettings(size: 60, softness: 0.3)
     /// For the retouching brushes, opacity is strength: how far a smear
     /// carries, how blurred or how coarse the tiles, how fully a spot heals.
