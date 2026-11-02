@@ -16,7 +16,7 @@ struct EaselApp: App {
             NewDocumentButton("Launch.NewImage")
             // A new image made from the picture on the clipboard. With
             // nothing there, no document is made and the launch screen says so.
-            NewDocumentButton(Text("Launch.FromClipboard")) { @MainActor in
+            NewDocumentButton(Text("Launch.FromClipboard"), for: EaselDocument.self) { @MainActor in
                 guard let item = ImageImport.pasteboardImage() else {
                     photoEditLauncher.errorMessage = String(localized: "Error.NothingToPaste")
                     return nil
