@@ -39,7 +39,7 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         case .transform: return "perspective"
         case .brush: return "paintbrush.pointed"
         case .eraser: return "eraser"
-        case .fill: return "drop"
+        case .fill: return "paint.bucket.classic"
         case .gradient: return "circle.lefthalf.striped.horizontal"
         case .eyedropper: return "eyedropper"
         case .censor: return "square.grid.3x3.fill"
@@ -47,10 +47,10 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         case .heal: return "bandage"
         case .liquify: return "hand.draw"
         case .clone: return "square.on.square.dashed"
-        case .text: return "textformat"
+        case .text: return "character.cursor.ibeam"
         case .shape: return "square.on.circle"
         case .pen: return "pencil.tip"
-        case .nodes: return "point.topleft.down.to.point.bottomright.curvepath"
+        case .nodes: return "beziercurve"
         }
     }
 
@@ -275,7 +275,7 @@ enum EditorPanel: String, Identifiable, Hashable, Sendable {
         case .filters: return "camera.filters"
         case .effects: return "square.on.square.squareshape.controlhandles"
         case .looks: return "wand.and.sparkles"
-        case .text: return "textformat"
+        case .text: return "character.cursor.ibeam"
         case .imageSize: return "arrow.up.left.and.arrow.down.right"
         case .history: return "clock.arrow.circlepath"
         case .comps: return "square.stack.3d.forward.dottedline"
