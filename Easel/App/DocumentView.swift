@@ -91,6 +91,13 @@ struct DocumentView: View {
 
     private var exportMenu: some View {
         Menu {
+            ShareLink(
+                item: ImageShare(composition: document.composition, name: name),
+                preview: SharePreview(name, image: Image(systemName: "photo"))
+            ) {
+                Label("Export.ShareImage", systemImage: "square.and.arrow.up")
+            }
+            .accessibilityIdentifier("shareImage")
             Section("Export.ShareAs") {
                 ForEach(CompositionExport.Format.allCases) { format in
                     ShareLink(

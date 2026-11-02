@@ -117,6 +117,23 @@ struct CompositionExport: Transferable, Sendable {
     }
 }
 
+/// The flattened picture as PNG image data, for sharing straight to Messages,
+/// Mail, Copy and the like as a picture rather than a file. Rendered only
+/// once a destination is picked.
+struct ImageShare: Transferable, Sendable {
+    var composition: Composition
+    var name: String
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .png) { share in
+            try ImageCodec.encode(CompositionRenderer.render(share.composition), as: .png)
+        }
+        .suggestedFileName { share in
+            "\(CompositionExport(composition: share.composition, name: share.name, format: .png).sanitizedName).png"
+        }
+    }
+}
+
 enum PhotoLibraryError: LocalizedError {
     case accessDenied
     case assetUnavailable
