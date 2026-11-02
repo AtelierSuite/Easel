@@ -90,7 +90,8 @@ struct ToolOptionsBar: View {
                     get: { BrushSizeScale.position(for: state.currentBrush.size) },
                     set: { state.currentBrush.size = BrushSizeScale.size(at: $0) }
                 ),
-                label: "Options.Size", valueText: "\(Int(state.currentBrush.size.rounded())) px"
+                label: "Options.Size", valueText: "\(Int(state.currentBrush.size.rounded())) px",
+                onEditingChanged: { state.previewBrushSize($0) }
             )
             .accessibilityIdentifier("brushSize")
             BrushSettingsButton(state: state)
@@ -704,10 +705,12 @@ struct OptionSlider: View {
     var range: ClosedRange<Double> = 0...1
     let label: LocalizedStringKey
     let valueText: String
+    /// Told when the slider is taken hold of, and let go.
+    var onEditingChanged: (Bool) -> Void = { _ in }
 
     var body: some View {
         HStack(spacing: 8) {
-            Slider(value: $value, in: range)
+            Slider(value: $value, in: range, onEditingChanged: onEditingChanged)
                 .frame(width: 120)
                 .accessibilityLabel(label)
                 .accessibilityValue(valueText)
@@ -836,6 +839,7 @@ private struct BrushSettingsButton: View {
                         ),
                         valueText: "\(Int(state.currentBrush.size.rounded())) px"
                     )
+                    .onEditingChanged { state.previewBrushSize($0) }
                     // The retouching brushes have a strength where others
                     // have an opacity; heal always heals fully, and a clone
                     // is laid down like paint.
@@ -995,6 +999,7 @@ struct LabeledSlider: View {
     let valueText: String
     /// How the value is typed in, where it can be.
     private var entry: Entry?
+    private var editingChanged: (Bool) -> Void = { _ in }
     @Environment(\.panelPlacement) private var placement
 
     /// A value typed in beside the slider in the Mac's inspector, in the
@@ -1044,6 +1049,13 @@ struct LabeledSlider: View {
         return copy
     }
 
+    /// Tells `action` when the slider is taken hold of, and let go.
+    func onEditingChanged(_ action: @escaping (Bool) -> Void) -> Self {
+        var copy = self
+        copy.editingChanged = action
+        return copy
+    }
+
     var body: some View {
         #if os(macOS)
         if placement == .inspector {
@@ -1073,7 +1085,7 @@ struct LabeledSlider: View {
     }
 
     private var slider: some View {
-        Slider(value: $value, in: range)
+        Slider(value: $value, in: range, onEditingChanged: editingChanged)
             .accessibilityLabel(label)
             .accessibilityValue(valueText)
     }

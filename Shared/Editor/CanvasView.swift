@@ -67,7 +67,15 @@ struct CanvasView: View {
             if state.showsRulers, viewport.rotation == 0 {
                 Rulers(state: state, viewport: viewport)
             }
+
+            if state.isPreviewingBrushSize {
+                BrushSizePreview(brush: state.currentBrush, tool: state.tool, scale: viewport.scale)
+                    .position(viewport.restingCenter)
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            }
         }
+        .animation(.snappy(duration: 0.2), value: state.isPreviewingBrushSize)
         // Exactly the size it is offered. The picture is framed to the size
         // last measured, which would otherwise hold the view at least that
         // big, so a window made smaller pushed the bars over the canvas off

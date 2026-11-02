@@ -101,6 +101,10 @@ final class EditorState {
     var isComparing = false
     /// Where Apple Pencil or the pointer hovers over the canvas.
     var hoverPoint: CGPoint?
+    /// Whether the brush in hand is shown at its size in the middle of the
+    /// canvas, as while its size slider is dragged.
+    private(set) var isPreviewingBrushSize = false
+    @ObservationIgnored private var brushSizePreviewTask: Task<Void, Never>?
     /// A guide being pulled out of a ruler.
     var draftGuide: Guide?
     /// The guide the Move tool is dragging.
@@ -750,6 +754,25 @@ final class EditorState {
             case .clone: cloneBrush = newValue
             default: brush = newValue
             }
+        }
+    }
+
+    /// Shows the brush at its size in the middle of the canvas for as long
+    /// as `isOn`, as while a size slider is held.
+    func previewBrushSize(_ isOn: Bool) {
+        brushSizePreviewTask?.cancel()
+        isPreviewingBrushSize = isOn
+    }
+
+    /// Shows the brush at its size for a moment, as after a size is typed
+    /// in or stepped with the brackets.
+    func flashBrushSizePreview() {
+        brushSizePreviewTask?.cancel()
+        isPreviewingBrushSize = true
+        brushSizePreviewTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.8))
+            guard !Task.isCancelled else { return }
+            self?.isPreviewingBrushSize = false
         }
     }
 
@@ -1661,7 +1684,7 @@ struct CanvasViewport: Equatable {
     var scale: Double { fitScale * zoom }
 
     /// The middle of the clear area, where a fitted canvas is centred.
-    private var restingCenter: CGPoint {
+    var restingCenter: CGPoint {
         CGPoint(
             x: insets.leading + (viewportSize.width - insets.leading - insets.trailing) / 2,
             y: insets.top + (viewportSize.height - insets.top - insets.bottom) / 2
