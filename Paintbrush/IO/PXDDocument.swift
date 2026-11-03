@@ -467,6 +467,36 @@ package enum PXDFormat {
             cutsUp = cuts("h", count: rows)
         }
 
+        /// The settings with the corners and the patches' points moved by
+        /// `move`, everything else as it was.
+        package static func moving(_ bytes: [UInt8], by move: (CGPoint) -> CGPoint) -> [UInt8]? {
+            func movedPoint(_ value: Any) -> Any? {
+                guard let point = value as? [Double], point.count == 2 else { return nil }
+                let moved = move(CGPoint(x: point[0], y: point[1]))
+                return [moved.x, moved.y]
+            }
+            /// `object` with what lies at `path` in it changed.
+            func updating(_ object: Any?, _ path: ArraySlice<String>, _ change: (Any) -> Any?) -> Any? {
+                guard let key = path.first else { return object.flatMap(change) }
+                guard var dictionary = object as? [String: Any],
+                      let updated = updating(dictionary[key], path.dropFirst(), change) else { return nil }
+                dictionary[key] = updated
+                return dictionary
+            }
+            guard var root = try? JSONSerialization.jsonObject(with: Data(bytes)) as? [String: Any] else { return nil }
+            for corner in ["a", "b", "c", "d"] {
+                guard let updated = updating(root, ["c", "w", "c", "q", corner], movedPoint) as? [String: Any] else { return nil }
+                root = updated
+            }
+            guard let updated = updating(root, ["c", "w", "c", "w", "c", "s", "c", "p"], { points in
+                      guard let points = points as? [Any] else { return nil }
+                      let moved = points.compactMap(movedPoint)
+                      return moved.count == points.count ? moved : nil
+                  }) as? [String: Any],
+                  let data = try? JSONSerialization.data(withJSONObject: updated) else { return nil }
+            return [UInt8](data)
+        }
+
         /// Where the point of the contents `across` of the way from `a` to
         /// `b` and `up` of the way from `a` to `d` is bent to.
         package func point(across: Double, up: Double) -> CGPoint {

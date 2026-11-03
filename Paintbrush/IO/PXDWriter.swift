@@ -14,8 +14,9 @@ import UniformTypeIdentifiers
 /// keep their rows and stay where they were among the layers around them.
 /// Painted layers whose pixels changed are saved again in the format they
 /// came in; placed pictures and new layers are saved as PNG pictures. A warp
-/// group stays as it was while the layer standing in for it does, and once
-/// that is painted on, moved or masked, it is saved in the group's stead.
+/// group stays while the layer standing in for it is only moved with the
+/// canvas, its patches moved too; once that layer is painted on, moved by
+/// itself or masked, it is saved in the group's stead.
 package enum PXDWriter {
     package enum Failure: LocalizedError {
         case notPixelmator
@@ -428,22 +429,32 @@ private struct Patch {
         )
     }
 
-    /// A warp group's stand-in keeps the group while its pixels, place and
-    /// mask are as they were read, on the canvas they were read on.
+    /// A warp group's stand-in keeps the group while its pixels and mask
+    /// are as they were read and it sits where they were, or where changes
+    /// to the canvas took it: the group is then moved the same way.
     /// Otherwise it is planned as any other layer, a new one.
     private func planStandIn(_ layer: Layer, claimed: inout Set<String>) -> Planned? {
+        let change = composition.canvasChange.since(database.canvasChange())
         guard let source = layer.pixelmator, let standIn = source.standIn, structure.warps[source.identifier] != nil,
               !claimed.contains(source.identifier), let row = structure.row(source.identifier),
-              layer.image === source.image, layer.transform == standIn.transform,
+              layer.image === source.image, change.isAffine,
+              Self.isSamePlacement(layer.transform, change.applied(to: standIn.transform)),
               layer.mask?.image === source.mask, layer.mask?.isEnabled == standIn.isMaskEnabled,
-              !layer.isClipped, layer.adjustment == nil, !layer.hasActiveFilters, !layer.hasActiveEffects,
-              composition.canvasChange == database.canvasChange(), oldCanvas == canvas
+              !layer.isClipped, layer.adjustment == nil, !layer.hasActiveFilters, !layer.hasActiveEffects
         else { return nil }
         claimed.insert(source.identifier)
         return Planned(
             layer: layer, identifier: source.identifier, row: row, image: layer.image, imageChanged: false,
             mask: nil, maskChanged: false, transform: layer.transform, keepsGroup: true
         )
+    }
+
+    private static func isSamePlacement(_ a: LayerTransform, _ b: LayerTransform) -> Bool {
+        func close(_ x: Double, _ y: Double) -> Bool { abs(x - y) <= 1e-6 * max(1, abs(x), abs(y)) }
+        var turn = (a.rotation - b.rotation).truncatingRemainder(dividingBy: 2 * .pi)
+        if turn > .pi { turn -= 2 * .pi } else if turn < -.pi { turn += 2 * .pi }
+        return close(a.position.x, b.position.x) && close(a.position.y, b.position.y)
+            && close(a.scaleX, b.scaleX) && close(a.scaleY, b.scaleY) && abs(turn) < 1e-9
     }
 
     /// Whether a row is inside a warp group, which then stays or goes with it.
@@ -986,6 +997,17 @@ private struct Patch {
                     continue
                 }
                 move(row, info: info, by: change)
+            }
+            // Warp groups kept: their contents were moved above, and the
+            // patches they are bent onto go with them.
+            for row in structure.rows where remaining.contains(row.identifier) && structure.warps[row.identifier] != nil {
+                guard let info = structure.info[row.id], let json = info[PXDFormat.Warp.key] else { continue }
+                let backing = info.backingScale
+                let moved = PXDFormat.Warp.moving(json) { point in
+                    let placed = CGPoint(x: point.x * backing, y: oldCanvas.height - point.y * backing).applying(change.positions)
+                    return CGPoint(x: placed.x / backing, y: (canvas.height - placed.y) / backing)
+                }
+                if let moved { set(PXDFormat.Warp.key, moved, rowID: row.id, old: json) }
             }
         }
         if let note = try? JSONEncoder().encode(composition.canvasChange) {

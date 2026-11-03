@@ -316,6 +316,33 @@ struct PXDWriterTests {
         #expect(reread.transform.position == CGPoint(x: 2, y: 2))
     }
 
+    /// Turning or flipping the canvas moves a warp group's stand-in with
+    /// everything else, and the group is kept, its patch moved the same way.
+    @Test func warpGroupsFollowTheCanvas() throws {
+        let original = try PXDBuilder.warpedDocument(zipped: true)
+        var composition = try PXDReader.composition(from: original)
+        composition.flip(horizontal: true)
+        composition.rotate(clockwise: true)
+        let written = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try rows(written).map(\.identifier).sorted() == ["INSIDE", "UNDER", "WARP", "WARPMASK"])
+        let json = try #require(PXDFormat.Info(values: try info(written, "WARP"))[PXDFormat.Warp.key])
+        let warp = try #require(PXDFormat.Warp(json: json))
+        // Flipped across, then a quarter turn clockwise: (x, y) up from the
+        // bottom left goes to (y, x).
+        #expect(abs(warp.a.x - 10) < 1e-9 && abs(warp.a.y - 10) < 1e-9)
+        #expect(abs(warp.b.x - 10) < 1e-9 && abs(warp.b.y - 30) < 1e-9)
+        #expect(abs(warp.mesh[3].x - 10) < 1e-9 && abs(warp.mesh[3].y - 40) < 1e-9)
+
+        let reread = try PXDReader.composition(from: written)
+        #expect(try layer(reread, "Warped").pixelmator?.standIn != nil)
+        let expected = try #require(Bitmap.pixels(of: CompositionRenderer.render(composition)))
+        let actual = try #require(Bitmap.pixels(of: CompositionRenderer.render(reread)))
+        for (x, y) in [(13, 25), (27, 25), (13, 15), (27, 15), (20, 35), (20, 5)] {
+            let a = expected.color(x: x, y: y), b = actual.color(x: x, y: y)
+            #expect(abs(a.alpha - b.alpha) < 8 && abs(a.red - b.red) < 8 && abs(a.blue - b.blue) < 8, "\(x), \(y): \(a) \(b)")
+        }
+    }
+
     /// A group's mask is kept as it was when the group is written back.
     @Test func groupMasksAreKept() throws {
         let original = try PXDBuilder(canvas: (4, 4), layers: [
