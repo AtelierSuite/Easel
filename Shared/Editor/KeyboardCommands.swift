@@ -52,6 +52,7 @@ extension EditorState {
     func stepBrushSize(larger: Bool) {
         let position = BrushSizeScale.position(for: currentBrush.size) + (larger ? 0.03 : -0.03)
         currentBrush.size = max(BrushSettings.sizeRange.lowerBound, BrushSizeScale.size(at: min(max(position, 0), 1)))
+        flashBrushSizePreview()
     }
 
     /// Feathers the brush in hand's edge more or less, as Shift with the
