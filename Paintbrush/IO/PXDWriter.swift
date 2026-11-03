@@ -619,9 +619,7 @@ private struct Patch {
         let position = CGPoint(
             x: plan.transform.position.x / backing, y: (canvas.height - plan.transform.position.y) / backing
         )
-        var angle = (-plan.transform.rotation * 180 / .pi).truncatingRemainder(dividingBy: 360)
-        if angle < 0 { angle += 360 }
-        if abs(angle - 360) < 1e-9 || abs(angle) < 1e-9 { angle = 0 }
+        let angle = PXDFormat.Info.angle(rotation: plan.transform.rotation)
         setPlacement(position: position, size: size, scale: scale, angle: angle, info: info, rowID: rowID)
         // Whether the layer covers another part of the canvas than it did,
         // which a mask placed by itself would no longer match.
@@ -953,7 +951,7 @@ private struct Patch {
             scaleX: info.scale.x, scaleY: info.scale.y, rotation: info.rotation
         ))
         var scale = CGPoint(x: placement.scaleX, y: placement.scaleY)
-        let angle = PXDFormat.Info.angle(rotation: placement.rotation, scale: scale)
+        let angle = PXDFormat.Info.angle(rotation: placement.rotation)
         // Text turns with the canvas but, as Pixelmator keeps it, is never
         // mirrored.
         if row.type == PXDFormat.textLayer { scale = CGPoint(x: abs(scale.x), y: abs(scale.y)) }

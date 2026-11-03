@@ -245,7 +245,7 @@ struct PXDReaderTests {
         let layers = try PXDReader.composition(from: wrapper).layers
         let child = try #require(layers.first { $0.name == "Child" })
         #expect(child.transform.position == CGPoint(x: 15, y: 10))
-        #expect(abs(child.transform.rotation + .pi / 2) < 0.001)
+        #expect(abs(child.transform.rotation - .pi / 2) < 0.001)
         #expect(layers.first { $0.name == "Hidden" }?.isVisible == false)
     }
 
@@ -338,9 +338,9 @@ struct PXDReaderTests {
     }
 
     /// Retina documents keep places and sizes in points, two pixels each.
-    /// Pixelmator flips a layer after turning it, so a flipped layer's
-    /// angle turns the other way.
-    @Test func flippedLayersTurnTheOtherWay() throws {
+    /// Pixelmator keeps angles clockwise, flipped or not: a layer it shows
+    /// turned a quarter anticlockwise is kept at 270.
+    @Test func anglesTurnClockwiseFlippedOrNot() throws {
         let wrapper = try PXDBuilder(canvas: (8, 8), layers: [
             .init(identifier: "FLIPPED", index: 0, type: 1, name: "Flipped", position: CGPoint(x: 4, y: 4),
                   size: CGSize(width: 4, height: 2), angle: 90, scale: CGPoint(x: -1, y: 1),
@@ -353,7 +353,7 @@ struct PXDReaderTests {
         #expect(flipped.transform.scaleX == -1)
         #expect(abs(flipped.transform.rotation - .pi / 2) < 1e-9)
         let turned = try #require(composition.layers.first { $0.name == "Turned" })
-        #expect(abs(turned.transform.rotation + .pi / 2) < 1e-9)
+        #expect(abs(turned.transform.rotation - .pi / 2) < 1e-9)
     }
 
     @Test func backingScaleTurnsPointsIntoPixels() throws {

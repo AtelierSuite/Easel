@@ -162,22 +162,25 @@ package enum PXDFormat {
         package var size: CGPoint? { values["size"].flatMap(Value.point) }
         package var scale: CGPoint { values["scale"].flatMap(Value.point) ?? CGPoint(x: 1, y: 1) }
         package var position: CGPoint? { values["position"].flatMap(Value.point) }
-        /// Degrees, anticlockwise.
+        /// Degrees, clockwise as the picture is seen: what Pixelmator shows
+        /// as a turn of 30° anticlockwise is kept as 330. A flipped layer's
+        /// angle turns it the same way.
         package var angle: Double { values["angle"].flatMap { Value.bigDouble($0) } ?? 0 }
 
         /// The angle as Easel turns a layer: clockwise radians.
-        package var rotation: Double { Info.rotation(angle: angle, scale: scale) }
+        package var rotation: Double { Info.rotation(angle: angle) }
 
-        /// Pixelmator flips a layer after turning it, across the canvas's
-        /// own axes, so a flipped layer's angle turns the other way.
-        package static func rotation(angle: Double, scale: CGPoint) -> Double {
-            -angle * .pi / 180 * (scale.x * scale.y < 0 ? -1 : 1)
+        /// Half a turn either way at most, so a small turn back reads as one.
+        package static func rotation(angle: Double) -> Double {
+            var degrees = angle.truncatingRemainder(dividingBy: 360)
+            if degrees > 180 { degrees -= 360 } else if degrees <= -180 { degrees += 360 }
+            return degrees * .pi / 180
         }
 
-        /// Easel's clockwise radians as Pixelmator's angle for a layer of
-        /// this scale, in degrees from 0 up to 360.
-        package static func angle(rotation: Double, scale: CGPoint) -> Double {
-            var angle = (-rotation * 180 / .pi * (scale.x * scale.y < 0 ? -1 : 1)).truncatingRemainder(dividingBy: 360)
+        /// Easel's clockwise radians as Pixelmator's angle, in degrees from 0
+        /// up to 360.
+        package static func angle(rotation: Double) -> Double {
+            var angle = (rotation * 180 / .pi).truncatingRemainder(dividingBy: 360)
             if angle < 0 { angle += 360 }
             if abs(angle - 360) < 1e-9 || abs(angle) < 1e-9 { angle = 0 }
             return angle
