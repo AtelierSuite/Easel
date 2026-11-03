@@ -157,24 +157,28 @@ package enum PXDReader {
             // Bézier patches lie within their points.
             let points = warp.mesh.map(onCanvas)
             let xs = points.map(\.x), ys = points.map(\.y)
+            // All of it, past the canvas's edges too, so it is whole when
+            // moved; drawn smaller and scaled back up when it is too large.
             let reach = CGRect(
                 x: xs.min() ?? 0, y: ys.min() ?? 0, width: (xs.max() ?? 0) - (xs.min() ?? 0), height: (ys.max() ?? 0) - (ys.min() ?? 0)
-            ).integral.intersection(CGRect(origin: .zero, size: canvas))
-            guard !reach.isNull, reach.width >= 1, reach.height >= 1 else { return nil }
+            ).integral
+            guard reach.width >= 1, reach.height >= 1 else { return nil }
+            let fit = min(1, Double(Bitmap.maximumDimension) / max(reach.width, reach.height))
             // Easel's flat contents run down from the top; Pixelmator's up from `a`.
             let bent = LayerImage(MeshWarp.renderWithoutSeams(
                 flat,
                 point: { u, v in
                     let point = onCanvas(warp.point(across: u, up: 1 - v))
-                    return CGPoint(x: point.x - reach.minX, y: point.y - reach.minY)
+                    return CGPoint(x: (point.x - reach.minX) * fit, y: (point.y - reach.minY) * fit)
                 },
-                size: reach.size, divisions: 32 * max(warp.columns, warp.rows)
+                size: CGSize(width: max(1, (reach.width * fit).rounded()), height: max(1, (reach.height * fit).rounded())),
+                divisions: 32 * max(warp.columns, warp.rows)
             ))
 
             var layer = Layer(
                 name: info.name ?? String(localized: "Layer.DefaultName.Group"),
                 image: bent,
-                transform: LayerTransform(position: CGPoint(x: reach.midX, y: reach.midY)),
+                transform: LayerTransform(position: CGPoint(x: reach.midX, y: reach.midY), scaleX: 1 / fit, scaleY: 1 / fit),
                 opacity: info.opacity,
                 blendMode: info.blendTag.flatMap { $0 == "pass" ? nil : PSDReader.blendMode($0) } ?? .normal,
                 isVisible: info.isVisible

@@ -221,15 +221,16 @@ extension PXDBuilder {
 
     /// A 40×40 document with a warp group holding a 20×20 layer in the
     /// middle, red over blue, bent onto the right half of the canvas. The
-    /// group's mask hides the rightmost quarter of the canvas.
-    static func warpedDocument(zipped: Bool = false) throws -> FileWrapper {
+    /// group's mask hides the rightmost quarter of the canvas. `shift` moves
+    /// the patch along, past the canvas's edge if far enough.
+    static func warpedDocument(zipped: Bool = false, shift: Double = 0) throws -> FileWrapper {
         let red: [UInt8] = [0, 0, 255, 255], blue: [UInt8] = [255, 0, 0, 255]
         let pixels = PXDPixels(
             bytes: Array((0..<20).map { row in Array(repeating: row < 10 ? red : blue, count: 20).joined() }.joined()),
             width: 20, height: 20
         )
         let quad = [CGPoint(x: 10, y: 10), CGPoint(x: 30, y: 10), CGPoint(x: 30, y: 30), CGPoint(x: 10, y: 30)]
-        let mesh = (0..<16).map { CGPoint(x: 20 + 20 * Double($0 % 4) / 3, y: 10 + 20 * Double($0 / 4) / 3) }
+        let mesh = (0..<16).map { CGPoint(x: 20 + shift + 20 * Double($0 % 4) / 3, y: 10 + 20 * Double($0 / 4) / 3) }
         return try PXDBuilder(canvas: (40, 40), layers: [
             .init(identifier: "WARP", index: 0, type: 4, name: "Warped", position: CGPoint(x: 20, y: 20),
                   size: CGSize(width: 20, height: 20), opacity: 80, blend: "pass",
@@ -334,6 +335,17 @@ struct PXDReaderTests {
         #expect(pixels.color(x: 15, y: 20).alpha < 5)
         #expect(pixels.color(x: 35, y: 13).alpha < 5)
         #expect(pixels.color(x: 25, y: 5).alpha < 5)
+    }
+
+    /// Bent past the canvas's edge, the stand-in keeps what lies beyond it,
+    /// so none is lost when it is moved back.
+    @Test func warpGroupsKeepWhatIsBentPastTheCanvas() throws {
+        let composition = try PXDReader.composition(from: try PXDBuilder.warpedDocument(shift: 15))
+        let warped = try #require(composition.layers.last)
+        #expect(warped.image.size == CGSize(width: 20, height: 20))
+        #expect(abs(warped.bounds.maxX - 55) < 0.001)
+        let pixels = try #require(Bitmap.pixels(of: warped.image.cgImage))
+        #expect(pixels.color(x: 18, y: 3).alpha > 250)
     }
 
     /// A warp of several patches: the contents are cut where Pixelmator
