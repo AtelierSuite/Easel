@@ -403,23 +403,29 @@ package enum PXDFormat {
     // MARK: - Warp groups
 
     /// How a warp group bends what is in it, kept as JSON under `key`: the
-    /// four corners its contents are laid out on, and the sixteen points of
-    /// the Bézier patch they are bent onto, in points up from the bottom
-    /// left of the canvas.
+    /// four corners its contents are laid out on, and the Bézier patches
+    /// they are bent onto, in points up from the bottom left of the canvas.
     package struct Warp: Equatable {
         package static let key = "g-warpGroupTransform-d"
 
         /// The contents' corners as laid out: `a` to `b` runs along the first
-        /// row of the patch, `a` to `d` up its first column.
+        /// row of the patches, `a` to `d` up their first column.
         package var a: CGPoint
         package var b: CGPoint
         package var c: CGPoint
         package var d: CGPoint
-        /// Four rows of four, the first row along `a` to `b`.
+        /// How many patches across, from `a` to `b`, and up, from `a` to `d`.
+        package var columns: Int
+        package var rows: Int
+        /// The patches' points: `3 × columns + 1` to a row, `3 × rows + 1`
+        /// rows, the first along `a` to `b`. Neighbouring patches share the
+        /// points between them.
         package var mesh: [CGPoint]
+        /// Where the contents are cut between patches, as parts of the way
+        /// from `a` to `b` and from `a` to `d`, ends included.
+        package var cutsAcross: [Double]
+        package var cutsUp: [Double]
 
-        /// Only a single patch is read: one row and one column of them,
-        /// sixteen points in all.
         package init?(json bytes: [UInt8]) {
             guard let root = try? JSONSerialization.jsonObject(with: Data(bytes)) as? [String: Any],
                   let settings = root["c"] as? [String: Any],
@@ -428,9 +434,12 @@ package enum PXDFormat {
                   let quad = warp["q"] as? [String: Any],
                   let shape = ((((warp["w"] as? [String: Any])?["c"] as? [String: Any])?["s"] as? [String: Any])?["c"])
                     as? [String: Any],
-                  (shape["c"] as? Int ?? 1) == 1, (shape["r"] as? Int ?? 1) == 1,
-                  let points = shape["p"] as? [[Double]], points.count == 16, points.allSatisfy({ $0.count == 2 })
+                  let points = shape["p"] as? [[Double]], points.allSatisfy({ $0.count == 2 })
             else { return nil }
+            let columns = shape["c"] as? Int ?? 1, rows = shape["r"] as? Int ?? 1
+            guard columns >= 1, rows >= 1, columns <= 64, rows <= 64, points.count == (3 * columns + 1) * (3 * rows + 1) else {
+                return nil
+            }
             func corner(_ key: String) -> CGPoint? {
                 guard let point = quad[key] as? [Double], point.count == 2 else { return nil }
                 return CGPoint(x: point[0], y: point[1])
@@ -438,11 +447,50 @@ package enum PXDFormat {
             guard let a = corner("a"), let b = corner("b"), let c = corner("c"), let d = corner("d") else { return nil }
             let mesh = points.map { CGPoint(x: $0[0], y: $0[1]) }
             guard ([a, b, c, d] + mesh).allSatisfy({ $0.x.isFinite && $0.y.isFinite }) else { return nil }
+            /// The cuts Pixelmator lists between patches, or even ones when
+            /// they do not add up.
+            func cuts(_ key: String, count: Int) -> [Double] {
+                let listed = (warp[key] as? [Double]) ?? []
+                let inner = listed.count == count - 1
+                    && zip([0] + listed, listed + [1]).allSatisfy { $0 < $1 } ? listed
+                    : (1..<count).map { Double($0) / Double(count) }
+                return [0] + inner + [1]
+            }
             self.a = a
             self.b = b
             self.c = c
             self.d = d
+            self.columns = columns
+            self.rows = rows
             self.mesh = mesh
+            cutsAcross = cuts("v", count: columns)
+            cutsUp = cuts("h", count: rows)
+        }
+
+        /// Where the point of the contents `across` of the way from `a` to
+        /// `b` and `up` of the way from `a` to `d` is bent to.
+        package func point(across: Double, up: Double) -> CGPoint {
+            func patch(_ cuts: [Double], _ t: Double) -> (index: Int, local: Double) {
+                let index = min(max(cuts.lastIndex { $0 <= t } ?? 0, 0), cuts.count - 2)
+                return (index, (t - cuts[index]) / max(cuts[index + 1] - cuts[index], 1e-12))
+            }
+            func bernstein(_ t: Double) -> [Double] {
+                let s = 1 - t
+                return [s * s * s, 3 * t * s * s, 3 * t * t * s, t * t * t]
+            }
+            let column = patch(cutsAcross, across), row = patch(cutsUp, up)
+            let bu = bernstein(column.local), bv = bernstein(row.local)
+            let width = 3 * columns + 1
+            var x = 0.0, y = 0.0
+            for k in 0..<4 {
+                for l in 0..<4 {
+                    let point = mesh[(3 * row.index + k) * width + 3 * column.index + l]
+                    let weight = bv[k] * bu[l]
+                    x += point.x * weight
+                    y += point.y * weight
+                }
+            }
+            return CGPoint(x: x, y: y)
         }
     }
 

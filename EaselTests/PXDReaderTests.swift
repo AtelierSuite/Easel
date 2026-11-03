@@ -209,11 +209,14 @@ extension PXDBuilder {
     /// contents are laid out on, `a` at the bottom left, and the sixteen
     /// points they are bent onto, rows up from `a`; in points up from the
     /// bottom left.
-    static func warp(quad: [CGPoint], mesh: [CGPoint]) -> [UInt8] {
+    static func warp(
+        quad: [CGPoint], mesh: [CGPoint], columns: Int = 1, rows: Int = 1, across: [Double] = [], up: [Double] = []
+    ) -> [UInt8] {
         func point(_ point: CGPoint) -> String { "[\(point.x),\(point.y)]" }
         let corners = zip(["a", "b", "c", "d"], quad).map { "\"\($0)\":\(point($1))" }.joined(separator: ",")
         let points = mesh.map(point).joined(separator: ",")
-        return Array(#"{"v":1,"c":{"t":1,"e":1,"b":1000,"w":{"v":1,"c":{"v":[],"h":[],"q":{\#(corners)},"w":{"c":{"s":{"v":1,"c":{"p":[\#(points)],"c":1,"r":1}},"k":14},"v":1}}},"o":0}}"#.utf8)
+        let cuts = "\"v\":[\(across.map { "\($0)" }.joined(separator: ","))],\"h\":[\(up.map { "\($0)" }.joined(separator: ","))]"
+        return Array(#"{"v":1,"c":{"t":1,"e":1,"b":1000,"w":{"v":1,"c":{\#(cuts),"q":{\#(corners)},"w":{"c":{"s":{"v":1,"c":{"p":[\#(points)],"c":\#(columns),"r":\#(rows)}},"k":14},"v":1}}},"o":0}}"#.utf8)
     }
 
     /// A 40×40 document with a warp group holding a 20×20 layer in the
@@ -331,6 +334,24 @@ struct PXDReaderTests {
         #expect(pixels.color(x: 15, y: 20).alpha < 5)
         #expect(pixels.color(x: 35, y: 13).alpha < 5)
         #expect(pixels.color(x: 25, y: 5).alpha < 5)
+    }
+
+    /// A warp of several patches: the contents are cut where Pixelmator
+    /// says, each part bent onto its own patch.
+    @Test func warpsOfSeveralPatchesFollowTheirCuts() throws {
+        let quad = [CGPoint(x: 0, y: 0), CGPoint(x: 10, y: 0), CGPoint(x: 10, y: 10), CGPoint(x: 0, y: 10)]
+        // Two patches across and one up, on a 7×4 grid over 0...60 × 0...30.
+        let mesh = (0..<28).map { CGPoint(x: Double($0 % 7) * 10, y: Double($0 / 7) * 10) }
+        let json = PXDBuilder.warp(quad: quad, mesh: mesh, columns: 2, rows: 1, across: [0.3])
+        let warp = try #require(PXDFormat.Warp(json: json))
+        #expect(warp.columns == 2 && warp.rows == 1)
+        #expect(warp.cutsAcross == [0, 0.3, 1])
+        // The cut lies on the points the two patches share.
+        #expect(warp.point(across: 0.3, up: 0) == CGPoint(x: 30, y: 0))
+        #expect(warp.point(across: 0.15, up: 0.5) == CGPoint(x: 15, y: 15))
+        #expect(warp.point(across: 1, up: 1) == CGPoint(x: 60, y: 30))
+        // Points that do not make up the grid are refused.
+        #expect(PXDFormat.Warp(json: PXDBuilder.warp(quad: quad, mesh: Array(mesh.prefix(16)), columns: 2)) == nil)
     }
 
     /// Groups come in faded and hidden as they were, and every layer and

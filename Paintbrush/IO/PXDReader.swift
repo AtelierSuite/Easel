@@ -154,15 +154,22 @@ package enum PXDReader {
                 CompositionRenderer.draw(inside, in: context)
             }
 
-            // Pixelmator's rows run up from `a`; Easel's down from the top.
-            let points = (0..<16).map { index in onCanvas(warp.mesh[(3 - index / 4) * 4 + index % 4]) }
+            // Bézier patches lie within their points.
+            let points = warp.mesh.map(onCanvas)
             let xs = points.map(\.x), ys = points.map(\.y)
             let reach = CGRect(
                 x: xs.min() ?? 0, y: ys.min() ?? 0, width: (xs.max() ?? 0) - (xs.min() ?? 0), height: (ys.max() ?? 0) - (ys.min() ?? 0)
             ).integral.intersection(CGRect(origin: .zero, size: canvas))
             guard !reach.isNull, reach.width >= 1, reach.height >= 1 else { return nil }
-            let shape = WarpShape.warp(points.map { CGPoint(x: $0.x - reach.minX, y: $0.y - reach.minY) })
-            let bent = LayerImage(MeshWarp.renderWithoutSeams(flat, shape: shape, size: reach.size))
+            // Easel's flat contents run down from the top; Pixelmator's up from `a`.
+            let bent = LayerImage(MeshWarp.renderWithoutSeams(
+                flat,
+                point: { u, v in
+                    let point = onCanvas(warp.point(across: u, up: 1 - v))
+                    return CGPoint(x: point.x - reach.minX, y: point.y - reach.minY)
+                },
+                size: reach.size, divisions: 32 * max(warp.columns, warp.rows)
+            ))
 
             var layer = Layer(
                 name: info.name ?? String(localized: "Layer.DefaultName.Group"),
