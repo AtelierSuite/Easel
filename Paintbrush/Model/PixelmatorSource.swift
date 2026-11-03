@@ -16,4 +16,13 @@ package struct PixelmatorSource: Equatable, Sendable {
     /// Set on Pixelmator's own preview, brought in to compare against: it is
     /// not part of the document, and is written back only once painted on.
     package var isPreview = false
+    /// Set on a layer standing in for a group Pixelmator bends as one, which
+    /// Easel shows drawn bent: how the layer was read. While its pixels,
+    /// place and mask stay as they were, the group is kept as it is.
+    package var standIn: StandIn?
+
+    package struct StandIn: Equatable, Sendable {
+        package var transform: LayerTransform
+        package var isMaskEnabled: Bool?
+    }
 }

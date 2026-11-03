@@ -316,6 +316,40 @@ struct PXDWriterTests {
         #expect(reread.transform.position == CGPoint(x: 2, y: 2))
     }
 
+    /// A warp group's stand-in left as it was read keeps the group, which
+    /// takes only its settings; moved, it takes the group's place as a
+    /// layer of its own; deleted, the group goes with it.
+    @Test func warpGroupsStayUntilTheirStandInChanges() throws {
+        let original = try PXDBuilder.warpedDocument(zipped: true)
+        var composition = try PXDReader.composition(from: original)
+        let index = try #require(composition.layers.firstIndex { $0.name == "Warped" })
+        #expect(try PXDWriter.fileWrapper(for: composition, original: original) === original)
+
+        composition.layers[index].name = "Halo"
+        composition.layers[index].opacity = 0.5
+        let renamed = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try rows(renamed).map(\.identifier).sorted() == ["INSIDE", "UNDER", "WARP", "WARPMASK"])
+        let group = PXDFormat.Info(values: try info(renamed, "WARP"))
+        #expect(group.name == "Halo")
+        #expect(abs(group.opacity - 0.5) < 0.001)
+        #expect(group.blendTag == "pass")
+        #expect(group[PXDFormat.Warp.key] == PXDFormat.Info(values: try info(original, "WARP"))[PXDFormat.Warp.key])
+        #expect(try layer(try PXDReader.composition(from: renamed), "Halo").pixelmator?.standIn != nil)
+
+        composition.layers[index].transform.position.x -= 5
+        let moved = try PXDWriter.fileWrapper(for: composition, original: original)
+        let identifiers = try rows(moved).map(\.identifier)
+        #expect(!identifiers.contains("WARP") && !identifiers.contains("INSIDE") && !identifiers.contains("WARPMASK"))
+        let flat = try layer(try PXDReader.composition(from: moved), "Halo")
+        #expect(flat.pixelmator?.standIn == nil)
+        #expect(flat.mask != nil)
+        #expect(abs(flat.transform.position.x - composition.layers[index].transform.position.x) < 0.5)
+
+        composition.layers.remove(at: index)
+        let removed = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try rows(removed).map(\.identifier) == ["UNDER"])
+    }
+
     @Test func groupsAreWrittenBack() throws {
         let original = try document()
         var composition = try PXDReader.composition(from: original)

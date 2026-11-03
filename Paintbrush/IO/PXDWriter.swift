@@ -13,7 +13,9 @@ import UniformTypeIdentifiers
 /// blend mode, mask, order and grouping. Layers Easel did not read, such as text and shapes,
 /// keep their rows and stay where they were among the layers around them.
 /// Painted layers whose pixels changed are saved again in the format they
-/// came in; placed pictures and new layers are saved as PNG pictures.
+/// came in; placed pictures and new layers are saved as PNG pictures. A warp
+/// group stays as it was while the layer standing in for it does, and once
+/// that is painted on, moved or masked, it is saved in the group's stead.
 package enum PXDWriter {
     package enum Failure: LocalizedError {
         case notPixelmator
@@ -301,6 +303,10 @@ private struct Patch {
         var mask: LayerMask?
         var maskChanged: Bool
         var transform: LayerTransform
+        /// A warp group's stand-in as it was read: the group stays as it is,
+        /// taking only the stand-in's name, visibility, lock, opacity and
+        /// blend mode.
+        var keepsGroup = false
     }
 
     mutating func apply() throws {
@@ -346,6 +352,11 @@ private struct Patch {
                 delete(row)
             }
         }
+        // A warp group goes with its stand-in, and when the stand-in was
+        // changed it is written as a layer of its own in the group's stead.
+        for identifier in structure.warps.keys.sorted() where !usedIdentifiers.contains(identifier) && !isInsideWarp(identifier) {
+            if let row = structure.row(identifier) { delete(row) }
+        }
 
         // New groups and layers, then each one's settings.
         for group in shownGroups {
@@ -365,6 +376,7 @@ private struct Patch {
         refreshesPreviews = changed && structure.rows.allSatisfy { row in
             let info = structure.info[row.id]
             return structure.layers.contains(row.identifier) || structure.groups.contains(row.identifier)
+                || structure.warps[row.identifier] != nil || structure.warpedLayers.contains(row.identifier)
                 || info?.isMask == true || info?.isVisible == false
         }
     }
@@ -375,6 +387,7 @@ private struct Patch {
         // Pixelmator's preview is not part of the document unless it was
         // painted on.
         if let source = layer.pixelmator, source.isPreview, source.image === layer.image { return nil }
+        if let plan = planStandIn(layer, claimed: &claimed) { return plan }
         if let filter = layer.adjustment { return planAdjustment(layer, filter: filter, claimed: &claimed) }
 
         var identifier = layer.id.uuidString
@@ -415,6 +428,35 @@ private struct Patch {
         )
     }
 
+    /// A warp group's stand-in keeps the group while its pixels, place and
+    /// mask are as they were read, on the canvas they were read on.
+    /// Otherwise it is planned as any other layer, a new one.
+    private func planStandIn(_ layer: Layer, claimed: inout Set<String>) -> Planned? {
+        guard let source = layer.pixelmator, let standIn = source.standIn, structure.warps[source.identifier] != nil,
+              !claimed.contains(source.identifier), let row = structure.row(source.identifier),
+              layer.image === source.image, layer.transform == standIn.transform,
+              layer.mask?.image === source.mask, layer.mask?.isEnabled == standIn.isMaskEnabled,
+              !layer.isClipped, layer.adjustment == nil, !layer.hasActiveFilters, !layer.hasActiveEffects,
+              composition.canvasChange == database.canvasChange(), oldCanvas == canvas
+        else { return nil }
+        claimed.insert(source.identifier)
+        return Planned(
+            layer: layer, identifier: source.identifier, row: row, image: layer.image, imageChanged: false,
+            mask: nil, maskChanged: false, transform: layer.transform, keepsGroup: true
+        )
+    }
+
+    /// Whether a row is inside a warp group, which then stays or goes with it.
+    private func isInsideWarp(_ identifier: String) -> Bool {
+        var seen: Set<String> = [identifier]
+        var parent = structure.row(identifier)?.parent
+        while let current = parent, !current.isEmpty, seen.insert(current).inserted {
+            if structure.warps[current] != nil { return true }
+            parent = structure.row(current)?.parent
+        }
+        return false
+    }
+
     /// An adjustment layer, as a colour adjustments layer: only those whose
     /// filter Pixelmator has a control for.
     private func planAdjustment(_ layer: Layer, filter: LayerFilter, claimed: inout Set<String>) -> Planned? {
@@ -450,7 +492,8 @@ private struct Patch {
         func holdsUnread(_ identifier: String) -> Bool {
             var found = false
             for child in structure.children[identifier] ?? [] where structure.info[child.id]?.isMask == false {
-                if structure.layers.contains(child.identifier) { continue }
+                // A warp group stays or goes with its stand-in, as a layer does.
+                if structure.layers.contains(child.identifier) || structure.warps[child.identifier] != nil { continue }
                 if structure.groups.contains(child.identifier) {
                     if holdsUnread(child.identifier) { found = true }
                 } else {
@@ -569,6 +612,15 @@ private struct Patch {
         let rowID = plan.row?.id ?? (plan.layer.isAdjustment ? insertAdjustments(plan.identifier) : insertLayer(plan.identifier))
         let info = isNew ? PXDFormat.Info(values: database.info(for: rowID)) : structure.info[rowID] ?? PXDFormat.Info(values: [:])
         let layer = plan.layer
+        if plan.keepsGroup {
+            let passes = info.blendTag == "pass" && layer.blendMode == .normal
+            let group = LayerGroup(
+                name: layer.name, isVisible: layer.isVisible, opacity: layer.opacity, isLocked: layer.isLocked,
+                blendMode: passes ? nil : layer.blendMode
+            )
+            updateGroup(group, rowID: rowID, isNew: false)
+            return
+        }
 
         if isNew || info.name != layer.name {
             set("name", Value.makeString(layer.name), rowID: rowID, old: info["name"])
@@ -870,7 +922,8 @@ private struct Patch {
             // Rows staying where they are: those Easel never read, and
             // groups kept for them.
             let staying = original.filter { row in
-                !used.contains(row.identifier) && (!structure.layers.contains(row.identifier))
+                !used.contains(row.identifier) && !structure.layers.contains(row.identifier)
+                    && structure.warps[row.identifier] == nil
                     && (!structure.groups.contains(row.identifier) || kept.contains(row.identifier))
             }
             var anchored: [String: [String]] = [:]

@@ -204,6 +204,44 @@ struct PXDBuilder {
     }
 }
 
+extension PXDBuilder {
+    /// A warp group's settings as Pixelmator keeps them: the corners its
+    /// contents are laid out on, `a` at the bottom left, and the sixteen
+    /// points they are bent onto, rows up from `a`; in points up from the
+    /// bottom left.
+    static func warp(quad: [CGPoint], mesh: [CGPoint]) -> [UInt8] {
+        func point(_ point: CGPoint) -> String { "[\(point.x),\(point.y)]" }
+        let corners = zip(["a", "b", "c", "d"], quad).map { "\"\($0)\":\(point($1))" }.joined(separator: ",")
+        let points = mesh.map(point).joined(separator: ",")
+        return Array(#"{"v":1,"c":{"t":1,"e":1,"b":1000,"w":{"v":1,"c":{"v":[],"h":[],"q":{\#(corners)},"w":{"c":{"s":{"v":1,"c":{"p":[\#(points)],"c":1,"r":1}},"k":14},"v":1}}},"o":0}}"#.utf8)
+    }
+
+    /// A 40×40 document with a warp group holding a 20×20 layer in the
+    /// middle, red over blue, bent onto the right half of the canvas. The
+    /// group's mask hides the rightmost quarter of the canvas.
+    static func warpedDocument(zipped: Bool = false) throws -> FileWrapper {
+        let red: [UInt8] = [0, 0, 255, 255], blue: [UInt8] = [255, 0, 0, 255]
+        let pixels = PXDPixels(
+            bytes: Array((0..<20).map { row in Array(repeating: row < 10 ? red : blue, count: 20).joined() }.joined()),
+            width: 20, height: 20
+        )
+        let quad = [CGPoint(x: 10, y: 10), CGPoint(x: 30, y: 10), CGPoint(x: 30, y: 30), CGPoint(x: 10, y: 30)]
+        let mesh = (0..<16).map { CGPoint(x: 20 + 20 * Double($0 % 4) / 3, y: 10 + 20 * Double($0 / 4) / 3) }
+        return try PXDBuilder(canvas: (40, 40), layers: [
+            .init(identifier: "WARP", index: 0, type: 4, name: "Warped", position: CGPoint(x: 20, y: 20),
+                  size: CGSize(width: 20, height: 20), opacity: 80, blend: "pass",
+                  info: [PXDFormat.Warp.key: warp(quad: quad, mesh: mesh), "g-kind": PXDFormat.Value.make("SI16", [1, 0, 0, 0])]),
+            .init(identifier: "INSIDE", parent: "WARP", index: 0, type: 1, name: "Inside", position: CGPoint(x: 20, y: 20),
+                  size: CGSize(width: 20, height: 20), pixels: pixels),
+            .init(identifier: "WARPMASK", parent: "WARP", index: PXDFormat.maskIndex, type: 1, name: "Mask",
+                  position: CGPoint(x: 35, y: 20), size: CGSize(width: 10, height: 40), isMask: true, maskBackground: 1,
+                  pixels: .grey([UInt8](repeating: 0, count: 400), width: 10, height: 40)),
+            .init(identifier: "UNDER", index: 1, type: 1, name: "Under", position: CGPoint(x: 20, y: 20),
+                  size: CGSize(width: 40, height: 40), visible: false, pixels: .bgra(0, 255, 0, width: 40, height: 40)),
+        ], zipped: zipped).build()
+    }
+}
+
 @Suite("Pixelmator Pro documents")
 struct PXDReaderTests {
     private func bgra(_ b: UInt8, _ g: UInt8, _ r: UInt8, width: Int, height: Int) -> PXDPixels {
@@ -267,6 +305,32 @@ struct PXDReaderTests {
         let pixels = try #require(Bitmap.pixels(of: layer.image.cgImage))
         #expect(pixels.color(x: 0, y: 0).alpha > 250)
         #expect(pixels.color(x: 3, y: 2).alpha > 250)
+    }
+
+    /// A warp group comes in as one layer standing in for it: what is in
+    /// it bent onto its patch, upright, then masked by the group's mask as
+    /// it lies on the canvas.
+    @Test func warpGroupsComeInBentAndMasked() throws {
+        let composition = try PXDReader.composition(from: try PXDBuilder.warpedDocument())
+        #expect(composition.layers.map(\.name) == ["Under", "Warped"])
+        #expect(composition.groups.isEmpty)
+        let warped = try #require(composition.layers.last)
+        #expect(abs(warped.opacity - 0.8) < 0.001)
+        #expect(warped.blendMode == .normal)
+        #expect(warped.pixelmator?.identifier == "WARP")
+        #expect(warped.pixelmator?.maskIdentifier == "WARPMASK")
+        #expect(warped.pixelmator?.standIn?.transform == warped.transform)
+
+        var opaque = composition
+        opaque.layers[1].opacity = 1
+        let pixels = try #require(Bitmap.pixels(of: CompositionRenderer.render(opaque)))
+        // Bent onto the right half, the top still red and the bottom blue.
+        #expect(pixels.color(x: 25, y: 13).red > 200 && pixels.color(x: 25, y: 13).alpha > 250)
+        #expect(pixels.color(x: 25, y: 27).blue > 200 && pixels.color(x: 25, y: 27).alpha > 250)
+        // Not where it was laid out, nor where the mask hides it.
+        #expect(pixels.color(x: 15, y: 20).alpha < 5)
+        #expect(pixels.color(x: 35, y: 13).alpha < 5)
+        #expect(pixels.color(x: 25, y: 5).alpha < 5)
     }
 
     /// Groups come in faded and hidden as they were, and every layer and

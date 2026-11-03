@@ -140,6 +140,50 @@ package enum MeshWarp {
         render(image, shape: shape, size: size, scale: scale, divisions: divisions, background: nil)
     }
 
+    /// `image` bent into `shape` without seams where it is see-through. The
+    /// pieces overlap a little, and see-through ones show it, so the colour
+    /// is bent opaque and how see-through it is bent apart as grey, then the
+    /// two are put back together.
+    package static func renderWithoutSeams(
+        _ image: CGImage, shape: WarpShape, size: CGSize, divisions: Int = 32
+    ) -> CGImage {
+        guard var colour = Bitmap.pixels(of: image) else { return render(image, shape: shape, size: size, divisions: divisions) }
+        var coverage = colour
+        colour.bytes.withUnsafeMutableBufferPointer { colour in
+            coverage.bytes.withUnsafeMutableBufferPointer { coverage in
+                for index in stride(from: 0, to: colour.count, by: 4) {
+                    let alpha = Int(colour[index + 3])
+                    for channel in 0..<3 {
+                        colour[index + channel] = alpha == 0 ? 0 : UInt8(min(255, (Int(colour[index + channel]) * 255 + alpha / 2) / alpha))
+                        coverage[index + channel] = UInt8(alpha)
+                    }
+                    colour[index + 3] = 255
+                    coverage[index + 3] = 255
+                }
+            }
+        }
+        guard let opaque = colour.makeImage(), let grey = coverage.makeImage(),
+              var bent = Bitmap.pixels(of: render(opaque, shape: shape, size: size, divisions: divisions)),
+              let alphas = Bitmap.pixels(of: render(grey, shape: shape, size: size, divisions: divisions))
+        else { return render(image, shape: shape, size: size, divisions: divisions) }
+        // Both come back premultiplied by the smoothed outline: the grey's
+        // value is already the alpha wanted, and the colour is taken back
+        // to its own before being premultiplied by it.
+        bent.bytes.withUnsafeMutableBufferPointer { bent in
+            alphas.bytes.withUnsafeBufferPointer { alphas in
+                for index in stride(from: 0, to: bent.count, by: 4) {
+                    let edge = Int(bent[index + 3]), alpha = Int(alphas[index])
+                    for channel in 0..<3 {
+                        let own = edge == 0 ? 0 : Int(bent[index + channel]) * 255 / edge
+                        bent[index + channel] = UInt8(min(alpha, (own * alpha + 127) / 255))
+                    }
+                    bent[index + 3] = UInt8(alpha)
+                }
+            }
+        }
+        return bent.makeImage() ?? render(image, shape: shape, size: size, divisions: divisions)
+    }
+
     /// A layer mask bent into `shape`. Off the bent layer the mask shows
     /// everything, as it does when a layer is lined up for painting.
     package static func renderMask(_ mask: CGImage, shape: WarpShape, size: CGSize, divisions: Int = 32) -> CGImage {

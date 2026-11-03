@@ -400,6 +400,52 @@ package enum PXDFormat {
         }
     }
 
+    // MARK: - Warp groups
+
+    /// How a warp group bends what is in it, kept as JSON under `key`: the
+    /// four corners its contents are laid out on, and the sixteen points of
+    /// the Bézier patch they are bent onto, in points up from the bottom
+    /// left of the canvas.
+    package struct Warp: Equatable {
+        package static let key = "g-warpGroupTransform-d"
+
+        /// The contents' corners as laid out: `a` to `b` runs along the first
+        /// row of the patch, `a` to `d` up its first column.
+        package var a: CGPoint
+        package var b: CGPoint
+        package var c: CGPoint
+        package var d: CGPoint
+        /// Four rows of four, the first row along `a` to `b`.
+        package var mesh: [CGPoint]
+
+        /// Only a single patch is read: one row and one column of them,
+        /// sixteen points in all.
+        package init?(json bytes: [UInt8]) {
+            guard let root = try? JSONSerialization.jsonObject(with: Data(bytes)) as? [String: Any],
+                  let settings = root["c"] as? [String: Any],
+                  (settings["e"] as? Int).map({ $0 != 0 }) ?? true,
+                  let warp = (settings["w"] as? [String: Any])?["c"] as? [String: Any],
+                  let quad = warp["q"] as? [String: Any],
+                  let shape = ((((warp["w"] as? [String: Any])?["c"] as? [String: Any])?["s"] as? [String: Any])?["c"])
+                    as? [String: Any],
+                  (shape["c"] as? Int ?? 1) == 1, (shape["r"] as? Int ?? 1) == 1,
+                  let points = shape["p"] as? [[Double]], points.count == 16, points.allSatisfy({ $0.count == 2 })
+            else { return nil }
+            func corner(_ key: String) -> CGPoint? {
+                guard let point = quad[key] as? [Double], point.count == 2 else { return nil }
+                return CGPoint(x: point[0], y: point[1])
+            }
+            guard let a = corner("a"), let b = corner("b"), let c = corner("c"), let d = corner("d") else { return nil }
+            let mesh = points.map { CGPoint(x: $0[0], y: $0[1]) }
+            guard ([a, b, c, d] + mesh).allSatisfy({ $0.x.isFinite && $0.y.isFinite }) else { return nil }
+            self.a = a
+            self.b = b
+            self.c = c
+            self.d = d
+            self.mesh = mesh
+        }
+    }
+
     /// Which rows of the layer table Easel brings in as its own layers,
     /// groups and masks. Everything else — text, shapes, masks drawn as
     /// shapes, layers Easel cannot decode — is kept as it is when the
@@ -416,8 +462,14 @@ package enum PXDFormat {
         /// Those colour adjustments layers' filters.
         package var adjustments: [String: LayerFilter] = [:]
         package var groups: Set<String> = []
-        /// Each layer's bitmap mask.
+        /// Each layer's bitmap mask, and each warp group's.
         package var masks: [String: String] = [:]
+        /// Groups Pixelmator bends as one, which Easel brings in as a single
+        /// layer drawn bent, standing in for the group and all in it.
+        package var warps: [String: Warp] = [:]
+        /// The layers Easel can draw inside those groups: not layers of
+        /// Easel's own, only part of the picture standing in for the group.
+        package var warpedLayers: Set<String> = []
 
         package init(database: Database, file: (String) -> Data?) {
             rows = database.layers()
@@ -447,14 +499,47 @@ package enum PXDFormat {
                     masks[row.identifier] = mask.identifier
                 }
             }
-            // A group shows in Easel when there is a layer of Easel's in it.
-            // Each is looked into once, however a damaged file nests them.
+            // Warp groups with something Easel can draw in them. What is in
+            // them is drawn only as part of the group's stand-in.
+            for row in rows where row.type == groupLayer && info[row.id]?.isMask == false {
+                if let json = info[row.id]?[Warp.key], let warp = Warp(json: json) { warps[row.identifier] = warp }
+            }
+            func descendants(of identifier: String) -> Set<String> {
+                var found: Set<String> = [identifier]
+                var pending = [identifier]
+                while let next = pending.popLast() {
+                    for child in children[next] ?? [] where found.insert(child.identifier).inserted {
+                        pending.append(child.identifier)
+                    }
+                }
+                found.remove(identifier)
+                return found
+            }
+            for identifier in warps.keys.sorted() where descendants(of: identifier).isDisjoint(with: layers) {
+                warps[identifier] = nil
+            }
+            for identifier in warps.keys {
+                warpedLayers.formUnion(descendants(of: identifier).intersection(layers))
+            }
+            layers.subtract(warpedLayers)
+            for identifier in warps.keys {
+                if let mask = children[identifier]?.first(where: { child in
+                    child.type == pixelLayer && info[child.id]?.isMask == true
+                        && file(bitmapPath(child.identifier)).flatMap(BitmapBuffer.init)?.channels == 1
+                }) {
+                    masks[identifier] = mask.identifier
+                }
+            }
+
+            // A group shows in Easel when there is a layer of Easel's in it,
+            // or a warp group's stand-in. Each is looked into once, however
+            // a damaged file nests them.
             var seen: Set<String> = []
             func holdsLayers(_ identifier: String) -> Bool {
                 guard seen.insert(identifier).inserted else { return false }
                 var found = false
                 for child in children[identifier] ?? [] where info[child.id]?.isMask == false {
-                    if layers.contains(child.identifier) {
+                    if layers.contains(child.identifier) || warps[child.identifier] != nil {
                         found = true
                     } else if child.type == groupLayer, holdsLayers(child.identifier) {
                         found = true

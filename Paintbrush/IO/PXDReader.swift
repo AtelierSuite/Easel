@@ -15,6 +15,9 @@ import Foundation
 /// Colour adjustments layers come in as Easel's adjustment layers when they
 /// amount to one filter Easel has.
 ///
+/// A warp group comes in as one layer standing in for it, drawn bent and
+/// masked as Pixelmator shows it; written back unchanged, the group is kept.
+///
 /// Text, shapes and Pixelmator's effects have no pixels saved for them, so
 /// when a document has any, its own preview comes in as a hidden top layer
 /// to compare against; writing back keeps them as they were.
@@ -48,7 +51,14 @@ package enum PXDReader {
                 guard let info = structure.info[row.id] else { continue }
                 // A layer that is another's mask is not drawn by itself.
                 if info.isMask { continue }
-                if structure.groups.contains(row.identifier) {
+                if structure.warps[row.identifier] != nil {
+                    if var layer = standIn(row, info: info) {
+                        layer.groupID = groupID
+                        layers.append(layer)
+                    } else {
+                        skipped += 1
+                    }
+                } else if structure.groups.contains(row.identifier) {
                     guard visited.insert(row.identifier).inserted else {
                         skipped += 1
                         continue
@@ -65,17 +75,8 @@ package enum PXDReader {
                     folder.pixelmatorID = row.identifier
                     groups.append(folder)
                     visit(row.identifier, groupID: folder.id)
-                } else if structure.layers.contains(row.identifier),
-                          var layer = structure.adjustments[row.identifier].map({ adjustmentLayer($0, row: row, info: info, canvas: canvas) })
-                            ?? rasterLayer(row, info: info, files: files, canvas: canvas) {
+                } else if structure.layers.contains(row.identifier), var layer = read(row, info: info) {
                     layer.groupID = groupID
-                    if let maskID = structure.masks[row.identifier], let maskRow = structure.row(maskID),
-                       let maskInfo = structure.info[maskRow.id],
-                       let mask = mask(maskRow, info: maskInfo, of: layer, files: files, canvas: canvas) {
-                        layer.mask = mask
-                        layer.pixelmator?.maskIdentifier = maskID
-                        layer.pixelmator?.mask = mask.image
-                    }
                     layers.append(layer)
                 } else {
                     skipped += 1
@@ -83,6 +84,108 @@ package enum PXDReader {
                 }
             }
         }
+
+        /// A layer Easel draws, with its mask.
+        func read(_ row: PXDFormat.LayerRow, info: PXDFormat.Info) -> Layer? {
+            guard var layer = structure.adjustments[row.identifier].map({ adjustmentLayer($0, row: row, info: info, canvas: canvas) })
+                ?? rasterLayer(row, info: info, files: files, canvas: canvas) else { return nil }
+            if let maskID = structure.masks[row.identifier], let maskRow = structure.row(maskID),
+               let maskInfo = structure.info[maskRow.id],
+               let mask = mask(maskRow, info: maskInfo, of: layer, files: files, canvas: canvas) {
+                layer.mask = mask
+                layer.pixelmator?.maskIdentifier = maskID
+                layer.pixelmator?.mask = mask.image
+            }
+            return layer
+        }
+
+        /// What is in a warp group, bottom first and laid out on the canvas
+        /// as it is before bending. Groups inside it only fade and hide what
+        /// is in them.
+        func contents(of parent: String, opacity: Double) -> [Layer] {
+            var result: [Layer] = []
+            for row in (structure.children[parent] ?? []).reversed() {
+                guard let info = structure.info[row.id], !info.isMask else { continue }
+                if structure.warps[row.identifier] != nil {
+                    if var layer = standIn(row, info: info) {
+                        layer.opacity *= opacity
+                        result.append(layer)
+                    } else {
+                        skipped += 1
+                    }
+                } else if row.type == PXDFormat.groupLayer {
+                    guard visited.insert(row.identifier).inserted else {
+                        skipped += 1
+                        continue
+                    }
+                    if info.isVisible { result += contents(of: row.identifier, opacity: opacity * info.opacity) }
+                } else if structure.warpedLayers.contains(row.identifier), var layer = read(row, info: info) {
+                    layer.opacity *= opacity
+                    result.append(layer)
+                } else {
+                    skipped += 1
+                }
+            }
+            return result
+        }
+
+        /// A warp group as one layer: what is in it drawn together, bent
+        /// onto its patch, then masked by the group's mask, which Pixelmator
+        /// lays over the group as it shows on the canvas.
+        func standIn(_ row: PXDFormat.LayerRow, info: PXDFormat.Info) -> Layer? {
+            guard let warp = structure.warps[row.identifier], visited.insert(row.identifier).inserted else { return nil }
+            let backing = info.backingScale
+            func onCanvas(_ point: CGPoint) -> CGPoint {
+                CGPoint(x: point.x * backing, y: canvas.height - point.y * backing)
+            }
+            let a = onCanvas(warp.a), b = onCanvas(warp.b), d = onCanvas(warp.d)
+            // The contents laid out flat, upright, `d` at the top left.
+            var size = CGSize(width: hypot(b.x - a.x, b.y - a.y), height: hypot(d.x - a.x, d.y - a.y))
+            let shrink = min(1, Double(Bitmap.maximumDimension) / max(size.width, size.height, 1))
+            size = CGSize(width: max(1, (size.width * shrink).rounded()), height: max(1, (size.height * shrink).rounded()))
+            let c = CGPoint(x: b.x + d.x - a.x, y: b.y + d.y - a.y)
+            guard let flatToCanvas = MeshWarp.affine(
+                from: [.zero, CGPoint(x: size.width, y: 0), CGPoint(x: 0, y: size.height)], to: [d, c, a]
+            ) else { return nil }
+            let inside = contents(of: row.identifier, opacity: 1)
+            guard !inside.isEmpty else { return nil }
+            let flat = Bitmap.render(size: size) { context in
+                context.concatenate(flatToCanvas.inverted())
+                CompositionRenderer.draw(inside, in: context)
+            }
+
+            // Pixelmator's rows run up from `a`; Easel's down from the top.
+            let points = (0..<16).map { index in onCanvas(warp.mesh[(3 - index / 4) * 4 + index % 4]) }
+            let xs = points.map(\.x), ys = points.map(\.y)
+            let reach = CGRect(
+                x: xs.min() ?? 0, y: ys.min() ?? 0, width: (xs.max() ?? 0) - (xs.min() ?? 0), height: (ys.max() ?? 0) - (ys.min() ?? 0)
+            ).integral.intersection(CGRect(origin: .zero, size: canvas))
+            guard !reach.isNull, reach.width >= 1, reach.height >= 1 else { return nil }
+            let shape = WarpShape.warp(points.map { CGPoint(x: $0.x - reach.minX, y: $0.y - reach.minY) })
+            let bent = LayerImage(MeshWarp.renderWithoutSeams(flat, shape: shape, size: reach.size))
+
+            var layer = Layer(
+                name: info.name ?? String(localized: "Layer.DefaultName.Group"),
+                image: bent,
+                transform: LayerTransform(position: CGPoint(x: reach.midX, y: reach.midY)),
+                opacity: info.opacity,
+                blendMode: info.blendTag.flatMap { $0 == "pass" ? nil : PSDReader.blendMode($0) } ?? .normal,
+                isVisible: info.isVisible
+            )
+            layer.isLocked = info.isLocked
+            var source = PixelmatorSource(identifier: row.identifier, image: bent)
+            if let maskID = structure.masks[row.identifier], let maskRow = structure.row(maskID),
+               let maskInfo = structure.info[maskRow.id],
+               let mask = mask(maskRow, info: maskInfo, of: layer, files: files, canvas: canvas) {
+                layer.mask = mask
+                source.maskIdentifier = maskID
+                source.mask = mask.image
+            }
+            source.standIn = PixelmatorSource.StandIn(transform: layer.transform, isMaskEnabled: layer.mask?.isEnabled)
+            layer.pixelmator = source
+            return layer
+        }
+
         visit("", groupID: nil)
 
         if skipped > 0 || layers.isEmpty, let preview = preview(files) {
