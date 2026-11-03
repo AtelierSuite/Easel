@@ -115,7 +115,7 @@ package enum PXDReader {
         if let buffer = files[PXDFormat.bitmapPath(row.identifier)] {
             image = bitmapBuffer(buffer)
         } else if let original = files[PXDFormat.originalPath(row.identifier)] {
-            image = try? ImageCodec.decode(original)
+            image = (try? ImageCodec.decode(original)).map { trimmed($0, info: info) }
         } else {
             image = nil
         }
@@ -134,6 +134,35 @@ package enum PXDReader {
         layer.isLocked = info.isLocked
         layer.pixelmator = PixelmatorSource(identifier: row.identifier, image: pixels)
         return layer
+    }
+
+    /// A placed picture as the layer shows it. Pixelmator sizes a placed
+    /// picture to its opaque part, keeping the file whole, so a picture
+    /// with see-through margins is cut down to what is drawn rather than
+    /// squeezed into the smaller size.
+    private static func trimmed(_ image: CGImage, info: PXDFormat.Info) -> CGImage {
+        guard let size = info.size else { return image }
+        let backing = info.backingScale
+        let width = Int((size.x * backing).rounded()), height = Int((size.y * backing).rounded())
+        guard width > 0, height > 0, width < image.width || height < image.height,
+              let pixels = Bitmap.pixels(of: image) else { return image }
+        var minX = pixels.width, minY = pixels.height, maxX = -1, maxY = -1
+        pixels.bytes.withUnsafeBufferPointer { bytes in
+            for y in 0..<pixels.height {
+                let row = y * pixels.width * 4
+                for x in 0..<pixels.width where bytes[row + x * 4 + 3] > 0 {
+                    minX = min(minX, x)
+                    maxX = max(maxX, x)
+                    minY = min(minY, y)
+                    maxY = max(maxY, y)
+                }
+            }
+        }
+        guard maxX >= minX, maxY >= minY,
+              abs(maxX - minX + 1 - width) <= 1, abs(maxY - minY + 1 - height) <= 1,
+              let cropped = image.cropping(to: CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1))
+        else { return image }
+        return cropped
     }
 
     /// A colour adjustments layer: no pixels, one filter over the whole

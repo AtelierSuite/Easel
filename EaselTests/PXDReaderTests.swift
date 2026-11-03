@@ -249,6 +249,26 @@ struct PXDReaderTests {
         #expect(layers.first { $0.name == "Hidden" }?.isVisible == false)
     }
 
+    /// Pixelmator sizes a placed picture to its opaque part: the clear
+    /// margins are cut off rather than the picture squeezed into that size.
+    @Test func placedPicturesAreTrimmedToWhatIsDrawn() throws {
+        let picture = Bitmap.render(size: CGSize(width: 8, height: 6)) { context in
+            context.setFillColor(RGBAColor(red: 1, green: 0, blue: 0).cgColor)
+            context.fill(CGRect(x: 2, y: 1, width: 4, height: 3))
+        }
+        let png = try ImageCodec.encode(picture, as: .png)
+        let wrapper = try PXDBuilder(canvas: (20, 10), layers: [
+            .init(index: 0, type: 1, name: "Placed", position: CGPoint(x: 10, y: 5), size: CGSize(width: 4, height: 3),
+                  original: png),
+        ]).build()
+        let layer = try #require(try PXDReader.composition(from: wrapper).layers.first)
+        #expect(layer.image.size == CGSize(width: 4, height: 3))
+        #expect(layer.transform.scaleX == 1 && layer.transform.scaleY == 1)
+        let pixels = try #require(Bitmap.pixels(of: layer.image.cgImage))
+        #expect(pixels.color(x: 0, y: 0).alpha > 250)
+        #expect(pixels.color(x: 3, y: 2).alpha > 250)
+    }
+
     /// Groups come in faded and hidden as they were, and every layer and
     /// group remembers its identifier in the document.
     @Test func groupsAndLayersKeepTheirSettingsAndIdentifiers() throws {
