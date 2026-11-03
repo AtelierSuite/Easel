@@ -31,6 +31,9 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         [.text, .shape, .pen, .nodes],
     ]
 
+    /// The tool's symbol: an SF Symbol, or for the tools SF Symbols has no
+    /// glyph for, one of Easel's own in the asset catalog (drawn by
+    /// Scripts/ToolSymbols.swift).
     var symbolName: String {
         switch self {
         case .move: return "arrow.up.and.down.and.arrow.left.and.right"
@@ -39,19 +42,32 @@ enum Tool: String, CaseIterable, Identifiable, Sendable {
         case .transform: return "perspective"
         case .brush: return "paintbrush.pointed"
         case .eraser: return "eraser"
-        case .fill: return "drop"
-        case .gradient: return "circle.lefthalf.striped.horizontal"
+        case .fill: return "paint.bucket.classic"
+        case .gradient: return "tool.gradient"
         case .eyedropper: return "eyedropper"
-        case .censor: return "square.grid.3x3.fill"
-        case .tone: return "circle.lefthalf.filled.inverse"
+        case .censor: return "tool.censor"
+        case .tone: return "tool.tone"
         case .heal: return "bandage"
-        case .liquify: return "hand.draw"
-        case .clone: return "square.on.square.dashed"
-        case .text: return "textformat"
+        case .liquify: return "tool.liquify"
+        case .clone: return "tool.clone"
+        case .text: return "character.cursor.ibeam"
         case .shape: return "square.on.circle"
         case .pen: return "pencil.tip"
-        case .nodes: return "point.topleft.down.to.point.bottomright.curvepath"
+        case .nodes: return "beziercurve"
         }
+    }
+
+    /// Whether `symbolName` names one of Easel's own symbols rather than a
+    /// system one.
+    var hasCustomSymbol: Bool {
+        switch self {
+        case .gradient, .censor, .tone, .liquify, .clone: return true
+        default: return false
+        }
+    }
+
+    var image: Image {
+        hasCustomSymbol ? Image(symbolName) : Image(systemName: symbolName)
     }
 
     var label: LocalizedStringKey { LocalizedStringKey(labelKey) }

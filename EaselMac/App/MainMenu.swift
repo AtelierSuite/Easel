@@ -282,7 +282,7 @@ enum MainMenu {
             for tool in tools {
                 let entry = item(String(localized: String.LocalizationValue(tool.labelKey)), #selector(EditorViewController.pickTool(_:)))
                 entry.tag = Tool.allCases.firstIndex(of: tool) ?? 0
-                entry.image = NSImage(systemSymbolName: tool.symbolName, accessibilityDescription: nil)
+                entry.image = tool.nsImage()
                 menu.addItem(entry)
             }
         }

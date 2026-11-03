@@ -75,7 +75,7 @@ struct ToolPicker: View {
         ForEach(Tool.groups, id: \.self) { tools in
             GlassGroup(axis: layout == .rail ? .vertical : .horizontal) {
                 ForEach(tools) { tool in
-                    GlassIconButton(symbol: tool.symbolName, label: tool.label, isOn: state.tool == tool) {
+                    GlassIconButton(image: tool.image, label: Text(tool.label), isOn: state.tool == tool) {
                         state.tool = tool
                     }
                     .modifier(ToolShortcut(key: tool.shortcut, isEnabled: state.presentedPanel != .text))
@@ -147,7 +147,7 @@ struct GlassGroup<Content: View>: View {
 
 /// A round icon button for the glass bars. When on, it reads as a lit key.
 struct GlassIconButton: View {
-    let symbol: String
+    let image: Image
     let label: Text
     var isOn = false
     let action: () -> Void
@@ -162,7 +162,12 @@ struct GlassIconButton: View {
     }
 
     init(symbol: String, label: Text, isOn: Bool, action: @escaping () -> Void) {
-        self.symbol = symbol
+        self.init(image: Image(systemName: symbol), label: label, isOn: isOn, action: action)
+    }
+
+    /// For symbols that aren't all system ones, such as the tools'.
+    init(image: Image, label: Text, isOn: Bool, action: @escaping () -> Void) {
+        self.image = image
         self.label = label
         self.isOn = isOn
         self.action = action
@@ -170,7 +175,7 @@ struct GlassIconButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol)
+            image
                 .font(.system(size: 17))
                 .frame(width: EditorToolbarMetrics.controlSize, height: EditorToolbarMetrics.controlSize)
                 .foregroundStyle(isOn ? Color.accentColor : .primary)
