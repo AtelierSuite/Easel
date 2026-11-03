@@ -162,22 +162,25 @@ package enum PXDFormat {
         package var size: CGPoint? { values["size"].flatMap(Value.point) }
         package var scale: CGPoint { values["scale"].flatMap(Value.point) ?? CGPoint(x: 1, y: 1) }
         package var position: CGPoint? { values["position"].flatMap(Value.point) }
-        /// Degrees, anticlockwise.
+        /// Degrees, clockwise as the picture is seen: what Pixelmator shows
+        /// as a turn of 30° anticlockwise is kept as 330. A flipped layer's
+        /// angle turns it the same way.
         package var angle: Double { values["angle"].flatMap { Value.bigDouble($0) } ?? 0 }
 
         /// The angle as Easel turns a layer: clockwise radians.
-        package var rotation: Double { Info.rotation(angle: angle, scale: scale) }
+        package var rotation: Double { Info.rotation(angle: angle) }
 
-        /// Pixelmator flips a layer after turning it, across the canvas's
-        /// own axes, so a flipped layer's angle turns the other way.
-        package static func rotation(angle: Double, scale: CGPoint) -> Double {
-            -angle * .pi / 180 * (scale.x * scale.y < 0 ? -1 : 1)
+        /// Half a turn either way at most, so a small turn back reads as one.
+        package static func rotation(angle: Double) -> Double {
+            var degrees = angle.truncatingRemainder(dividingBy: 360)
+            if degrees > 180 { degrees -= 360 } else if degrees <= -180 { degrees += 360 }
+            return degrees * .pi / 180
         }
 
-        /// Easel's clockwise radians as Pixelmator's angle for a layer of
-        /// this scale, in degrees from 0 up to 360.
-        package static func angle(rotation: Double, scale: CGPoint) -> Double {
-            var angle = (-rotation * 180 / .pi * (scale.x * scale.y < 0 ? -1 : 1)).truncatingRemainder(dividingBy: 360)
+        /// Easel's clockwise radians as Pixelmator's angle, in degrees from 0
+        /// up to 360.
+        package static func angle(rotation: Double) -> Double {
+            var angle = (rotation * 180 / .pi).truncatingRemainder(dividingBy: 360)
             if angle < 0 { angle += 360 }
             if abs(angle - 360) < 1e-9 || abs(angle) < 1e-9 { angle = 0 }
             return angle
@@ -397,6 +400,130 @@ package enum PXDFormat {
         }
     }
 
+    // MARK: - Warp groups
+
+    /// How a warp group bends what is in it, kept as JSON under `key`: the
+    /// four corners its contents are laid out on, and the Bézier patches
+    /// they are bent onto, in points up from the bottom left of the canvas.
+    package struct Warp: Equatable {
+        package static let key = "g-warpGroupTransform-d"
+
+        /// The contents' corners as laid out: `a` to `b` runs along the first
+        /// row of the patches, `a` to `d` up their first column.
+        package var a: CGPoint
+        package var b: CGPoint
+        package var c: CGPoint
+        package var d: CGPoint
+        /// How many patches across, from `a` to `b`, and up, from `a` to `d`.
+        package var columns: Int
+        package var rows: Int
+        /// The patches' points: `3 × columns + 1` to a row, `3 × rows + 1`
+        /// rows, the first along `a` to `b`. Neighbouring patches share the
+        /// points between them.
+        package var mesh: [CGPoint]
+        /// Where the contents are cut between patches, as parts of the way
+        /// from `a` to `b` and from `a` to `d`, ends included.
+        package var cutsAcross: [Double]
+        package var cutsUp: [Double]
+
+        package init?(json bytes: [UInt8]) {
+            guard let root = try? JSONSerialization.jsonObject(with: Data(bytes)) as? [String: Any],
+                  let settings = root["c"] as? [String: Any],
+                  (settings["e"] as? Int).map({ $0 != 0 }) ?? true,
+                  let warp = (settings["w"] as? [String: Any])?["c"] as? [String: Any],
+                  let quad = warp["q"] as? [String: Any],
+                  let shape = ((((warp["w"] as? [String: Any])?["c"] as? [String: Any])?["s"] as? [String: Any])?["c"])
+                    as? [String: Any],
+                  let points = shape["p"] as? [[Double]], points.allSatisfy({ $0.count == 2 })
+            else { return nil }
+            let columns = shape["c"] as? Int ?? 1, rows = shape["r"] as? Int ?? 1
+            guard columns >= 1, rows >= 1, columns <= 64, rows <= 64, points.count == (3 * columns + 1) * (3 * rows + 1) else {
+                return nil
+            }
+            func corner(_ key: String) -> CGPoint? {
+                guard let point = quad[key] as? [Double], point.count == 2 else { return nil }
+                return CGPoint(x: point[0], y: point[1])
+            }
+            guard let a = corner("a"), let b = corner("b"), let c = corner("c"), let d = corner("d") else { return nil }
+            let mesh = points.map { CGPoint(x: $0[0], y: $0[1]) }
+            guard ([a, b, c, d] + mesh).allSatisfy({ $0.x.isFinite && $0.y.isFinite }) else { return nil }
+            /// The cuts Pixelmator lists between patches, or even ones when
+            /// they do not add up.
+            func cuts(_ key: String, count: Int) -> [Double] {
+                let listed = (warp[key] as? [Double]) ?? []
+                let inner = listed.count == count - 1
+                    && zip([0] + listed, listed + [1]).allSatisfy { $0 < $1 } ? listed
+                    : (1..<count).map { Double($0) / Double(count) }
+                return [0] + inner + [1]
+            }
+            self.a = a
+            self.b = b
+            self.c = c
+            self.d = d
+            self.columns = columns
+            self.rows = rows
+            self.mesh = mesh
+            cutsAcross = cuts("v", count: columns)
+            cutsUp = cuts("h", count: rows)
+        }
+
+        /// The settings with the corners and the patches' points moved by
+        /// `move`, everything else as it was.
+        package static func moving(_ bytes: [UInt8], by move: (CGPoint) -> CGPoint) -> [UInt8]? {
+            func movedPoint(_ value: Any) -> Any? {
+                guard let point = value as? [Double], point.count == 2 else { return nil }
+                let moved = move(CGPoint(x: point[0], y: point[1]))
+                return [moved.x, moved.y]
+            }
+            /// `object` with what lies at `path` in it changed.
+            func updating(_ object: Any?, _ path: ArraySlice<String>, _ change: (Any) -> Any?) -> Any? {
+                guard let key = path.first else { return object.flatMap(change) }
+                guard var dictionary = object as? [String: Any],
+                      let updated = updating(dictionary[key], path.dropFirst(), change) else { return nil }
+                dictionary[key] = updated
+                return dictionary
+            }
+            guard var root = try? JSONSerialization.jsonObject(with: Data(bytes)) as? [String: Any] else { return nil }
+            for corner in ["a", "b", "c", "d"] {
+                guard let updated = updating(root, ["c", "w", "c", "q", corner], movedPoint) as? [String: Any] else { return nil }
+                root = updated
+            }
+            guard let updated = updating(root, ["c", "w", "c", "w", "c", "s", "c", "p"], { points in
+                      guard let points = points as? [Any] else { return nil }
+                      let moved = points.compactMap(movedPoint)
+                      return moved.count == points.count ? moved : nil
+                  }) as? [String: Any],
+                  let data = try? JSONSerialization.data(withJSONObject: updated) else { return nil }
+            return [UInt8](data)
+        }
+
+        /// Where the point of the contents `across` of the way from `a` to
+        /// `b` and `up` of the way from `a` to `d` is bent to.
+        package func point(across: Double, up: Double) -> CGPoint {
+            func patch(_ cuts: [Double], _ t: Double) -> (index: Int, local: Double) {
+                let index = min(max(cuts.lastIndex { $0 <= t } ?? 0, 0), cuts.count - 2)
+                return (index, (t - cuts[index]) / max(cuts[index + 1] - cuts[index], 1e-12))
+            }
+            func bernstein(_ t: Double) -> [Double] {
+                let s = 1 - t
+                return [s * s * s, 3 * t * s * s, 3 * t * t * s, t * t * t]
+            }
+            let column = patch(cutsAcross, across), row = patch(cutsUp, up)
+            let bu = bernstein(column.local), bv = bernstein(row.local)
+            let width = 3 * columns + 1
+            var x = 0.0, y = 0.0
+            for k in 0..<4 {
+                for l in 0..<4 {
+                    let point = mesh[(3 * row.index + k) * width + 3 * column.index + l]
+                    let weight = bv[k] * bu[l]
+                    x += point.x * weight
+                    y += point.y * weight
+                }
+            }
+            return CGPoint(x: x, y: y)
+        }
+    }
+
     /// Which rows of the layer table Easel brings in as its own layers,
     /// groups and masks. Everything else — text, shapes, masks drawn as
     /// shapes, layers Easel cannot decode — is kept as it is when the
@@ -413,8 +540,14 @@ package enum PXDFormat {
         /// Those colour adjustments layers' filters.
         package var adjustments: [String: LayerFilter] = [:]
         package var groups: Set<String> = []
-        /// Each layer's bitmap mask.
+        /// Each layer's bitmap mask, and each group's.
         package var masks: [String: String] = [:]
+        /// Groups Pixelmator bends as one, which Easel brings in as a single
+        /// layer drawn bent, standing in for the group and all in it.
+        package var warps: [String: Warp] = [:]
+        /// The layers Easel can draw inside those groups: not layers of
+        /// Easel's own, only part of the picture standing in for the group.
+        package var warpedLayers: Set<String> = []
 
         package init(database: Database, file: (String) -> Data?) {
             rows = database.layers()
@@ -444,14 +577,48 @@ package enum PXDFormat {
                     masks[row.identifier] = mask.identifier
                 }
             }
-            // A group shows in Easel when there is a layer of Easel's in it.
-            // Each is looked into once, however a damaged file nests them.
+            // Warp groups with something Easel can draw in them. What is in
+            // them is drawn only as part of the group's stand-in.
+            for row in rows where row.type == groupLayer && info[row.id]?.isMask == false {
+                if let json = info[row.id]?[Warp.key], let warp = Warp(json: json) { warps[row.identifier] = warp }
+            }
+            func descendants(of identifier: String) -> Set<String> {
+                var found: Set<String> = [identifier]
+                var pending = [identifier]
+                while let next = pending.popLast() {
+                    for child in children[next] ?? [] where found.insert(child.identifier).inserted {
+                        pending.append(child.identifier)
+                    }
+                }
+                found.remove(identifier)
+                return found
+            }
+            for identifier in warps.keys.sorted() where descendants(of: identifier).isDisjoint(with: layers) {
+                warps[identifier] = nil
+            }
+            for identifier in warps.keys {
+                warpedLayers.formUnion(descendants(of: identifier).intersection(layers))
+            }
+            layers.subtract(warpedLayers)
+            // Groups' masks, warp groups' among them.
+            for row in rows where row.type == groupLayer && info[row.id]?.isMask == false {
+                if let mask = children[row.identifier]?.first(where: { child in
+                    child.type == pixelLayer && info[child.id]?.isMask == true
+                        && file(bitmapPath(child.identifier)).flatMap(BitmapBuffer.init)?.channels == 1
+                }) {
+                    masks[row.identifier] = mask.identifier
+                }
+            }
+
+            // A group shows in Easel when there is a layer of Easel's in it,
+            // or a warp group's stand-in. Each is looked into once, however
+            // a damaged file nests them.
             var seen: Set<String> = []
             func holdsLayers(_ identifier: String) -> Bool {
                 guard seen.insert(identifier).inserted else { return false }
                 var found = false
                 for child in children[identifier] ?? [] where info[child.id]?.isMask == false {
-                    if layers.contains(child.identifier) {
+                    if layers.contains(child.identifier) || warps[child.identifier] != nil {
                         found = true
                     } else if child.type == groupLayer, holdsLayers(child.identifier) {
                         found = true

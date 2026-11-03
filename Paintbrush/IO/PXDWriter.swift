@@ -13,7 +13,10 @@ import UniformTypeIdentifiers
 /// blend mode, mask, order and grouping. Layers Easel did not read, such as text and shapes,
 /// keep their rows and stay where they were among the layers around them.
 /// Painted layers whose pixels changed are saved again in the format they
-/// came in; placed pictures and new layers are saved as PNG pictures.
+/// came in; placed pictures and new layers are saved as PNG pictures. A warp
+/// group stays while the layer standing in for it is only moved with the
+/// canvas, its patches moved too; once that layer is painted on, moved by
+/// itself or masked, it is saved in the group's stead.
 package enum PXDWriter {
     package enum Failure: LocalizedError {
         case notPixelmator
@@ -301,6 +304,10 @@ private struct Patch {
         var mask: LayerMask?
         var maskChanged: Bool
         var transform: LayerTransform
+        /// A warp group's stand-in as it was read: the group stays as it is,
+        /// taking only the stand-in's name, visibility, lock, opacity and
+        /// blend mode.
+        var keepsGroup = false
     }
 
     mutating func apply() throws {
@@ -346,6 +353,11 @@ private struct Patch {
                 delete(row)
             }
         }
+        // A warp group goes with its stand-in, and when the stand-in was
+        // changed it is written as a layer of its own in the group's stead.
+        for identifier in structure.warps.keys.sorted() where !usedIdentifiers.contains(identifier) && !isInsideWarp(identifier) {
+            if let row = structure.row(identifier) { delete(row) }
+        }
 
         // New groups and layers, then each one's settings.
         for group in shownGroups {
@@ -365,6 +377,7 @@ private struct Patch {
         refreshesPreviews = changed && structure.rows.allSatisfy { row in
             let info = structure.info[row.id]
             return structure.layers.contains(row.identifier) || structure.groups.contains(row.identifier)
+                || structure.warps[row.identifier] != nil || structure.warpedLayers.contains(row.identifier)
                 || info?.isMask == true || info?.isVisible == false
         }
     }
@@ -375,6 +388,7 @@ private struct Patch {
         // Pixelmator's preview is not part of the document unless it was
         // painted on.
         if let source = layer.pixelmator, source.isPreview, source.image === layer.image { return nil }
+        if let plan = planStandIn(layer, claimed: &claimed) { return plan }
         if let filter = layer.adjustment { return planAdjustment(layer, filter: filter, claimed: &claimed) }
 
         var identifier = layer.id.uuidString
@@ -415,6 +429,45 @@ private struct Patch {
         )
     }
 
+    /// A warp group's stand-in keeps the group while its pixels and mask
+    /// are as they were read and it sits where they were, or where changes
+    /// to the canvas took it: the group is then moved the same way.
+    /// Otherwise it is planned as any other layer, a new one.
+    private func planStandIn(_ layer: Layer, claimed: inout Set<String>) -> Planned? {
+        let change = composition.canvasChange.since(database.canvasChange())
+        guard let source = layer.pixelmator, let standIn = source.standIn, structure.warps[source.identifier] != nil,
+              !claimed.contains(source.identifier), let row = structure.row(source.identifier),
+              layer.image === source.image, change.isAffine,
+              Self.isSamePlacement(layer.transform, change.applied(to: standIn.transform)),
+              layer.mask?.image === source.mask, layer.mask?.isEnabled == standIn.isMaskEnabled,
+              !layer.isClipped, layer.adjustment == nil, !layer.hasActiveFilters, !layer.hasActiveEffects
+        else { return nil }
+        claimed.insert(source.identifier)
+        return Planned(
+            layer: layer, identifier: source.identifier, row: row, image: layer.image, imageChanged: false,
+            mask: nil, maskChanged: false, transform: layer.transform, keepsGroup: true
+        )
+    }
+
+    private static func isSamePlacement(_ a: LayerTransform, _ b: LayerTransform) -> Bool {
+        func close(_ x: Double, _ y: Double) -> Bool { abs(x - y) <= 1e-6 * max(1, abs(x), abs(y)) }
+        var turn = (a.rotation - b.rotation).truncatingRemainder(dividingBy: 2 * .pi)
+        if turn > .pi { turn -= 2 * .pi } else if turn < -.pi { turn += 2 * .pi }
+        return close(a.position.x, b.position.x) && close(a.position.y, b.position.y)
+            && close(a.scaleX, b.scaleX) && close(a.scaleY, b.scaleY) && abs(turn) < 1e-9
+    }
+
+    /// Whether a row is inside a warp group, which then stays or goes with it.
+    private func isInsideWarp(_ identifier: String) -> Bool {
+        var seen: Set<String> = [identifier]
+        var parent = structure.row(identifier)?.parent
+        while let current = parent, !current.isEmpty, seen.insert(current).inserted {
+            if structure.warps[current] != nil { return true }
+            parent = structure.row(current)?.parent
+        }
+        return false
+    }
+
     /// An adjustment layer, as a colour adjustments layer: only those whose
     /// filter Pixelmator has a control for.
     private func planAdjustment(_ layer: Layer, filter: LayerFilter, claimed: inout Set<String>) -> Planned? {
@@ -450,7 +503,8 @@ private struct Patch {
         func holdsUnread(_ identifier: String) -> Bool {
             var found = false
             for child in structure.children[identifier] ?? [] where structure.info[child.id]?.isMask == false {
-                if structure.layers.contains(child.identifier) { continue }
+                // A warp group stays or goes with its stand-in, as a layer does.
+                if structure.layers.contains(child.identifier) || structure.warps[child.identifier] != nil { continue }
                 if structure.groups.contains(child.identifier) {
                     if holdsUnread(child.identifier) { found = true }
                 } else {
@@ -569,6 +623,15 @@ private struct Patch {
         let rowID = plan.row?.id ?? (plan.layer.isAdjustment ? insertAdjustments(plan.identifier) : insertLayer(plan.identifier))
         let info = isNew ? PXDFormat.Info(values: database.info(for: rowID)) : structure.info[rowID] ?? PXDFormat.Info(values: [:])
         let layer = plan.layer
+        if plan.keepsGroup {
+            let passes = info.blendTag == "pass" && layer.blendMode == .normal
+            let group = LayerGroup(
+                name: layer.name, isVisible: layer.isVisible, opacity: layer.opacity, isLocked: layer.isLocked,
+                blendMode: passes ? nil : layer.blendMode
+            )
+            updateGroup(group, rowID: rowID, isNew: false)
+            return
+        }
 
         if isNew || info.name != layer.name {
             set("name", Value.makeString(layer.name), rowID: rowID, old: info["name"])
@@ -619,9 +682,7 @@ private struct Patch {
         let position = CGPoint(
             x: plan.transform.position.x / backing, y: (canvas.height - plan.transform.position.y) / backing
         )
-        var angle = (-plan.transform.rotation * 180 / .pi).truncatingRemainder(dividingBy: 360)
-        if angle < 0 { angle += 360 }
-        if abs(angle - 360) < 1e-9 || abs(angle) < 1e-9 { angle = 0 }
+        let angle = PXDFormat.Info.angle(rotation: plan.transform.rotation)
         setPlacement(position: position, size: size, scale: scale, angle: angle, info: info, rowID: rowID)
         // Whether the layer covers another part of the canvas than it did,
         // which a mask placed by itself would no longer match.
@@ -872,7 +933,8 @@ private struct Patch {
             // Rows staying where they are: those Easel never read, and
             // groups kept for them.
             let staying = original.filter { row in
-                !used.contains(row.identifier) && (!structure.layers.contains(row.identifier))
+                !used.contains(row.identifier) && !structure.layers.contains(row.identifier)
+                    && structure.warps[row.identifier] == nil
                     && (!structure.groups.contains(row.identifier) || kept.contains(row.identifier))
             }
             var anchored: [String: [String]] = [:]
@@ -936,6 +998,17 @@ private struct Patch {
                 }
                 move(row, info: info, by: change)
             }
+            // Warp groups kept: their contents were moved above, and the
+            // patches they are bent onto go with them.
+            for row in structure.rows where remaining.contains(row.identifier) && structure.warps[row.identifier] != nil {
+                guard let info = structure.info[row.id], let json = info[PXDFormat.Warp.key] else { continue }
+                let backing = info.backingScale
+                let moved = PXDFormat.Warp.moving(json) { point in
+                    let placed = CGPoint(x: point.x * backing, y: oldCanvas.height - point.y * backing).applying(change.positions)
+                    return CGPoint(x: placed.x / backing, y: (canvas.height - placed.y) / backing)
+                }
+                if let moved { set(PXDFormat.Warp.key, moved, rowID: row.id, old: json) }
+            }
         }
         if let note = try? JSONEncoder().encode(composition.canvasChange) {
             database.execute("insert into document_info (key, value) values (?, ?)", [PXDFormat.canvasChangeKey, [UInt8](note)])
@@ -953,7 +1026,7 @@ private struct Patch {
             scaleX: info.scale.x, scaleY: info.scale.y, rotation: info.rotation
         ))
         var scale = CGPoint(x: placement.scaleX, y: placement.scaleY)
-        let angle = PXDFormat.Info.angle(rotation: placement.rotation, scale: scale)
+        let angle = PXDFormat.Info.angle(rotation: placement.rotation)
         // Text turns with the canvas but, as Pixelmator keeps it, is never
         // mirrored.
         if row.type == PXDFormat.textLayer { scale = CGPoint(x: abs(scale.x), y: abs(scale.y)) }

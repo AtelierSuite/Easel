@@ -253,8 +253,8 @@ package struct Composition: Equatable, Sendable {
             return moved.rect.width >= 1 && moved.rect.height >= 1 ? moved : nil
         }
         canvasChange.apply(transform, rotation: rotation, flipX: flipX, flipY: flipY)
-        for index in layers.indices {
-            var placement = layers[index].transform
+        func moved(_ placement: LayerTransform) -> LayerTransform {
+            var placement = placement
             placement.position = placement.position.applying(transform)
             placement.rotation += rotation
             if flipX {
@@ -265,7 +265,13 @@ package struct Composition: Equatable, Sendable {
                 placement.scaleY = -placement.scaleY
                 placement.rotation = -placement.rotation
             }
-            layers[index].transform = placement
+            return placement
+        }
+        for index in layers.indices {
+            layers[index].transform = moved(layers[index].transform)
+        }
+        for index in groups.indices {
+            if let mask = groups[index].mask { groups[index].mask?.transform = moved(mask.transform) }
         }
     }
 
@@ -318,6 +324,10 @@ package struct Composition: Equatable, Sendable {
             by: CGAffineTransform(translationX: offset.x, y: offset.y).scaledBy(x: scaleX, y: scaleY)
         )
         canvasChange.scale(x: scaleX, y: scaleY)
+        for index in groups.indices where groups[index].mask != nil {
+            groups[index].mask?.transform.scaleX *= scaleX
+            groups[index].mask?.transform.scaleY *= scaleY
+        }
         for index in layers.indices {
             layers[index].transform.scaleX *= scaleX
             layers[index].transform.scaleY *= scaleY
@@ -411,6 +421,14 @@ package struct Composition: Equatable, Sendable {
             if let mask = flat.filterMask { flat.filterMask?.image = LayerImage(flattened(mask.image.cgImage)) }
             flat.transform = LayerTransform(position: CGPoint(x: newSize.width / 2, y: newSize.height / 2))
             return flat
+        }
+        for index in groups.indices {
+            guard let mask = groups[index].mask else { continue }
+            groups[index].mask = GroupMask(
+                image: LayerImage(flattened(mask.canvasImage(size: oldSize))),
+                transform: LayerTransform(position: CGPoint(x: newSize.width / 2, y: newSize.height / 2)),
+                isEnabled: mask.isEnabled
+            )
         }
         size = newSize
         guides = []

@@ -316,6 +316,85 @@ struct PXDWriterTests {
         #expect(reread.transform.position == CGPoint(x: 2, y: 2))
     }
 
+    /// Turning or flipping the canvas moves a warp group's stand-in with
+    /// everything else, and the group is kept, its patch moved the same way.
+    @Test func warpGroupsFollowTheCanvas() throws {
+        let original = try PXDBuilder.warpedDocument(zipped: true)
+        var composition = try PXDReader.composition(from: original)
+        composition.flip(horizontal: true)
+        composition.rotate(clockwise: true)
+        let written = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try rows(written).map(\.identifier).sorted() == ["INSIDE", "UNDER", "WARP", "WARPMASK"])
+        let json = try #require(PXDFormat.Info(values: try info(written, "WARP"))[PXDFormat.Warp.key])
+        let warp = try #require(PXDFormat.Warp(json: json))
+        // Flipped across, then a quarter turn clockwise: (x, y) up from the
+        // bottom left goes to (y, x).
+        #expect(abs(warp.a.x - 10) < 1e-9 && abs(warp.a.y - 10) < 1e-9)
+        #expect(abs(warp.b.x - 10) < 1e-9 && abs(warp.b.y - 30) < 1e-9)
+        #expect(abs(warp.mesh[3].x - 10) < 1e-9 && abs(warp.mesh[3].y - 40) < 1e-9)
+
+        let reread = try PXDReader.composition(from: written)
+        #expect(try layer(reread, "Warped").pixelmator?.standIn != nil)
+        let expected = try #require(Bitmap.pixels(of: CompositionRenderer.render(composition)))
+        let actual = try #require(Bitmap.pixels(of: CompositionRenderer.render(reread)))
+        for (x, y) in [(13, 25), (27, 25), (13, 15), (27, 15), (20, 35), (20, 5)] {
+            let a = expected.color(x: x, y: y), b = actual.color(x: x, y: y)
+            #expect(abs(a.alpha - b.alpha) < 8 && abs(a.red - b.red) < 8 && abs(a.blue - b.blue) < 8, "\(x), \(y): \(a) \(b)")
+        }
+    }
+
+    /// A group's mask is kept as it was when the group is written back.
+    @Test func groupMasksAreKept() throws {
+        let original = try PXDBuilder(canvas: (4, 4), layers: [
+            .init(identifier: "GROUP", index: 0, type: 4, name: "Group", position: CGPoint(x: 2, y: 2),
+                  size: CGSize(width: 4, height: 4), blend: "pass"),
+            .init(identifier: "RED", parent: "GROUP", index: 0, type: 1, name: "Red", position: CGPoint(x: 2, y: 2),
+                  size: CGSize(width: 4, height: 4), pixels: red),
+            .init(identifier: "GROUPMASK", parent: "GROUP", index: PXDFormat.maskIndex, type: 1, name: "Mask",
+                  position: CGPoint(x: 1, y: 2), size: CGSize(width: 2, height: 4), isMask: true, maskBackground: 0,
+                  pixels: .grey([UInt8](repeating: 255, count: 8), width: 2, height: 4)),
+        ], zipped: true).build()
+        var composition = try PXDReader.composition(from: original)
+        composition.groups[0].name = "Renamed"
+        let written = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try rows(written).contains { $0.identifier == "GROUPMASK" && $0.parent == "GROUP" })
+        #expect(try PXDReader.composition(from: written).groups.first?.mask != nil)
+    }
+
+    /// A warp group's stand-in left as it was read keeps the group, which
+    /// takes only its settings; moved, it takes the group's place as a
+    /// layer of its own; deleted, the group goes with it.
+    @Test func warpGroupsStayUntilTheirStandInChanges() throws {
+        let original = try PXDBuilder.warpedDocument(zipped: true)
+        var composition = try PXDReader.composition(from: original)
+        let index = try #require(composition.layers.firstIndex { $0.name == "Warped" })
+        #expect(try PXDWriter.fileWrapper(for: composition, original: original) === original)
+
+        composition.layers[index].name = "Halo"
+        composition.layers[index].opacity = 0.5
+        let renamed = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try rows(renamed).map(\.identifier).sorted() == ["INSIDE", "UNDER", "WARP", "WARPMASK"])
+        let group = PXDFormat.Info(values: try info(renamed, "WARP"))
+        #expect(group.name == "Halo")
+        #expect(abs(group.opacity - 0.5) < 0.001)
+        #expect(group.blendTag == "pass")
+        #expect(group[PXDFormat.Warp.key] == PXDFormat.Info(values: try info(original, "WARP"))[PXDFormat.Warp.key])
+        #expect(try layer(try PXDReader.composition(from: renamed), "Halo").pixelmator?.standIn != nil)
+
+        composition.layers[index].transform.position.x -= 5
+        let moved = try PXDWriter.fileWrapper(for: composition, original: original)
+        let identifiers = try rows(moved).map(\.identifier)
+        #expect(!identifiers.contains("WARP") && !identifiers.contains("INSIDE") && !identifiers.contains("WARPMASK"))
+        let flat = try layer(try PXDReader.composition(from: moved), "Halo")
+        #expect(flat.pixelmator?.standIn == nil)
+        #expect(flat.mask != nil)
+        #expect(abs(flat.transform.position.x - composition.layers[index].transform.position.x) < 0.5)
+
+        composition.layers.remove(at: index)
+        let removed = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try rows(removed).map(\.identifier) == ["UNDER"])
+    }
+
     @Test func groupsAreWrittenBack() throws {
         let original = try document()
         var composition = try PXDReader.composition(from: original)

@@ -35,12 +35,21 @@ package enum CompositionArchive {
         package var height: Double
         package var layers: [LayerRecord]
         package var groups: [LayerGroup]?
+        /// Groups' masks, which the groups' own records leave out.
+        package var groupMasks: [GroupMaskRecord]?
         package var guides: [Guide]?
         package var swatches: [RGBAColor]?
         package var patterns: [PatternRecord]?
         package var layerComps: [LayerComp]?
         package var artboards: [Artboard]?
         package var resolution: Double?
+    }
+
+    package struct GroupMaskRecord: Codable {
+        package var groupID: UUID
+        package var file: String
+        package var transform: LayerTransform
+        package var isEnabled: Bool
     }
 
     package struct PatternRecord: Codable {
@@ -197,6 +206,13 @@ package enum CompositionArchive {
                 pixelmatorID: layer.pixelmator.flatMap { $0.isPreview ? nil : $0.identifier }
             ))
         }
+        var groupMasks: [GroupMaskRecord] = []
+        for group in composition.groups {
+            guard let mask = group.mask else { continue }
+            let file = "group-\(group.id.uuidString)-mask.png"
+            try write(file, try mask.image.pngData())
+            groupMasks.append(GroupMaskRecord(groupID: group.id, file: file, transform: mask.transform, isEnabled: mask.isEnabled))
+        }
         var patterns: [PatternRecord] = []
         for pattern in composition.patterns {
             let file = "pattern-\(pattern.id.uuidString).png"
@@ -206,6 +222,7 @@ package enum CompositionArchive {
         return Manifest(
             version: currentVersion, width: composition.size.width, height: composition.size.height, layers: records,
             groups: composition.groups.isEmpty ? nil : composition.groups,
+            groupMasks: groupMasks.isEmpty ? nil : groupMasks,
             guides: composition.guides.isEmpty ? nil : composition.guides,
             swatches: composition.swatches.isEmpty ? nil : composition.swatches,
             patterns: patterns.isEmpty ? nil : patterns,
@@ -263,8 +280,17 @@ package enum CompositionArchive {
             }
             return layer
         }
+        var groups = manifest.groups ?? []
+        for record in manifest.groupMasks ?? [] {
+            guard let index = groups.firstIndex(where: { $0.id == record.groupID }) else { continue }
+            guard let data = read(record.file) else { throw Failure.missingLayer(record.file) }
+            groups[index].mask = GroupMask(
+                image: LayerImage(try ImageCodec.decode(data), encoded: data), transform: record.transform,
+                isEnabled: record.isEnabled
+            )
+        }
         var composition = Composition(
-            size: CGSize(width: manifest.width, height: manifest.height), layers: layers, groups: manifest.groups ?? []
+            size: CGSize(width: manifest.width, height: manifest.height), layers: layers, groups: groups
         )
         composition.guides = manifest.guides ?? []
         composition.swatches = manifest.swatches ?? []

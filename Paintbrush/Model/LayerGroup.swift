@@ -24,6 +24,17 @@ package struct LayerGroup: Identifiable, Codable, Equatable, Sendable {
     /// The group's identifier in the Pixelmator Pro document it was read
     /// from, so it is written back in place.
     package var pixelmatorID: String?
+    /// A mask over everything in the group. A masked group is put together
+    /// on its own, as one in a blend mode is, then masked. Kept in a file of
+    /// its own rather than with the group's settings.
+    package var mask: GroupMask?
+
+    /// The mask, when it is turned on.
+    package var activeMask: GroupMask? { mask?.isEnabled == true ? mask : nil }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, parentID, isVisible, opacity, isLocked, isExpanded, blendMode, photoshop, pixelmatorID
+    }
 
     package init(
         id: UUID = UUID(),
@@ -47,6 +58,30 @@ package struct LayerGroup: Identifiable, Codable, Equatable, Sendable {
         self.blendMode = blendMode
         self.photoshop = photoshop
         self.pixelmatorID = pixelmatorID
+    }
+}
+
+/// A group's mask: pixels placed on the canvas as a layer's are, showing
+/// the group where they are opaque and hiding it where they are clear and
+/// past their edges.
+package struct GroupMask: Equatable, Sendable {
+    package var image: LayerImage
+    package var transform: LayerTransform
+    /// Turned off, the whole group shows, but the mask is kept.
+    package var isEnabled = true
+
+    package init(image: LayerImage, transform: LayerTransform, isEnabled: Bool = true) {
+        self.image = image
+        self.transform = transform
+        self.isEnabled = isEnabled
+    }
+
+    /// The mask drawn at its place on a canvas of `size`.
+    package func canvasImage(size: CGSize) -> CGImage {
+        Bitmap.render(size: size) { context in
+            context.concatenate(transform.affineTransform(for: image.size))
+            Bitmap.draw(image.cgImage, in: CGRect(origin: .zero, size: image.size), context: context)
+        }
     }
 }
 
@@ -120,7 +155,7 @@ extension Composition {
                 let inside = members.filter { member in
                     member.groupID == child || ancestors(of: member.groupID).contains { $0.id == child }
                 }
-                if folder.blendMode == nil {
+                if folder.blendMode == nil, folder.activeMask == nil {
                     result += items(inside, in: child, isVisible: isVisible && folder.isVisible, opacity: opacity * folder.opacity)
                 } else {
                     var shown = folder

@@ -137,7 +137,55 @@ package enum MeshWarp {
     package static func render(
         _ image: CGImage, shape: WarpShape, size: CGSize, scale: Double = 1, divisions: Int = 32
     ) -> CGImage {
-        render(image, shape: shape, size: size, scale: scale, divisions: divisions, background: nil)
+        render(image, point: shape.point, size: size, scale: scale, divisions: divisions, background: nil)
+    }
+
+    /// `image` bent into `shape` without seams where it is see-through. The
+    /// pieces overlap a little, and see-through ones show it, so the colour
+    /// is bent opaque and how see-through it is bent apart as grey, then the
+    /// two are put back together.
+    /// `point(u, v)` takes a point given as a fraction of the image, (0, 0)
+    /// its top left, to the output.
+    package static func renderWithoutSeams(
+        _ image: CGImage, point: (Double, Double) -> CGPoint, size: CGSize, divisions: Int = 32
+    ) -> CGImage {
+        func plain(_ image: CGImage) -> CGImage {
+            render(image, point: point, size: size, scale: 1, divisions: divisions, background: nil)
+        }
+        guard var colour = Bitmap.pixels(of: image) else { return plain(image) }
+        var coverage = colour
+        colour.bytes.withUnsafeMutableBufferPointer { colour in
+            coverage.bytes.withUnsafeMutableBufferPointer { coverage in
+                for index in stride(from: 0, to: colour.count, by: 4) {
+                    let alpha = Int(colour[index + 3])
+                    for channel in 0..<3 {
+                        colour[index + channel] = alpha == 0 ? 0 : UInt8(min(255, (Int(colour[index + channel]) * 255 + alpha / 2) / alpha))
+                        coverage[index + channel] = UInt8(alpha)
+                    }
+                    colour[index + 3] = 255
+                    coverage[index + 3] = 255
+                }
+            }
+        }
+        guard let opaque = colour.makeImage(), let grey = coverage.makeImage(),
+              var bent = Bitmap.pixels(of: plain(opaque)), let alphas = Bitmap.pixels(of: plain(grey))
+        else { return plain(image) }
+        // Both come back premultiplied by the smoothed outline: the grey's
+        // value is already the alpha wanted, and the colour is taken back
+        // to its own before being premultiplied by it.
+        bent.bytes.withUnsafeMutableBufferPointer { bent in
+            alphas.bytes.withUnsafeBufferPointer { alphas in
+                for index in stride(from: 0, to: bent.count, by: 4) {
+                    let edge = Int(bent[index + 3]), alpha = Int(alphas[index])
+                    for channel in 0..<3 {
+                        let own = edge == 0 ? 0 : Int(bent[index + channel]) * 255 / edge
+                        bent[index + channel] = UInt8(min(alpha, (own * alpha + 127) / 255))
+                    }
+                    bent[index + 3] = UInt8(alpha)
+                }
+            }
+        }
+        return bent.makeImage() ?? plain(image)
     }
 
     /// A layer mask bent into `shape`. Off the bent layer the mask shows
@@ -151,7 +199,7 @@ package enum MeshWarp {
             context.fill(rect)
             Bitmap.draw(mask, in: rect, context: context)
         }
-        let bent = render(grey, shape: shape, size: size, scale: 1, divisions: divisions, background: .white)
+        let bent = render(grey, point: shape.point, size: size, scale: 1, divisions: divisions, background: .white)
         guard var pixels = Bitmap.pixels(of: bent) else { return bent }
         pixels.bytes.withUnsafeMutableBufferPointer { bytes in
             for index in stride(from: 0, to: bytes.count, by: 4) {
@@ -165,7 +213,8 @@ package enum MeshWarp {
     }
 
     private static func render(
-        _ image: CGImage, shape: WarpShape, size: CGSize, scale: Double, divisions: Int, background: RGBAColor?
+        _ image: CGImage, point: (Double, Double) -> CGPoint, size: CGSize, scale: Double, divisions: Int,
+        background: RGBAColor?
     ) -> CGImage {
         let output = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
         let sourceSize = CGSize(width: image.width, height: image.height)
@@ -174,8 +223,8 @@ package enum MeshWarp {
         var grid = [CGPoint](repeating: .zero, count: steps * steps)
         for row in 0..<steps {
             for column in 0..<steps {
-                let point = shape.point(Double(column) / Double(divisions), Double(row) / Double(divisions))
-                grid[row * steps + column] = CGPoint(x: point.x * scale, y: point.y * scale)
+                let bent = point(Double(column) / Double(divisions), Double(row) / Double(divisions))
+                grid[row * steps + column] = CGPoint(x: bent.x * scale, y: bent.y * scale)
             }
         }
         func source(_ column: Int, _ row: Int) -> CGPoint {
