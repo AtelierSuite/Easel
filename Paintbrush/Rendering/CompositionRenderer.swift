@@ -26,6 +26,9 @@ package enum CompositionRenderer {
                 )
                 layer.opacity = group.opacity
                 layer.blendMode = group.blendMode ?? .normal
+                if let mask = group.activeMask {
+                    layer.mask = LayerMask(image: LayerImage(mask.canvasImage(size: size)))
+                }
                 // A group of its own, so nothing above clips to it, as
                 // nothing does on the canvas.
                 layer.groupID = UUID()

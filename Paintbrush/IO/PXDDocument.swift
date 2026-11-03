@@ -510,7 +510,7 @@ package enum PXDFormat {
         /// Those colour adjustments layers' filters.
         package var adjustments: [String: LayerFilter] = [:]
         package var groups: Set<String> = []
-        /// Each layer's bitmap mask, and each warp group's.
+        /// Each layer's bitmap mask, and each group's.
         package var masks: [String: String] = [:]
         /// Groups Pixelmator bends as one, which Easel brings in as a single
         /// layer drawn bent, standing in for the group and all in it.
@@ -570,12 +570,13 @@ package enum PXDFormat {
                 warpedLayers.formUnion(descendants(of: identifier).intersection(layers))
             }
             layers.subtract(warpedLayers)
-            for identifier in warps.keys {
-                if let mask = children[identifier]?.first(where: { child in
+            // Groups' masks, warp groups' among them.
+            for row in rows where row.type == groupLayer && info[row.id]?.isMask == false {
+                if let mask = children[row.identifier]?.first(where: { child in
                     child.type == pixelLayer && info[child.id]?.isMask == true
                         && file(bitmapPath(child.identifier)).flatMap(BitmapBuffer.init)?.channels == 1
                 }) {
-                    masks[identifier] = mask.identifier
+                    masks[row.identifier] = mask.identifier
                 }
             }
 

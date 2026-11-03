@@ -17,6 +17,7 @@ import Foundation
 ///
 /// A warp group comes in as one layer standing in for it, drawn bent and
 /// masked as Pixelmator shows it; written back unchanged, the group is kept.
+/// Other groups keep their masks, which are written back as they were.
 ///
 /// Text, shapes and Pixelmator's effects have no pixels saved for them, so
 /// when a document has any, its own preview comes in as a hidden top layer
@@ -73,6 +74,10 @@ package enum PXDReader {
                     folder.isLocked = info.isLocked
                     folder.blendMode = info.blendTag.flatMap { $0 == "pass" ? nil : PSDReader.blendMode($0) }
                     folder.pixelmatorID = row.identifier
+                    if let maskID = structure.masks[row.identifier], let maskRow = structure.row(maskID),
+                       let maskInfo = structure.info[maskRow.id] {
+                        folder.mask = groupMask(maskRow, info: maskInfo, files: files, canvas: canvas)
+                    }
                     groups.append(folder)
                     visit(row.identifier, groupID: folder.id)
                 } else if structure.layers.contains(row.identifier), var layer = read(row, info: info) {
@@ -306,26 +311,8 @@ package enum PXDReader {
     private static func mask(
         _ row: PXDFormat.LayerRow, info: PXDFormat.Info, of layer: Layer, files: PXDFormat.Files, canvas: CGSize
     ) -> LayerMask? {
-        guard let data = files[PXDFormat.bitmapPath(row.identifier)],
-              let buffer = PXDFormat.BitmapBuffer(data), buffer.channels == 1,
-              let (grey, rowBytes) = buffer.pixels(in: data) else { return nil }
-
-        // Grey becomes coverage: Easel masks show where they are opaque.
-        var coverage = [UInt8](repeating: 0, count: buffer.width * buffer.height * 4)
-        for y in 0..<buffer.height {
-            for x in 0..<buffer.width {
-                let value = grey[y * rowBytes + x]
-                let offset = (y * buffer.width + x) * 4
-                coverage[offset] = value
-                coverage[offset + 1] = value
-                coverage[offset + 2] = value
-                coverage[offset + 3] = value
-            }
-        }
-        guard let maskImage = PixelBuffer(width: buffer.width, height: buffer.height, bytes: coverage).makeImage() else {
-            return nil
-        }
-        let maskSize = CGSize(width: buffer.width, height: buffer.height)
+        guard let maskImage = coverage(row, files: files) else { return nil }
+        let maskSize = CGSize(width: maskImage.width, height: maskImage.height)
         let placement = info.placement(imageSize: maskSize, canvas: canvas).affineTransform(for: maskSize)
         let background = info["maskBackgroundValue"].flatMap { PXDFormat.Value.bigDouble($0) } ?? 0
 
@@ -341,6 +328,50 @@ package enum PXDReader {
             Bitmap.draw(maskImage, in: CGRect(origin: .zero, size: maskSize), context: context)
         }
         return LayerMask(image: LayerImage(image), isEnabled: info.isVisible)
+    }
+
+    /// A group's mask, placed on the canvas by itself. Easel's group masks
+    /// hide past their own pixels, so one whose background shows is drawn
+    /// over the whole canvas instead.
+    private static func groupMask(
+        _ row: PXDFormat.LayerRow, info: PXDFormat.Info, files: PXDFormat.Files, canvas: CGSize
+    ) -> GroupMask? {
+        guard let maskImage = coverage(row, files: files) else { return nil }
+        let maskSize = CGSize(width: maskImage.width, height: maskImage.height)
+        let placement = info.placement(imageSize: maskSize, canvas: canvas)
+        let background = info["maskBackgroundValue"].flatMap { PXDFormat.Value.bigDouble($0) } ?? 0
+        guard background > 0 else { return GroupMask(image: LayerImage(maskImage), transform: placement, isEnabled: info.isVisible) }
+        let image = Bitmap.render(size: canvas) { context in
+            context.setFillColor(RGBAColor(red: 1, green: 1, blue: 1, alpha: min(background, 1)).cgColor)
+            context.fill(CGRect(origin: .zero, size: canvas))
+            context.concatenate(placement.affineTransform(for: maskSize))
+            context.setBlendMode(.copy)
+            Bitmap.draw(maskImage, in: CGRect(origin: .zero, size: maskSize), context: context)
+        }
+        return GroupMask(
+            image: LayerImage(image), transform: LayerTransform(position: CGPoint(x: canvas.width / 2, y: canvas.height / 2)),
+            isEnabled: info.isVisible
+        )
+    }
+
+    /// A mask's grey pixels as coverage: Easel's masks show where they are
+    /// opaque.
+    private static func coverage(_ row: PXDFormat.LayerRow, files: PXDFormat.Files) -> CGImage? {
+        guard let data = files[PXDFormat.bitmapPath(row.identifier)],
+              let buffer = PXDFormat.BitmapBuffer(data), buffer.channels == 1,
+              let (grey, rowBytes) = buffer.pixels(in: data) else { return nil }
+        var coverage = [UInt8](repeating: 0, count: buffer.width * buffer.height * 4)
+        for y in 0..<buffer.height {
+            for x in 0..<buffer.width {
+                let value = grey[y * rowBytes + x]
+                let offset = (y * buffer.width + x) * 4
+                coverage[offset] = value
+                coverage[offset + 1] = value
+                coverage[offset + 2] = value
+                coverage[offset + 3] = value
+            }
+        }
+        return PixelBuffer(width: buffer.width, height: buffer.height, bytes: coverage).makeImage()
     }
 
     // MARK: - Files

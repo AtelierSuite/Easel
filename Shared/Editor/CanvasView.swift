@@ -221,8 +221,19 @@ struct CanvasView: View {
             return AnyView(EmptyView())
         case .group(let group, let inside):
             guard item.isVisible else { return AnyView(EmptyView()) }
-            return AnyView(stacked(inside[...], viewport)
-                .compositingGroup()
+            var together = AnyView(stacked(inside[...], viewport).compositingGroup())
+            if let mask = group.activeMask {
+                // The mask drawn at its place, as an adjustment layer's is.
+                together = AnyView(together.mask(alignment: .topLeading) {
+                    LayerView(
+                        layer: Layer(name: group.name, image: mask.image, transform: mask.transform),
+                        displayed: mask.image.cgImage, masksItself: false,
+                        strokes: [], maskStrokes: [], retouch: nil,
+                        canvasSize: composition.size, viewport: viewport, displayScale: displayScale
+                    )
+                })
+            }
+            return AnyView(together
                 .opacity(group.opacity)
                 .blendMode(mixing ? item.blendMode.swiftUI : .normal))
         }

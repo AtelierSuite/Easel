@@ -311,6 +311,32 @@ struct PXDReaderTests {
         #expect(pixels.color(x: 3, y: 2).alpha > 250)
     }
 
+    /// A group's mask covers everything in the group, placed on the canvas
+    /// by itself; past its pixels it shows or hides as its background says.
+    @Test func groupMasksComeInOverTheirGroups() throws {
+        func document(background: Double) throws -> FileWrapper {
+            try PXDBuilder(canvas: (8, 4), layers: [
+                .init(identifier: "GROUP", index: 0, type: 4, name: "Group", position: CGPoint(x: 4, y: 2),
+                      size: CGSize(width: 8, height: 4), blend: "pass"),
+                .init(parent: "GROUP", index: 0, type: 1, name: "Red", position: CGPoint(x: 4, y: 2),
+                      size: CGSize(width: 8, height: 4), pixels: bgra(0, 0, 255, width: 8, height: 4)),
+                // Black over the middle 4×4: hidden there.
+                .init(parent: "GROUP", index: PXDFormat.maskIndex, type: 1, name: "Mask", position: CGPoint(x: 4, y: 2),
+                      size: CGSize(width: 4, height: 4), isMask: true, maskBackground: background,
+                      pixels: .grey([UInt8](repeating: 0, count: 16), width: 4, height: 4)),
+            ]).build()
+        }
+        let shown = try PXDReader.composition(from: try document(background: 1))
+        #expect(shown.groups.first?.mask != nil)
+        let showing = CompositionRenderer.render(shown)
+        #expect(TestImages.isRed(showing, x: 0, y: 1))
+        #expect(TestImages.isClear(showing, x: 4, y: 1))
+
+        let hidden = CompositionRenderer.render(try PXDReader.composition(from: try document(background: 0)))
+        #expect(TestImages.isClear(hidden, x: 0, y: 1))
+        #expect(TestImages.isClear(hidden, x: 4, y: 1))
+    }
+
     /// A warp group comes in as one layer standing in for it: what is in
     /// it bent onto its patch, upright, then masked by the group's mask as
     /// it lies on the canvas.

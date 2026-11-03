@@ -316,6 +316,24 @@ struct PXDWriterTests {
         #expect(reread.transform.position == CGPoint(x: 2, y: 2))
     }
 
+    /// A group's mask is kept as it was when the group is written back.
+    @Test func groupMasksAreKept() throws {
+        let original = try PXDBuilder(canvas: (4, 4), layers: [
+            .init(identifier: "GROUP", index: 0, type: 4, name: "Group", position: CGPoint(x: 2, y: 2),
+                  size: CGSize(width: 4, height: 4), blend: "pass"),
+            .init(identifier: "RED", parent: "GROUP", index: 0, type: 1, name: "Red", position: CGPoint(x: 2, y: 2),
+                  size: CGSize(width: 4, height: 4), pixels: red),
+            .init(identifier: "GROUPMASK", parent: "GROUP", index: PXDFormat.maskIndex, type: 1, name: "Mask",
+                  position: CGPoint(x: 1, y: 2), size: CGSize(width: 2, height: 4), isMask: true, maskBackground: 0,
+                  pixels: .grey([UInt8](repeating: 255, count: 8), width: 2, height: 4)),
+        ], zipped: true).build()
+        var composition = try PXDReader.composition(from: original)
+        composition.groups[0].name = "Renamed"
+        let written = try PXDWriter.fileWrapper(for: composition, original: original)
+        #expect(try rows(written).contains { $0.identifier == "GROUPMASK" && $0.parent == "GROUP" })
+        #expect(try PXDReader.composition(from: written).groups.first?.mask != nil)
+    }
+
     /// A warp group's stand-in left as it was read keeps the group, which
     /// takes only its settings; moved, it takes the group's place as a
     /// layer of its own; deleted, the group goes with it.
