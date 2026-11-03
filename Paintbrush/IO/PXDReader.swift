@@ -105,16 +105,14 @@ package enum PXDReader {
         }
 
         /// What is in a warp group, bottom first and laid out on the canvas
-        /// as it is before bending. Groups inside it only fade and hide what
-        /// is in them.
-        func contents(of parent: String, opacity: Double) -> [Layer] {
-            var result: [Layer] = []
+        /// as it is before bending, its groups as Easel's own.
+        func contents(of parent: String, groupID: UUID?, layers: inout [Layer], groups: inout [LayerGroup]) {
             for row in (structure.children[parent] ?? []).reversed() {
                 guard let info = structure.info[row.id], !info.isMask else { continue }
                 if structure.warps[row.identifier] != nil {
                     if var layer = standIn(row, info: info) {
-                        layer.opacity *= opacity
-                        result.append(layer)
+                        layer.groupID = groupID
+                        layers.append(layer)
                     } else {
                         skipped += 1
                     }
@@ -123,15 +121,24 @@ package enum PXDReader {
                         skipped += 1
                         continue
                     }
-                    if info.isVisible { result += contents(of: row.identifier, opacity: opacity * info.opacity) }
+                    var folder = LayerGroup(
+                        name: info.name ?? String(localized: "Layer.DefaultName.Group"),
+                        parentID: groupID, isVisible: info.isVisible, opacity: info.opacity
+                    )
+                    folder.blendMode = info.blendTag.flatMap { $0 == "pass" ? nil : PSDReader.blendMode($0) }
+                    if let maskID = structure.masks[row.identifier], let maskRow = structure.row(maskID),
+                       let maskInfo = structure.info[maskRow.id] {
+                        folder.mask = groupMask(maskRow, info: maskInfo, files: files, canvas: canvas)
+                    }
+                    groups.append(folder)
+                    contents(of: row.identifier, groupID: folder.id, layers: &layers, groups: &groups)
                 } else if structure.warpedLayers.contains(row.identifier), var layer = read(row, info: info) {
-                    layer.opacity *= opacity
-                    result.append(layer)
+                    layer.groupID = groupID
+                    layers.append(layer)
                 } else {
                     skipped += 1
                 }
             }
-            return result
         }
 
         /// A warp group as one layer: what is in it drawn together, bent
@@ -152,12 +159,26 @@ package enum PXDReader {
             guard let flatToCanvas = MeshWarp.affine(
                 from: [.zero, CGPoint(x: size.width, y: 0), CGPoint(x: 0, y: size.height)], to: [d, c, a]
             ) else { return nil }
-            let inside = contents(of: row.identifier, opacity: 1)
+            // What is in it, moved from the canvas onto the flat contents
+            // and drawn as Easel draws a picture, groups and all.
+            var inside: [Layer] = [], insideGroups: [LayerGroup] = []
+            contents(of: row.identifier, groupID: nil, layers: &inside, groups: &insideGroups)
             guard !inside.isEmpty else { return nil }
-            let flat = Bitmap.render(size: size) { context in
-                context.concatenate(flatToCanvas.inverted())
-                CompositionRenderer.draw(inside, in: context)
+            let canvasToFlat = flatToCanvas.inverted()
+            for index in inside.indices {
+                inside[index].transform = placement(
+                    inside[index].affineTransform.concatenating(canvasToFlat), size: inside[index].image.size
+                )
             }
+            for index in insideGroups.indices {
+                guard let mask = insideGroups[index].mask else { continue }
+                insideGroups[index].mask?.transform = placement(
+                    mask.transform.affineTransform(for: mask.image.size).concatenating(canvasToFlat), size: mask.image.size
+                )
+            }
+            var flatContents = Composition(size: size, layers: inside, groups: insideGroups)
+            flatContents.normalizeGroups()
+            let flat = CompositionRenderer.render(flatContents)
 
             // Bézier patches lie within their points.
             let points = warp.mesh.map(onCanvas)
@@ -253,6 +274,17 @@ package enum PXDReader {
         layer.isLocked = info.isLocked
         layer.pixelmator = PixelmatorSource(identifier: row.identifier, image: pixels)
         return layer
+    }
+
+    /// The placement that maps pixels of `size` as `affine` does, which
+    /// turns, scales and flips them but does not slant them.
+    private static func placement(_ affine: CGAffineTransform, size: CGSize) -> LayerTransform {
+        let scaleX = hypot(affine.a, affine.b)
+        return LayerTransform(
+            position: CGPoint(x: size.width / 2, y: size.height / 2).applying(affine),
+            scaleX: scaleX, scaleY: (affine.a * affine.d - affine.b * affine.c) / max(scaleX, 1e-12),
+            rotation: atan2(affine.b, affine.a)
+        )
     }
 
     /// A placed picture as the layer shows it. Pixelmator sizes a placed

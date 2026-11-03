@@ -363,6 +363,34 @@ struct PXDReaderTests {
         #expect(pixels.color(x: 25, y: 5).alpha < 5)
     }
 
+    /// Groups inside a warp group mix and mask as they do anywhere else.
+    @Test func groupsInsideWarpGroupsKeepTheirBlendModesAndMasks() throws {
+        let quad = [CGPoint(x: 10, y: 10), CGPoint(x: 30, y: 10), CGPoint(x: 30, y: 30), CGPoint(x: 10, y: 30)]
+        // Not bent at all: the patch lies on the corners.
+        let mesh = (0..<16).map { CGPoint(x: 10 + 20 * Double($0 % 4) / 3, y: 10 + 20 * Double($0 / 4) / 3) }
+        let wrapper = try PXDBuilder(canvas: (40, 40), layers: [
+            .init(identifier: "WARP", index: 0, type: 4, name: "Warped", position: CGPoint(x: 20, y: 20),
+                  size: CGSize(width: 20, height: 20), blend: "pass", info: [PXDFormat.Warp.key: PXDBuilder.warp(quad: quad, mesh: mesh)]),
+            .init(identifier: "NEST", parent: "WARP", index: 0, type: 4, name: "Multiplied", position: CGPoint(x: 20, y: 20),
+                  size: CGSize(width: 20, height: 20), blend: "mul "),
+            .init(parent: "NEST", index: 0, type: 1, name: "Red", position: CGPoint(x: 20, y: 20),
+                  size: CGSize(width: 20, height: 20), pixels: bgra(0, 0, 255, width: 20, height: 20)),
+            // Showing only the right half of the nested group.
+            .init(parent: "NEST", index: PXDFormat.maskIndex, type: 1, name: "Mask", position: CGPoint(x: 25, y: 20),
+                  size: CGSize(width: 10, height: 20), isMask: true, maskBackground: 0,
+                  pixels: .grey([UInt8](repeating: 255, count: 200), width: 10, height: 20)),
+            .init(parent: "WARP", index: 1, type: 1, name: "Blue", position: CGPoint(x: 20, y: 20),
+                  size: CGSize(width: 20, height: 20), pixels: bgra(255, 0, 0, width: 20, height: 20)),
+        ]).build()
+        let composition = try PXDReader.composition(from: wrapper)
+        #expect(composition.layers.map(\.name) == ["Warped"])
+        let pixels = try #require(Bitmap.pixels(of: CompositionRenderer.render(composition)))
+        let left = pixels.color(x: 14, y: 20), right = pixels.color(x: 26, y: 20)
+        #expect(left.blue > 200 && left.red < 60, "\(left)")
+        // Red multiplied over blue is black, not red.
+        #expect(right.red < 60 && right.blue < 60 && right.alpha > 250, "\(right)")
+    }
+
     /// Bent past the canvas's edge, the stand-in keeps what lies beyond it,
     /// so none is lost when it is moved back.
     @Test func warpGroupsKeepWhatIsBentPastTheCanvas() throws {
