@@ -82,6 +82,7 @@ final class ToolPaletteViewController: NSViewController {
         let name = String(localized: String.LocalizationValue(tool.labelKey))
         let image = tool.nsImage(accessibilityDescription: name)?
             .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
+            .map(Self.rasterizedAt2x)
         let button = ToolButton(image: image ?? NSImage(), target: self, action: #selector(pickTool(_:)))
         button.tag = Tool.allCases.firstIndex(of: tool) ?? 0
         button.toolTip = "\(name) (\(String(tool.shortcut.character).uppercased()))"
@@ -91,6 +92,29 @@ final class ToolPaletteViewController: NSViewController {
             button.heightAnchor.constraint(equalToConstant: 32),
         ])
         return button
+    }
+
+    /// The symbol drawn once at 2x, which a 1x display scales down. At 1x the
+    /// system draws its own pixel-fitted version of a symbol instead, which
+    /// leans and stretches diagonal ones such as the eraser and the brush.
+    private static func rasterizedAt2x(_ symbol: NSImage) -> NSImage {
+        let size = symbol.size
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return symbol }
+        rep.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        symbol.draw(in: NSRect(origin: .zero, size: size))
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: size)
+        image.addRepresentation(rep)
+        image.isTemplate = true
+        image.alignmentRect = symbol.alignmentRect
+        image.accessibilityDescription = symbol.accessibilityDescription
+        return image
     }
 
     private func showTool() {
@@ -126,6 +150,7 @@ private final class ToolButton: NSButton {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        wantsLayer = true
         setButtonType(.pushOnPushOff)
         isBordered = false
         imagePosition = .imageOnly
@@ -152,7 +177,14 @@ private final class ToolButton: NSButton {
     override func mouseEntered(with event: NSEvent) { isHovered = true }
     override func mouseExited(with event: NSEvent) { isHovered = false }
 
-    override func draw(_ dirtyRect: NSRect) {
+    /// The circle is the layer's own background, not drawn: overriding
+    /// `draw(_:)` would make the cell draw the symbol itself, at the half
+    /// point its centring leaves it on, which smears it sideways on a 1x
+    /// display.
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        super.updateLayer()
         let fill: NSColor? = if state == .on {
             .controlAccentColor.withAlphaComponent(isHighlighted ? 0.3 : 0.2)
         } else if isHighlighted {
@@ -162,15 +194,10 @@ private final class ToolButton: NSButton {
         } else {
             nil
         }
-        if let fill {
-            fill.setFill()
-            // A circle, whatever shape the stack leaves the button.
-            let diameter = min(bounds.width, bounds.height)
-            NSBezierPath(ovalIn: NSRect(
-                x: bounds.midX - diameter / 2, y: bounds.midY - diameter / 2, width: diameter, height: diameter
-            )).fill()
-        }
-        super.draw(dirtyRect)
+        var color: CGColor?
+        effectiveAppearance.performAsCurrentDrawingAppearance { color = fill?.cgColor }
+        layer?.backgroundColor = color
+        layer?.cornerRadius = min(bounds.width, bounds.height) / 2
     }
 }
 
