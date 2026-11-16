@@ -126,6 +126,7 @@ private final class ToolButton: NSButton {
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        wantsLayer = true
         setButtonType(.pushOnPushOff)
         isBordered = false
         imagePosition = .imageOnly
@@ -152,7 +153,14 @@ private final class ToolButton: NSButton {
     override func mouseEntered(with event: NSEvent) { isHovered = true }
     override func mouseExited(with event: NSEvent) { isHovered = false }
 
-    override func draw(_ dirtyRect: NSRect) {
+    /// The circle is the layer's own background, not drawn: overriding
+    /// `draw(_:)` would make the cell draw the symbol itself, at the half
+    /// point its centring leaves it on, which smears it sideways on a 1x
+    /// display.
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        super.updateLayer()
         let fill: NSColor? = if state == .on {
             .controlAccentColor.withAlphaComponent(isHighlighted ? 0.3 : 0.2)
         } else if isHighlighted {
@@ -162,15 +170,10 @@ private final class ToolButton: NSButton {
         } else {
             nil
         }
-        if let fill {
-            fill.setFill()
-            // A circle, whatever shape the stack leaves the button.
-            let diameter = min(bounds.width, bounds.height)
-            NSBezierPath(ovalIn: NSRect(
-                x: bounds.midX - diameter / 2, y: bounds.midY - diameter / 2, width: diameter, height: diameter
-            )).fill()
-        }
-        super.draw(dirtyRect)
+        var color: CGColor?
+        effectiveAppearance.performAsCurrentDrawingAppearance { color = fill?.cgColor }
+        layer?.backgroundColor = color
+        layer?.cornerRadius = min(bounds.width, bounds.height) / 2
     }
 }
 
