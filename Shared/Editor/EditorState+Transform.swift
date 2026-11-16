@@ -26,6 +26,53 @@ struct TransformDraft: Equatable {
         let nextRow = row == 0 ? 1 : 2, nextColumn = column == 0 ? 1 : 2
         return [index, row * 4 + nextColumn, nextRow * 4 + column, nextRow * 4 + nextColumn]
     }
+
+    /// How far outside the warp's box its resize handles sit, in screen
+    /// points, so they stay clear of the grid's corners.
+    static let resizeMargin: CGFloat = 18
+
+    /// The box round every handle, which warp's resize handles scale.
+    var bounds: CGRect {
+        let xs = points.map(\.x), ys = points.map(\.y)
+        guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else { return .null }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    /// Warp's eight resize handles, on the corners and edges of its box
+    /// pushed out by `margin` canvas pixels; none in the other modes.
+    func resizeHandles(margin: CGFloat) -> [TransformResizeHandle] {
+        guard mode == .warp, !bounds.isNull else { return [] }
+        let box = bounds.insetBy(dx: -margin, dy: -margin)
+        return TransformResizeHandle.all.map { handle in
+            var handle = handle
+            handle.location = CGPoint(
+                x: box.midX + CGFloat(handle.side.x) * box.width / 2,
+                y: box.midY + CGFloat(handle.side.y) * box.height / 2
+            )
+            return handle
+        }
+    }
+
+    /// The handles scaled from `box` to fill `target`, as a plain resize.
+    static func resized(_ points: [CGPoint], from box: CGRect, to target: CGRect) -> [CGPoint] {
+        points.map { point in
+            CGPoint(
+                x: box.width > 0 ? target.minX + (point.x - box.minX) / box.width * target.width : point.x + target.minX - box.minX,
+                y: box.height > 0 ? target.minY + (point.y - box.minY) / box.height * target.height : point.y + target.minY - box.minY
+            )
+        }
+    }
+}
+
+/// One of warp's eight resize handles: which side of the box it pulls.
+struct TransformResizeHandle {
+    /// -1 for the left or top, 1 for the right or bottom, 0 for neither.
+    var side: (x: Int, y: Int)
+    var location: CGPoint = .zero
+
+    static let all: [TransformResizeHandle] = [
+        (-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0),
+    ].map { TransformResizeHandle(side: (x: $0.0, y: $0.1)) }
 }
 
 /// A transform drag in progress.
@@ -33,6 +80,9 @@ struct TransformDrag {
     var start: CGPoint
     /// The handles being moved and where each began.
     var handles: [(index: Int, origin: CGPoint)]
+    /// A warp being resized: which side of the box is pulled, and the box
+    /// it started from.
+    var resize: (side: (x: Int, y: Int), box: CGRect)?
 }
 
 extension EditorState {
@@ -82,12 +132,20 @@ extension EditorState {
     func transformBegan(at point: CGPoint) {
         guard let draft = transformDraft, let layer = activeLayer, !composition.isLocked(layer) else { return }
         // A handle from this far away on screen.
-        let reach = 30 / max(viewport.scale, 0.0001)
-        let nearest = draft.points.indices.min {
-            hypot(draft.points[$0].x - point.x, draft.points[$0].y - point.y)
-                < hypot(draft.points[$1].x - point.x, draft.points[$1].y - point.y)
-        }
-        if let nearest, hypot(draft.points[nearest].x - point.x, draft.points[nearest].y - point.y) <= reach {
+        let scale = max(viewport.scale, 0.0001)
+        let reach = 30 / scale
+        func distance(_ handle: CGPoint) -> CGFloat { hypot(handle.x - point.x, handle.y - point.y) }
+        let nearest = draft.points.indices.min { distance(draft.points[$0]) < distance(draft.points[$1]) }
+        let nearestResize = draft.resizeHandles(margin: TransformDraft.resizeMargin / scale)
+            .min { distance($0.location) < distance($1.location) }
+        if let resize = nearestResize, distance(resize.location) <= reach,
+           nearest.map({ distance(resize.location) < distance(draft.points[$0]) }) ?? true {
+            // A resize handle scales the whole grid from the opposite side.
+            transformDrag = TransformDrag(
+                start: point, handles: draft.points.enumerated().map { ($0.offset, $0.element) },
+                resize: (resize.side, draft.bounds)
+            )
+        } else if let nearest, distance(draft.points[nearest]) <= reach {
             transformDrag = TransformDrag(
                 start: point, handles: draft.handlesMoving(with: nearest).map { ($0, draft.points[$0]) }
             )
@@ -100,6 +158,19 @@ extension EditorState {
     func transformMoved(to point: CGPoint) {
         guard let drag = transformDrag, var draft = transformDraft else { return }
         let dx = point.x - drag.start.x, dy = point.y - drag.start.y
+        if let resize = drag.resize {
+            var box = resize.box
+            // The pulled sides follow the pointer; the box never turns inside out.
+            let minimum: CGFloat = 1
+            if resize.side.x < 0 { box = CGRect(x: min(box.minX + dx, box.maxX - minimum), y: box.minY, width: max(box.width - dx, minimum), height: box.height) }
+            if resize.side.x > 0 { box.size.width = max(box.width + dx, minimum) }
+            if resize.side.y < 0 { box = CGRect(x: box.minX, y: min(box.minY + dy, box.maxY - minimum), width: box.width, height: max(box.height - dy, minimum)) }
+            if resize.side.y > 0 { box.size.height = max(box.height + dy, minimum) }
+            draft.points = TransformDraft.resized(drag.handles.map(\.origin), from: resize.box, to: box)
+            transformDraft = draft
+            updateTransformPreview()
+            return
+        }
         // A cylinder's curve stays as deep while its corners move.
         let depth = draft.mode == .cylinder ? WarpShape.cylinderDepth(draft.points) : nil
         for handle in drag.handles {
