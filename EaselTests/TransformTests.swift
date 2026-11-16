@@ -111,6 +111,38 @@ struct TransformToolTests {
         #expect(state.transformDraft?.isChanged == false)
     }
 
+    @Test func warpsResizeHandlesScaleTheGridFromTheOppositeSide() throws {
+        let (state, _) = host()
+        state.tool = .transform
+        state.viewportSize = CGSize(width: 400, height: 200)
+        state.setTransformMode(.warp)
+        let margin = TransformDraft.resizeMargin / state.viewport.scale
+        // The right edge's handle, pulled out by 20: twice as wide, same height.
+        let right = CGPoint(x: 40 + margin, y: 10)
+        state.toolBegan(at: right, pressure: 1)
+        state.toolMoved(to: [StrokePoint(location: CGPoint(x: right.x + 40, y: 10))])
+        state.toolEnded(isTap: false, at: CGPoint(x: right.x + 40, y: 10))
+        let points = try #require(state.transformDraft?.points)
+        #expect(points[0] == CGPoint(x: 0, y: 0))
+        #expect(abs(points[1].x - 80.0 / 3) < 0.001 && points[1].y == 0)
+        #expect(points[15] == CGPoint(x: 80, y: 20))
+        // The top left corner's handle, pulled up and left: the bottom right stays.
+        let corner = CGPoint(x: -margin, y: -margin)
+        state.toolBegan(at: corner, pressure: 1)
+        state.toolMoved(to: [StrokePoint(location: CGPoint(x: corner.x - 20, y: corner.y - 20))])
+        state.toolEnded(isTap: false, at: CGPoint(x: corner.x - 20, y: corner.y - 20))
+        #expect(state.transformDraft?.points[0] == CGPoint(x: -20, y: -20))
+        #expect(state.transformDraft?.points[15] == CGPoint(x: 80, y: 20))
+    }
+
+    @Test func aWarpCantBeResizedInsideOut() {
+        let box = CGRect(x: 0, y: 0, width: 40, height: 20)
+        let points = TransformDraft.resized([CGPoint(x: 40, y: 20)], from: box, to: CGRect(x: 0, y: 0, width: 1, height: 20))
+        #expect(points == [CGPoint(x: 1, y: 20)])
+        let distort = TransformDraft(layerID: UUID(), mode: .distort, points: [.zero], original: [])
+        #expect(distort.resizeHandles(margin: 2).isEmpty)
+    }
+
     @Test func aWarpCornerTakesItsNeighboursAlong() {
         let draft = TransformDraft(layerID: UUID(), mode: .warp, points: [], original: [])
         #expect(Set(draft.handlesMoving(with: 0)) == [0, 1, 4, 5])

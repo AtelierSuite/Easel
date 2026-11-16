@@ -247,6 +247,21 @@ struct CanvasOverlay: View {
             }
             context.stroke(pulls, with: .color(.accentColor.opacity(0.7)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
         }
+        // Warp's resize box, just outside the grid, with square handles.
+        let resizeHandles = draft.resizeHandles(margin: TransformDraft.resizeMargin / max(viewport.scale, 0.0001))
+        if !resizeHandles.isEmpty {
+            var box = Path()
+            box.addLines(resizeHandles.map { $0.location.applying(transform) })
+            box.closeSubpath()
+            context.stroke(box, with: .color(.black.opacity(0.4)), lineWidth: 2)
+            context.stroke(box, with: .color(.white), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            for handle in resizeHandles {
+                let center = handle.location.applying(transform)
+                let square = Path(CGRect(x: center.x - 5, y: center.y - 5, width: 10, height: 10))
+                context.fill(square, with: .color(.accentColor))
+                context.stroke(square, with: .color(.white), lineWidth: 1.5)
+            }
+        }
         for point in draft.points {
             let center = point.applying(transform)
             let knob = Path(ellipseIn: CGRect(x: center.x - 7, y: center.y - 7, width: 14, height: 14))
