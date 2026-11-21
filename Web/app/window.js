@@ -29,6 +29,7 @@ const ICONS = {
 const ZOOMS = [0.05, 0.0833, 0.125, 0.1667, 0.25, 0.3333, 0.5, 0.6667, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32];
 const DISPLAY_LIMIT = 4096;
 const RECENT_LIMIT = 12;
+const SOURCE_CODE_URL = "https://github.com/AtelierSuite/Easel";
 
 const escapeHTML = (text) => String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -695,8 +696,27 @@ export class EaselWindow {
   }
 
   about() {
-    const version = globalThis.EASEL_APP_VERSION ?? "";
-    this.alert(`Easel ${version}`.trim());
+    const backdrop = this.sheet(`
+      <div class="ds-sheet ds-alert app__about" role="alertdialog" aria-labelledby="about-title" aria-describedby="about-message">
+        <div class="ds-sheet__body">
+          <img class="app__about-icon" src="app/icons/icon.svg" width="48" height="48" alt="" draggable="false">
+          <div>
+            <h2 class="ds-sheet__title" id="about-title">Easel</h2>
+            <p class="ds-caption app__about-version"></p>
+            <p class="ds-sheet__message" id="about-message"></p>
+            <p class="ds-sheet__message app__about-suite"><a href="https://atelier.ktgk.app" target="_blank" rel="noopener"></a></p>
+          </div>
+        </div>
+        <div class="ds-sheet__buttons">
+          <button class="ds-button" type="button" data-source>${escapeHTML(t("Toolbar.SourceCode"))}</button>
+          <button class="ds-button ds-button--primary" type="button" data-cancel>${escapeHTML(t("Web.Common.Close"))}</button>
+        </div>
+      </div>`);
+    backdrop.querySelector("#about-message").textContent = t("Web.About.Message");
+    backdrop.querySelector(".app__about-version").textContent = t("Web.About.Version", globalThis.EASEL_APP_VERSION ?? "");
+    backdrop.querySelector(".app__about-suite a").textContent = t("Web.About.Suite");
+    backdrop.querySelector("[data-source]").addEventListener("click", () => window.open(SOURCE_CODE_URL, "_blank", "noopener"));
+    backdrop.querySelector("[data-cancel]").focus();
   }
 
   // ------------------------------------------------------------ Updates
