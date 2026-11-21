@@ -74,7 +74,7 @@ package enum ImageFiles {
                 number += 1
             }
             let url = folder.appending(path: "\(unique).png")
-            try ImageCodec.encode(item.image, as: .png).write(to: url, options: .atomic)
+            try ImageCodec.encode(item.image, as: .png).write(to: url)
             return url
         }
     }
