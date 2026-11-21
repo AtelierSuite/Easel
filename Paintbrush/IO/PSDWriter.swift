@@ -641,7 +641,7 @@ package struct PSDBinaryWriter {
     package mutating func uint32(_ value: Int) {
         data += [24, 16, 8, 0].map { UInt8(truncatingIfNeeded: value >> $0) }
     }
-    package mutating func int32(_ value: Int) { uint32(value & 0xFFFF_FFFF) }
+    package mutating func int32(_ value: Int) { uint32(Int(truncatingIfNeeded: UInt32(truncatingIfNeeded: value))) }
 
     /// A Pascal name, at most 255 bytes, padded to four.
     package mutating func pascalName(_ name: String) {
@@ -671,7 +671,7 @@ package struct PSDBinaryWriter {
 extension PSDBinaryWriter {
     package mutating func uint64(_ value: Int) {
         uint32(Int(UInt64(value) >> 32))
-        uint32(value & 0xFFFF_FFFF)
+        uint32(Int(truncatingIfNeeded: UInt32(truncatingIfNeeded: value)))
     }
 
     package mutating func float64(_ value: Double) {
