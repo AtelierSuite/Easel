@@ -21,7 +21,7 @@ const FORBIDDEN_NAMES = /(^|[-_])(chips?|pills?|badges?|tags?|tokens?|lozenges?|
 const MONO_ELEMENTS = /<(code|pre|kbd|samp|tt|var)[\s>]/i;
 
 // The accent colour must match the Apple app's AccentColor asset.
-const accentAsset = resolve(webRoot, "../Shared/Resources/Assets.xcassets/AccentColor.colorset/Contents.json");
+const accentAsset = resolve(webRoot, "../Shared/Support/Assets.xcassets/AccentColor.colorset/Contents.json");
 const APP_ACCENT = (() => {
   try {
     const { colors } = JSON.parse(readFileSync(accentAsset, "utf8"));

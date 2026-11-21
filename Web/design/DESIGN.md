@@ -83,11 +83,11 @@ No coloured bar along a single edge of a card, list row, tab, notification, call
 
 ### Colour
 
-Carbon **White** theme in light appearance and **Gray 100** in dark, with one change: Carbon's blue is replaced by **the Easel app's accent colour**, the orange in `Shared/Resources/Assets.xcassets/AccentColor.colorset` (`#E8612E`).
+Carbon **White** theme in light appearance and **Gray 100** in dark, with one change: Carbon's blue is replaced by **the Easel app's accent colour**, the pink of the app icon in `Shared/Support/Assets.xcassets/AccentColor.colorset` (`#ED406B`).
 
 - `--ds-accent` holds that value and is the only place it is written. `lint.mjs` fails if it drifts from the Apple colour set, so changing the app's accent changes both apps.
 - Every interactive colour is mixed from it with `color-mix()`: focus outlines, selection borders, switches, sliders, progress, the text selection, highlights and links.
-- Fills that carry text (the default button, highlighted menu items) use `--ds-accent-strong`, the accent mixed with 25% black, which gives 5.6:1 against white text where the raw accent gives 3.4:1. Light-appearance links use the same shade. In dark appearance links use the accent mixed with 30% white, which reads on the dark background.
+- Fills that carry text (the default button, highlighted menu items) use `--ds-accent-strong`, the accent mixed with 25% black, which gives 6.1:1 against white text where the raw accent gives 3.8:1. Light-appearance links use the same shade. In dark appearance links use the accent mixed with 30% white, which reads on the dark background.
 - Status colours keep their meaning and are not accent-tinted: info stays blue, success green, warning yellow and error red. Appearance follows the OS (`prefers-color-scheme`); the app can force it with `data-theme="light"` or `"dark"` on `<html>`. Components only ever reference role tokens, never raw hex.
 
 | Role | Tokens |
