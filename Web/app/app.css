@@ -1,0 +1,328 @@
+/*
+ * The Easel window: layout only. Components and tokens come from the design
+ * system (design/tokens.css, design/components.css); everything here must pass
+ * `node design/lint.mjs`.
+ */
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--ds-layer-01);
+}
+
+.app {
+  height: 100vh;
+  height: 100dvh;
+  border: 0;
+  position: relative;
+}
+
+.app[hidden] {
+  display: none;
+}
+
+.app__loading,
+.app__failure {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  align-self: center;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-04);
+  margin: var(--ds-spacing-05);
+}
+
+.app__loading {
+  gap: var(--ds-spacing-03);
+}
+
+.app__loading-progress {
+  width: 120px;
+}
+
+/* While the engine downloads: the bar, with the percentage under it. */
+.app__loading.is-downloading {
+  flex-direction: column;
+}
+
+.app__loading.is-downloading .ds-caption {
+  font-variant-numeric: tabular-nums;
+}
+
+.app__noscript {
+  padding: var(--ds-spacing-06);
+}
+
+/* Room for the window controls when installed with the title bar overlay. */
+@media (display-mode: window-controls-overlay) {
+  .app > .ds-menu-bar {
+    padding-inline-start: env(titlebar-area-x, 0);
+    padding-inline-end: calc(100vw - env(titlebar-area-x, 0) - env(titlebar-area-width, 100vw));
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .app > .ds-menu-bar > * {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}
+
+
+/* MARK: - Toolbar */
+
+.app__title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app__subtitle:empty {
+  display: none;
+}
+
+.app__update:not(.is-offered) {
+  display: none;
+}
+
+.app__zoom {
+  min-width: 56px;
+  justify-content: center;
+}
+
+/* MARK: - Start */
+
+.app__content {
+  background: var(--ds-page-canvas);
+}
+
+.app__start {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: var(--ds-background);
+}
+
+.app__start[hidden],
+.app__viewport[hidden],
+.app__busy[hidden],
+.app__inspector[hidden],
+.app__status[hidden],
+.app__layer-settings[hidden] {
+  display: none;
+}
+
+.app__start-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--ds-spacing-09) var(--ds-spacing-05);
+}
+
+.app__start-intro {
+  margin: var(--ds-spacing-03) 0 var(--ds-spacing-06);
+  color: var(--ds-text-secondary);
+}
+
+.app__start-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-spacing-03);
+  margin-bottom: var(--ds-spacing-08);
+}
+
+.app__start-heading {
+  margin-bottom: var(--ds-spacing-03);
+  color: var(--ds-text-secondary);
+}
+
+.app__recents td:first-child {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-03);
+  height: var(--ds-control-sm);
+}
+
+.app__recents td:first-child span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app__recents tr:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -2px;
+}
+
+.app__recent-date {
+  color: var(--ds-text-helper);
+  font: var(--ds-type-caption);
+  white-space: nowrap;
+}
+
+.app__recent-remove {
+  width: 40px;
+}
+
+.app.is-dropping .app__content {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -2px;
+}
+
+/* MARK: - Canvas */
+
+.app__viewport {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+.app__stage {
+  width: max-content;
+  height: max-content;
+}
+
+.app__canvas {
+  display: block;
+  background-color: var(--ds-layer-01);
+  background-image: conic-gradient(var(--ds-layer-accent-01) 25%, transparent 25% 50%, var(--ds-layer-accent-01) 50% 75%, transparent 75%);
+  background-size: 16px 16px;
+  outline: 1px solid var(--ds-border-subtle-01);
+  image-rendering: auto;
+}
+
+.app__canvas.is-pixelated {
+  image-rendering: pixelated;
+}
+
+.app__busy {
+  position: absolute;
+  inset-block-start: var(--ds-spacing-05);
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-03);
+  padding: var(--ds-spacing-03) var(--ds-spacing-05);
+  background: var(--ds-layer-01);
+  border: 1px solid var(--ds-border-subtle-01);
+}
+
+/* MARK: - Layers */
+
+.app__inspector {
+  min-height: 0;
+}
+
+.app__layers-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app__layers-title {
+  padding: var(--ds-spacing-04) var(--ds-spacing-05) var(--ds-spacing-03);
+}
+
+.app__layers {
+  width: auto;
+  border: 0;
+  background: transparent;
+}
+
+.app__layer {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-03);
+  padding-inline-start: calc(var(--ds-spacing-03) + var(--depth, 0) * var(--ds-spacing-05));
+  min-height: 56px;
+}
+
+.app__layer.is-hidden .app__layer-name,
+.app__layer.is-hidden .app__thumbnail {
+  opacity: 0.45;
+}
+
+.app__thumbnail {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  background-color: var(--ds-layer-01);
+  background-image: conic-gradient(var(--ds-layer-accent-01) 25%, transparent 25% 50%, var(--ds-layer-accent-01) 50% 75%, transparent 75%);
+  background-size: 8px 8px;
+  outline: 1px solid var(--ds-border-subtle-01);
+}
+
+.app__disclosure .ds-icon {
+  transition: transform var(--ds-duration-fast-02) var(--ds-ease-standard);
+}
+
+.app__disclosure.is-open .ds-icon {
+  transform: rotate(90deg);
+}
+
+.app__layer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app__layer-kind {
+  flex: none;
+  color: var(--ds-text-secondary);
+}
+
+.app__layer-settings {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ds-spacing-03) var(--ds-spacing-04);
+  padding: var(--ds-spacing-05);
+  border-block-start: 1px solid var(--ds-border-subtle-01);
+}
+
+.app__layer-settings .ds-slider,
+.app__layer-settings .ds-popup {
+  min-width: 0;
+}
+
+.app__layer-settings input[type="range"] {
+  min-width: 0;
+}
+
+.app__opacity-value {
+  min-width: 40px;
+  text-align: end;
+}
+
+/* MARK: - New image */
+
+.app__new-form .ds-text-input {
+  width: 96px;
+}
+
+/* MARK: - Status bar */
+
+.app__status-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ds-text-secondary);
+}
+
+@media (max-width: 720px) {
+  .app__inspector {
+    display: none;
+  }
+
+  .app__status-note {
+    display: none;
+  }
+}

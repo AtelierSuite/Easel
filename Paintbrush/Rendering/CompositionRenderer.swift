@@ -1,6 +1,8 @@
 import CoreGraphics
 import CoreImage
+#if canImport(CoreImage.CIFilterBuiltins)
 import CoreImage.CIFilterBuiltins
+#endif
 
 /// Flattens layers into one image, the way the canvas shows them.
 package enum CompositionRenderer {

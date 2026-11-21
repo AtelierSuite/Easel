@@ -1,6 +1,8 @@
 import CoreGraphics
 import CoreImage
+#if canImport(CoreImage.CIFilterBuiltins)
 import CoreImage.CIFilterBuiltins
+#endif
 
 /// A correction for the colour of the light a picture was taken in, as
 /// how much to scale its red, green and blue light: a picked grey comes out

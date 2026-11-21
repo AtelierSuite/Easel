@@ -383,9 +383,9 @@ package enum ZipArchive {
         var central = Data()
         for entry in entries {
             let offset = data.count
-            let needsSizes = forceZip64 || entry.payload.count >= Int(zip64Placeholder)
-                || entry.uncompressedSize >= Int(zip64Placeholder)
-            let needsOffset = forceZip64 || offset >= Int(zip64Placeholder)
+            let needsSizes = forceZip64 || entry.payload.count >= Int(clamping: zip64Placeholder)
+                || entry.uncompressedSize >= Int(clamping: zip64Placeholder)
+            let needsOffset = forceZip64 || offset >= Int(clamping: zip64Placeholder)
             let name = Data(entry.name.utf8)
             // ZIP64 needs version 4.5 to extract.
             let versionNeeded = needsSizes || needsOffset ? max(entry.versionNeeded, 45) : entry.versionNeeded
@@ -454,8 +454,8 @@ package enum ZipArchive {
 
         let directoryOffset = data.count
         data += central
-        let needsZip64 = forceZip64 || entries.count >= 0xFFFF || directoryOffset >= Int(zip64Placeholder)
-            || central.count >= Int(zip64Placeholder)
+        let needsZip64 = forceZip64 || entries.count >= 0xFFFF || directoryOffset >= Int(clamping: zip64Placeholder)
+            || central.count >= Int(clamping: zip64Placeholder)
         if needsZip64 {
             let recordOffset = data.count
             data.appendUInt32(zip64EndOfCentralDirectorySignature)
@@ -558,7 +558,7 @@ package enum ZipArchive {
             guard var next = raw.bindMemory(to: Bytef.self).baseAddress else { return }
             var left = raw.count
             while left > 0 {
-                let chunk = min(left, Int(UInt32.max))
+                let chunk = min(left, Int(clamping: UInt32.max))
                 crc = zlib.crc32(crc, next, uInt(chunk))
                 next += chunk
                 left -= chunk

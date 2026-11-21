@@ -1,5 +1,7 @@
 import CoreImage
+#if canImport(CoreImage.CIFilterBuiltins)
 import CoreImage.CIFilterBuiltins
+#endif
 import Foundation
 
 /// Photoshop's blurs, sharpens and noise filters, worked out its way. Each

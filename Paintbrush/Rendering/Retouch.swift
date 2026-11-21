@@ -1,6 +1,8 @@
 import CoreGraphics
 import CoreImage
+#if canImport(CoreImage.CIFilterBuiltins)
 import CoreImage.CIFilterBuiltins
+#endif
 
 /// What the Tone tool does where it is dragged.
 package enum ToneKind: String, CaseIterable, Identifiable, Sendable {
