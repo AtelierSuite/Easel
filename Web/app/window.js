@@ -4,7 +4,8 @@
 import { attachMenuBar, attachToolbarOverflow, openMenu } from "../design/menus.js";
 import { dismissSheet } from "../design/sheets.js";
 import { t, language } from "./i18n.js";
-import { chooseFile, choosePackage, droppedDocument, bytesForEngine, saveFile } from "./files.js";
+import { chooseFile, choosePackage, droppedDocument, bytesForEngine, readHandle, saveFile } from "./files.js";
+import * as storage from "./storage.js";
 
 const icon = (path, extra = "") => `<svg class="ds-icon" viewBox="0 0 16 16" aria-hidden="true"${extra}>${path}</svg>`;
 const ICONS = {
@@ -20,11 +21,14 @@ const ICONS = {
   text: icon('<path d="M3 3.5h10M8 3.5v10" stroke="currentColor" stroke-width="1.5"/>'),
   vector: icon('<path d="M3 13C5 5 11 11 13 3" fill="none" stroke="currentColor"/><rect x="1.5" y="11.5" width="3" height="3" fill="none" stroke="currentColor"/><rect x="11.5" y="1.5" width="3" height="3" fill="none" stroke="currentColor"/>'),
   adjustment: icon('<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor"/>'),
+  picture: icon('<rect x="1.5" y="2.5" width="13" height="11" fill="none" stroke="currentColor"/><path d="M1.5 11l4-4 3 3 2-2 4 4" fill="none" stroke="currentColor"/><circle cx="11" cy="5.5" r="1" fill="currentColor"/>'),
+  close: icon('<path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5"/>'),
   smart: icon('<rect x="2.5" y="2.5" width="11" height="11" fill="none" stroke="currentColor"/><path d="M5 11l2.5-3 2 2 1.5-2" fill="none" stroke="currentColor"/>'),
 };
 
 const ZOOMS = [0.05, 0.0833, 0.125, 0.1667, 0.25, 0.3333, 0.5, 0.6667, 1, 1.5, 2, 3, 4, 6, 8, 12, 16, 24, 32];
 const DISPLAY_LIMIT = 4096;
+const RECENT_LIMIT = 12;
 
 const escapeHTML = (text) => String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
@@ -61,17 +65,7 @@ export class EaselWindow {
         <button class="ds-button ds-button--primary ds-button--xs app__update" data-overflow="never">${escapeHTML(t("Web.Update.Button"))}</button>
       </div>
       <div class="ds-window__content app__content">
-        <div class="app__start">
-          <img class="app__start-icon" src="app/icons/icon-192.png" alt="" draggable="false" width="96" height="96">
-          <h1 class="ds-heading-04">Easel</h1>
-          <p class="ds-body app__start-message">${escapeHTML(t("Web.Start.Message"))}</p>
-          <div class="app__start-buttons">
-            <button class="ds-button ds-button--primary" data-action="open">${escapeHTML(t("Web.Start.Open"))}</button>
-            <button class="ds-button ds-button--bordered" data-action="new">${escapeHTML(t("Web.Start.New"))}</button>
-            <button class="ds-button ds-button--bordered" data-action="sample">${escapeHTML(t("Web.Start.Sample"))}</button>
-          </div>
-          <p class="ds-caption app__start-drop">${escapeHTML(t("Web.Drop"))}</p>
-        </div>
+        <div class="app__start"></div>
         <div class="app__viewport" hidden><div class="app__stage"><canvas class="app__canvas"></canvas></div></div>
         <div class="app__busy" hidden><div class="ds-spinner"></div><span class="ds-caption"></span></div>
       </div>
@@ -199,6 +193,55 @@ export class EaselWindow {
   showStart() {
     this.root.querySelector(".app__loading")?.remove();
     this.showDocument(false);
+    this.refreshRecents();
+  }
+
+  async refreshRecents() {
+    this.recents = await storage.recentDocuments();
+    if (!this.start.hidden) this.renderStart();
+  }
+
+  renderStart() {
+    const recents = this.recents ?? [];
+    const relative = new Intl.RelativeTimeFormat(language, { numeric: "auto" });
+    const when = (time) => {
+      const minutes = Math.round((time - Date.now()) / 60000);
+      if (Math.abs(minutes) < 60) return relative.format(minutes, "minute");
+      const hours = Math.round(minutes / 60);
+      if (Math.abs(hours) < 24) return relative.format(hours, "hour");
+      return new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(time);
+    };
+    this.start.innerHTML = `
+      <div class="app__start-inner">
+        <h1 class="ds-heading-04">Easel</h1>
+        <p class="ds-body app__start-intro">${escapeHTML(t("Web.Start.Intro"))}</p>
+        <div class="app__start-actions">
+          <button class="ds-button ds-button--primary" data-action="new">${escapeHTML(t("Web.Start.New"))}</button>
+          <button class="ds-button ds-button--bordered" data-action="open">${escapeHTML(t("Menu.Open"))}</button>
+        </div>
+        <h2 class="ds-heading-compact app__start-heading">${escapeHTML(t("Menu.OpenRecent"))}</h2>
+        ${recents.length ? `<table class="ds-table app__recents"><tbody>
+          ${recents.map((record) => `<tr data-id="${escapeHTML(record.id)}" tabindex="0">
+            <td>${record.isPackage ? ICONS.folder : ICONS.picture} <span>${escapeHTML(record.name)}</span></td>
+            <td class="ds-numeric app__recent-date">${escapeHTML(when(record.openedAt))}</td>
+            <td class="app__recent-remove"><button class="ds-button ds-button--ghost ds-button--icon ds-button--xs" data-remove="${escapeHTML(record.id)}" aria-label="${escapeHTML(t("Web.Start.Remove"))}" title="${escapeHTML(t("Web.Start.Remove"))}">${ICONS.close}</button></td>
+          </tr>`).join("")}</tbody></table>`
+        : `<p class="ds-caption">${escapeHTML(t("Web.Start.NoRecent"))}</p>`}
+      </div>`;
+    for (const row of this.start.querySelectorAll("tr[data-id]")) {
+      const record = recents.find((entry) => entry.id === row.dataset.id);
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("[data-remove]")) return;
+        this.openRecord(record);
+      });
+      row.addEventListener("keydown", (event) => event.key === "Enter" && this.openRecord(record));
+    }
+    for (const button of this.start.querySelectorAll("[data-remove]")) {
+      button.addEventListener("click", async () => {
+        await storage.removeRecord(button.dataset.remove);
+        this.refreshRecents();
+      });
+    }
   }
 
   showDocument(shown) {
@@ -207,7 +250,9 @@ export class EaselWindow {
     this.inspector.hidden = !shown;
     this.status.hidden = !shown;
     for (const button of this.toolbar.querySelectorAll("[data-action]")) button.disabled = !shown;
+    this.root.classList.toggle("is-empty", !shown);
     if (!shown) {
+      this.renderStart();
       this.title.textContent = "Easel";
       this.subtitle.textContent = "";
       document.title = "Easel";
@@ -217,16 +262,22 @@ export class EaselWindow {
   // ------------------------------------------------------------ Documents
 
   async openChosen() {
-    const file = await chooseFile();
-    if (file) await this.openFile(file);
+    const chosen = await chooseFile();
+    if (chosen) await this.openFile(chosen.file, { handle: chosen.handle });
   }
 
   async openPackage() {
     const chosen = await choosePackage();
-    if (chosen) await this.load(() => this.engine.call("open", { name: chosen.name, package: true }, chosen.bytes), chosen.name);
+    if (chosen) await this.openPackageBytes(chosen.name, chosen.bytes);
   }
 
-  async openFile(file) {
+  async openPackageBytes(name, bytes, record = null) {
+    await this.load(() => this.engine.call("open", { name, package: true }, bytes.slice()), name, { bytes: record ? null : bytes, isPackage: true, record });
+  }
+
+  /** Opens a file, remembering it in Open Recent by its handle, or else by a copy of it. */
+  async openFile(file, { handle = null, record = null } = {}) {
+    const copy = handle || record?.kept ? null : new Uint8Array(await file.arrayBuffer());
     await this.load(async () => {
       let bytes;
       try {
@@ -235,11 +286,58 @@ export class EaselWindow {
         throw new Error(t("Web.Error.Picture"));
       }
       return this.engine.call("open", { name: file.name }, bytes);
-    }, file.name);
+    }, file.name, { handle, bytes: copy, record });
+  }
+
+  async openRecord(record) {
+    try {
+      if (record.handle) {
+        const file = await readHandle(record.handle);
+        if (file) await this.openFile(file, { handle: record.handle, record });
+        return;
+      }
+      const bytes = record.kept ? await storage.readCopy(record.id) : null;
+      if (!bytes) {
+        this.alert(t("Web.Error.Missing %@", record.name));
+        return;
+      }
+      if (record.isPackage) await this.openPackageBytes(record.name, bytes, record);
+      else await this.openFile(new File([bytes], record.name), { record });
+    } catch (error) {
+      this.alert(t("Web.Error.Open %@ %@", record.name, error.message));
+    }
+  }
+
+  /** Puts a document at the top of Open Recent. */
+  async remember(name, { handle = null, bytes = null, isPackage = false, record = null }) {
+    const recents = await storage.recentDocuments();
+    let existing = record;
+    if (!existing && handle) {
+      for (const entry of recents) {
+        if (entry.handle && (await entry.handle.isSameEntry?.(handle))) {
+          existing = entry;
+          break;
+        }
+      }
+    }
+    // Without a handle there's no telling two files apart but by name: the newer copy replaces the older.
+    if (!existing && !handle) existing = recents.find((entry) => !entry.handle && entry.name === name && Boolean(entry.isPackage) === isPackage) ?? null;
+    const entry = { id: existing?.id ?? crypto.randomUUID(), name, openedAt: Date.now(), isPackage: isPackage || Boolean(existing?.isPackage) };
+    if (handle) {
+      entry.handle = handle;
+      if (existing?.kept) await storage.removeCopy(entry.id);
+    } else if (bytes) {
+      entry.kept = await storage.writeCopy(entry.id, bytes);
+    } else {
+      entry.kept = Boolean(existing?.kept);
+    }
+    await storage.saveRecord(entry);
+    for (const old of recents.filter((r) => r.id !== entry.id).slice(RECENT_LIMIT - 1)) await storage.removeRecord(old.id);
+    storage.persist();
   }
 
   /** Runs `request`, which makes a document, and shows it. */
-  async load(request, name) {
+  async load(request, name, remembering = null) {
     this.setBusy(t("Web.Opening"));
     try {
       const { response } = await request();
@@ -256,6 +354,7 @@ export class EaselWindow {
       this.zoom = this.fitZoom();
       this.layout();
       await this.render();
+      if (remembering) this.remember(name, remembering).catch(() => {});
     } catch (error) {
       this.alert(t("Web.Error.Open %@ %@", name, error.message));
     } finally {
@@ -268,7 +367,7 @@ export class EaselWindow {
     this.engine.call("close", { doc: this.doc }).catch(() => {});
     this.doc = null;
     this.info = null;
-    this.showDocument(false);
+    this.showStart();
   }
 
   newImage() {
@@ -555,8 +654,8 @@ export class EaselWindow {
       this.root.classList.remove("is-dropping");
       const dropped = await droppedDocument(event.dataTransfer);
       if (!dropped) return;
-      if (dropped.file) await this.openFile(dropped.file);
-      else await this.load(() => this.engine.call("open", { name: dropped.name, package: true }, dropped.bytes), dropped.name);
+      if (dropped.file) await this.openFile(dropped.file, { handle: dropped.handle });
+      else await this.openPackageBytes(dropped.name, dropped.bytes);
     });
   }
 
@@ -565,7 +664,7 @@ export class EaselWindow {
     if (!("launchQueue" in window)) return;
     window.launchQueue.setConsumer(async (params) => {
       const handle = params.files?.[0];
-      if (handle) await this.openFile(await handle.getFile());
+      if (handle) await this.openFile(await handle.getFile(), { handle });
     });
   }
 

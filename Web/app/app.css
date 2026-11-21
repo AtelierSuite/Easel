@@ -105,13 +105,8 @@ body {
 .app__start {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--ds-spacing-04);
-  padding: var(--ds-spacing-07);
-  text-align: center;
+  overflow: auto;
+  background: var(--ds-background);
 }
 
 .app__start[hidden],
@@ -123,26 +118,55 @@ body {
   display: none;
 }
 
-.app__start-icon {
-  width: 96px;
-  height: 96px;
+.app__start-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--ds-spacing-09) var(--ds-spacing-05);
 }
 
-.app__start-message {
-  max-width: 420px;
+.app__start-intro {
+  margin: var(--ds-spacing-03) 0 var(--ds-spacing-06);
   color: var(--ds-text-secondary);
 }
 
-.app__start-buttons {
+.app__start-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   gap: var(--ds-spacing-03);
-  margin-top: var(--ds-spacing-03);
+  margin-bottom: var(--ds-spacing-08);
 }
 
-.app__start-drop {
+.app__start-heading {
+  margin-bottom: var(--ds-spacing-03);
   color: var(--ds-text-secondary);
+}
+
+.app__recents td:first-child {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-03);
+  height: var(--ds-control-sm);
+}
+
+.app__recents td:first-child span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app__recents tr:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -2px;
+}
+
+.app__recent-date {
+  color: var(--ds-text-helper);
+  font: var(--ds-type-caption);
+  white-space: nowrap;
+}
+
+.app__recent-remove {
+  width: 40px;
 }
 
 .app.is-dropping .app__content {

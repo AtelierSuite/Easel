@@ -36,41 +36,6 @@
         }
       }
     },
-    "Web.Drop" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Drop an image to open it"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "イメージをドロップして開く"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "이미지를 드롭하여 열기"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拖放图像以打开"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拖放影像以打開"
-          }
-        }
-      }
-    },
     "Web.Error.Export %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -102,6 +67,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法輸出影像。%@"
+          }
+        }
+      }
+    },
+    "Web.Error.Missing %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” can’t be opened again from here. Open it with Open… instead."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”はここから再度開くことができません。「開く…」から開いてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‘%@’은(를) 여기에서 다시 열 수 없습니다. ‘열기…’로 여십시오."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法从这里再次打开“%@”。请改用“打开…”。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法從這裡再次打開「%@」。請改用「打開⋯」。"
           }
         }
       }
@@ -596,37 +596,37 @@
         }
       }
     },
-    "Web.Start.Message" : {
+    "Web.Start.Intro" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open a Photoshop, Pixelmator Pro or Easel image, or any picture, to look through its layers and export it."
+            "value" : "Open a Photoshop, Pixelmator Pro or Easel image or any picture, or start a new one. Everything stays on this device."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Photoshop、Pixelmator Pro、Easel のイメージやピクチャを開いて、レイヤーを確認したり書き出したりできます。"
+            "value" : "Photoshop、Pixelmator Pro、Easel のイメージやピクチャを開くか、新しいイメージを作成します。データはすべてこのデバイスに保存されます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Photoshop, Pixelmator Pro 또는 Easel 이미지나 사진을 열어 레이어를 살펴보고 내보낼 수 있습니다."
+            "value" : "Photoshop, Pixelmator Pro 또는 Easel 이미지나 사진을 열거나 새 이미지를 시작하십시오. 모든 데이터는 이 기기에 남습니다."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开 Photoshop、Pixelmator Pro 或 Easel 图像或任意图片，浏览其图层并导出。"
+            "value" : "打开 Photoshop、Pixelmator Pro 或 Easel 图像或任意图片，或新建图像。所有内容都保留在此设备上。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打開 Photoshop、Pixelmator Pro 或 Easel 影像或任何圖片，瀏覽其圖層並輸出。"
+            "value" : "打開 Photoshop、Pixelmator Pro 或 Easel 影像或任何圖片，或新增影像。所有內容都保留在此裝置上。"
           }
         }
       }
@@ -666,72 +666,72 @@
         }
       }
     },
-    "Web.Start.Open" : {
+    "Web.Start.NoRecent" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open…"
+            "value" : "No recent images"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開く…"
+            "value" : "最近使ったイメージはありません"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "열기…"
+            "value" : "최근 이미지 없음"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开…"
+            "value" : "没有最近使用的图像"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打開…"
+            "value" : "沒有最近使用的影像"
           }
         }
       }
     },
-    "Web.Start.Sample" : {
+    "Web.Start.Remove" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Sample"
+            "value" : "Remove from Recents"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サンプルを開く"
+            "value" : "最近使った項目から削除"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "샘플 열기"
+            "value" : "최근 항목에서 제거"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开示例"
+            "value" : "从最近使用中移除"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打開範例"
+            "value" : "從最近使用中移除"
           }
         }
       }

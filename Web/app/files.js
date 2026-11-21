@@ -40,7 +40,7 @@ function pickWithInput({ directory = false } = {}) {
   });
 }
 
-/** The file the person picks, or null. */
+/** The file the person picks, with its handle where the browser gives one; or null. */
 export async function chooseFile() {
   if ("showOpenFilePicker" in window) {
     try {
@@ -49,12 +49,21 @@ export async function chooseFile() {
         excludeAcceptAllOption: false,
         id: "easel-open",
       });
-      return await handle.getFile();
+      return { file: await handle.getFile(), handle };
     } catch (error) {
       if (error.name === "AbortError") return null;
     }
   }
-  return pickWithInput();
+  const file = await pickWithInput();
+  return file ? { file } : null;
+}
+
+/** The file behind a kept handle, asking for permission again if needed; null if refused. */
+export async function readHandle(handle) {
+  if (handle.queryPermission && (await handle.queryPermission({ mode: "read" })) !== "granted") {
+    if ((await handle.requestPermission({ mode: "read" })) !== "granted") return null;
+  }
+  return handle.getFile();
 }
 
 /** A package folder the person picks, zipped, with its name; or null. */
@@ -88,15 +97,18 @@ async function readDirectory(directory, prefix, entries) {
 
 /** Dropped items: a file, or a package folder zipped. */
 export async function droppedDocument(dataTransfer) {
+  // Everything is taken from the drop before the first wait, after which the browser empties it.
   const item = [...(dataTransfer.items ?? [])].find((i) => i.kind === "file");
   const entry = item?.webkitGetAsEntry?.();
+  const file = dataTransfer.files?.[0];
+  const handlePromise = entry?.isDirectory ? null : item?.getAsFileSystemHandle?.().catch(() => null);
   if (entry?.isDirectory) {
     const entries = [];
     await readChildren(entry, "", entries);
     return { name: entry.name, bytes: zip(entries), isPackage: true };
   }
-  const file = dataTransfer.files?.[0];
-  return file ? { file } : null;
+  const handle = await handlePromise;
+  return file ? { file, handle: handle?.kind === "file" ? handle : undefined } : null;
 }
 
 async function readEntry(entry, prefix, entries) {
