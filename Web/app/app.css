@@ -308,6 +308,26 @@ body {
   width: 96px;
 }
 
+/* MARK: - About */
+
+.app__about-suite {
+  margin-top: var(--ds-spacing-03);
+}
+
+.app__about-version {
+  margin: 0 0 var(--ds-spacing-03);
+}
+
+.app__about .ds-sheet__body {
+  grid-template-columns: 48px 1fr;
+}
+
+.app__about-icon {
+  display: block;
+  width: 48px;
+  height: 48px;
+}
+
 /* MARK: - Status bar */
 
 .app__status-note {
