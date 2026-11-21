@@ -1,6 +1,6 @@
 # Easel for the web
 
-The offline, installable web version of Easel: the Apple apps' own drawing engine, Paintbrush (`../Paintbrush`), compiled to WebAssembly, behind a web interface built on the Atelier design system in Easel's orange. No Node packages: the build is Swift and a shell script, and the page is plain HTML, CSS and JavaScript modules. It follows Tables', Libretto's and Dazzle's web apps file for file.
+The offline, installable web version of Easel: the Apple apps' own drawing engine, Paintbrush (`../Paintbrush`), compiled to WebAssembly, behind a web interface built on the Atelier design system in Easel's pink. No Node packages: the build is Swift and a shell script, and the page is plain HTML, CSS and JavaScript modules. It follows Tables', Libretto's and Dazzle's web apps file for file.
 
 - [PLAN.md](PLAN.md): the porting plan and where it stands.
 - [design/](design/): the design system. Rules are in `design/DESIGN.md`.

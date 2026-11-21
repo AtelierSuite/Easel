@@ -68,11 +68,11 @@
 
   /*
    * The app's accent colour. Must match
-   * Shared/Resources/Assets.xcassets/AccentColor.colorset (lint.mjs checks it).
+   * Shared/Support/Assets.xcassets/AccentColor.colorset (lint.mjs checks it).
    * Shades are mixed from it so changing the colour set changes the whole UI.
-   * --ds-accent-strong is the fill behind white text (5.4:1 for the current orange).
+   * --ds-accent-strong is the fill behind white text (6.1:1 for the current pink).
    */
-  --ds-accent: #f56b38;
+  --ds-accent: #ed406b;
   --ds-accent-strong: color-mix(in srgb, var(--ds-accent) 75%, #000);
 
   /* ---- Light appearance: Carbon White theme ---- */
