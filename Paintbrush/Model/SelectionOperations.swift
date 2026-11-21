@@ -1,6 +1,8 @@
 import CoreGraphics
 import CoreImage
+#if canImport(CoreImage.CIFilterBuiltins)
 import CoreImage.CIFilterBuiltins
+#endif
 import Foundation
 import SwiftUI
 

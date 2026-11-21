@@ -1,5 +1,7 @@
 import CoreImage
+#if canImport(CoreImage.CIFilterBuiltins)
 import CoreImage.CIFilterBuiltins
+#endif
 
 /// The one-tap looks and effects in the Looks panel, painted into a layer.
 /// Blurs and mosaics are layer filters instead, which stay editable.

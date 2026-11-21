@@ -1,6 +1,8 @@
 import CoreGraphics
 import CoreImage
+#if canImport(CoreImage.CIFilterBuiltins)
 import CoreImage.CIFilterBuiltins
+#endif
 import Synchronization
 
 /// A layer with its effects worked out, in three parts so a clipping group

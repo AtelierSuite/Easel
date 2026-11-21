@@ -1,5 +1,7 @@
 import CoreImage
+#if canImport(CoreImage.CIFilterBuiltins)
 import CoreImage.CIFilterBuiltins
+#endif
 import Synchronization
 
 extension LayerFilter {
