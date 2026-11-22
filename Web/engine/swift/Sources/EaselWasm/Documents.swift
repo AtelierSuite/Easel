@@ -122,6 +122,15 @@ enum Edits {
             if let mode = (request["blendMode"] as? String).flatMap(LayerBlendMode.init(rawValue:)) { layer.blendMode = mode }
             if let name = request["name"] as? String, !name.isEmpty { layer.name = name }
             if let locked = request["locked"] as? Bool { layer.isLocked = locked }
+            if let fill = request["fillOpacity"] as? Double { layer.fillOpacity = min(max(fill, 0), 1) }
+            if var adjustment = layer.adjustment {
+                if let amount = request["amount"] as? Double {
+                    adjustment.amount = min(max(amount, adjustment.kind.amountRange.lowerBound), adjustment.kind.amountRange.upperBound)
+                }
+                if let value = request["value"] as? Double, let at = request["parameter"] as? Int { adjustment.setValue(value, at: at) }
+                if let enabled = request["adjustmentEnabled"] as? Bool { adjustment.isEnabled = enabled }
+                layer.adjustment = adjustment
+            }
             composition.layers[index] = layer
         } else if let index = composition.groups.firstIndex(where: { $0.id == id }) {
             var group = composition.groups[index]

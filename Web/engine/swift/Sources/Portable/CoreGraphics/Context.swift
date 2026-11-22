@@ -90,6 +90,11 @@ enum Paint {
             return s.read(sx, sy)
         }
     }
+
+    func moved(dx: Int, dy: Int) -> Paint {
+        if dx == 0, dy == 0 { return self }
+        return .gradient { x, y in self.color(x - dx, y - dy) }
+    }
 }
 
 struct ImagePaint {
@@ -653,7 +658,9 @@ public final class CGContext: @unchecked Sendable {
     /// the current alpha, blend mode, clip and shadow.
     private func composite(_ polygons: [[CGPoint]], rule: CGPathFillRule, paint: Paint) {
         if let shadow = state.shadow {
-            // Draw the shape alone, then its shadow, then the shape over it.
+            // The shape alone, moved to where its shadow falls, as it may be
+            // drawn off the surface for only its shadow to show.
+            let dx = Int(shadow.offset.width.rounded()), dy = Int((-shadow.offset.height).rounded())
             let shape = Surface(width: base.width, height: base.height)
             let saved = state
             state.shadow = nil
@@ -661,7 +668,8 @@ public final class CGContext: @unchecked Sendable {
             state.alpha = 1
             let clip = state.clip
             state.clip = nil
-            render(polygons, rule: rule, paint: paint, into: shape)
+            let moved = polygons.map { $0.map { CGPoint(x: $0.x + CGFloat(dx), y: $0.y + CGFloat(dy)) } }
+            render(moved, rule: rule, paint: paint.moved(dx: dx, dy: dy), into: shape)
             state = saved
             state.clip = clip
             var alpha = [Float](repeating: 0, count: shape.width * shape.height)
@@ -671,16 +679,14 @@ public final class CGContext: @unchecked Sendable {
             gaussianBlur(&alpha, width: shape.width, height: shape.height, sigma: Double(shadow.blur) / 2)
             let c = shadow.color
             let color = SIMD4(c.x * c.w, c.y * c.w, c.z * c.w, c.w)
-            let dx = Int(shadow.offset.width.rounded()), dy = Int((-shadow.offset.height).rounded())
             let w = shape.width, h = shape.height
             let everything = [[CGPoint(x: 0, y: 0), CGPoint(x: w, y: 0), CGPoint(x: w, y: h), CGPoint(x: 0, y: h)]]
             state.shadow = nil
             render(everything, rule: .winding, paint: .gradient({ x, y in
-                let sx = x - dx, sy = y - dy
-                guard sx >= 0, sy >= 0, sx < w, sy < h else { return nil }
-                return color * alpha[sy * w + sx]
+                guard x >= 0, y >= 0, x < w, y < h else { return nil }
+                return color * alpha[y * w + x]
             }), into: target)
-            render(everything, rule: .winding, paint: .surface(shape, dx: 0, dy: 0), into: target)
+            render(polygons, rule: rule, paint: paint, into: target)
             state.shadow = shadow
             return
         }

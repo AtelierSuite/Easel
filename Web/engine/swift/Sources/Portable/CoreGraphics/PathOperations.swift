@@ -200,70 +200,29 @@ extension CGPath {
     }
 
     // MARK: Combining
-    //
-    // Boolean operations on paths aren't implemented exactly yet: unions and
-    // differences are approximated by combining subpaths, which fills the
-    // same way under the matching rule.
 
-    public func normalized(using rule: CGPathFillRule = .winding) -> CGPath { copy() }
+    public func normalized(using rule: CGPathFillRule = .winding) -> CGPath {
+        PathBoolean.combine(self, nil, rule: rule) { filled, _ in filled }
+    }
 
     public func union(_ other: CGPath, using rule: CGPathFillRule = .winding) -> CGPath {
-        let path = mutableCopy()
-        path.addPath(other)
-        return path
+        PathBoolean.combine(self, other, rule: rule) { $0 || $1 }
     }
 
     public func symmetricDifference(_ other: CGPath, using rule: CGPathFillRule = .winding) -> CGPath {
-        let path = mutableCopy()
-        path.addPath(other)
-        return path
+        PathBoolean.combine(self, other, rule: rule) { $0 != $1 }
     }
 
     public func subtracting(_ other: CGPath, using rule: CGPathFillRule = .winding) -> CGPath {
-        let path = mutableCopy()
-        path.addPath(other.reversed())
-        return path
+        PathBoolean.combine(self, other, rule: rule) { $0 && !$1 }
     }
 
     public func intersection(_ other: CGPath, using rule: CGPathFillRule = .winding) -> CGPath {
-        other.boundingBoxOfPath.intersects(boundingBoxOfPath) ? copy() : CGPath()
+        PathBoolean.combine(self, other, rule: rule) { $0 && $1 }
     }
 
     public func componentsSeparated(using rule: CGPathFillRule = .winding) -> [CGPath] {
-        var result: [CGPath] = []
-        var current: CGMutablePath?
-        for element in elements {
-            if case .move = element {
-                if let current, !current.isEmpty { result.append(current) }
-                current = CGMutablePath()
-            }
-            if current == nil { current = CGMutablePath() }
-            current!.append(element)
-        }
-        if let current, !current.isEmpty { result.append(current) }
-        return result
-    }
-
-    /// The same outline traced the other way round.
-    func reversed() -> CGPath {
-        let path = CGMutablePath()
-        for subpath in flattened(tolerance: 0.05) {
-            path.addLines(between: subpath.points.reversed())
-            if subpath.closed { path.closeSubpath() }
-        }
-        return path
-    }
-}
-
-extension CGMutablePath {
-    func append(_ element: Element) {
-        switch element {
-        case .move(let p): move(to: p)
-        case .line(let p): addLine(to: p)
-        case .quadratic(let c, let p): addQuadCurve(to: p, control: c)
-        case .cubic(let c1, let c2, let p): addCurve(to: p, control1: c1, control2: c2)
-        case .close: closeSubpath()
-        }
+        PathBoolean.components(self, rule: rule)
     }
 }
 
