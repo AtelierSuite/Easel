@@ -13,6 +13,7 @@
 
 import { t } from "./i18n.js";
 import { openMenu } from "../design/menus.js";
+import { editGradient, flatStops, gradientWell, presetStops } from "./gradient.js";
 
 const icon = (path) => `<svg class="ds-icon" viewBox="0 0 16 16" aria-hidden="true">${path}</svg>`;
 const line = (d) => `<path d="${d}" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -1157,33 +1158,45 @@ class GradientTool {
   constructor(tools) {
     this.tools = tools;
     this.kind = "linear";
-    this.preset = "fading";
+    this.customStops = null;
     this.opacity = 1;
   }
 
+  /** The stops chosen, or the brush colour fading out. */
+  get shownStops() {
+    return this.customStops ?? presetStops("fading", hexToColor(this.tools.color));
+  }
+
   options() {
-    return colorWell(this.tools.color)
-      + choice("kind", "Gradient.Kind", GRADIENT_KINDS, this.kind)
-      + choice("preset", "Gradient.Presets", [["fading", "Gradient.Preset.Fading"], ["toWhite", "Gradient.Preset.ToWhite"], ["blackToWhite", "Gradient.Preset.BlackToWhite"]], this.preset)
+    return choice("kind", "Gradient.Kind", GRADIENT_KINDS, this.kind)
+      + colorWell(this.tools.color) + gradientWell(this.shownStops)
       + slider("opacity", "Options.Opacity", 1, 100, Math.round(this.opacity * 100), "%");
   }
 
   bind(element) {
     bindOptions(element, (key, value) => {
-      if (key === "color") this.tools.color = value;
-      else if (key === "opacity") this.opacity = value / 100;
-      else this[key] = value;
+      if (key === "color") {
+        this.tools.color = value;
+        if (!this.customStops) this.tools.renderOptions();
+      } else if (key === "opacity") {
+        this.opacity = value / 100;
+      } else {
+        this[key] = value;
+      }
+    });
+    bindActions(element, async () => {
+      const color = hexToColor(this.tools.color);
+      const stops = await editGradient(this.tools.window, this.shownStops, color);
+      if (!stops) return;
+      const fading = presetStops("fading", color);
+      const same = stops.length === 2 && stops.every((s, i) => s.location === fading[i].location && s.color.every((v, j) => v === fading[i].color[j]));
+      this.customStops = same ? null : stops;
+      this.tools.renderOptions();
     });
   }
 
   get stops() {
-    const color = hexToColor(this.tools.color);
-    const [from, to] = {
-      fading: [color, [...color.slice(0, 3), 0]],
-      toWhite: [color, [1, 1, 1, 1]],
-      blackToWhite: [[0, 0, 0, 1], [1, 1, 1, 1]],
-    }[this.preset];
-    return [0, ...from, 1, ...to];
+    return flatStops(this.shownStops);
   }
 
   begin(point) {
@@ -1598,7 +1611,7 @@ class NodesTool {
     if (path.fill) {
       html += action("gradient", "Options.GradientFill", path.gradient !== null);
       html += path.gradient
-        ? choice("gradientKind", "Gradient.Kind", GRADIENT_KINDS, path.gradient.kind) + slider("angle", "LayerFilters.Angle", -180, 180, Math.round(path.gradient.angle), "°")
+        ? choice("gradientKind", "Gradient.Kind", GRADIENT_KINDS, path.gradient.kind) + gradientWell(path.gradient.stops) + slider("angle", "LayerFilters.Angle", -180, 180, Math.round(path.gradient.angle), "°")
         : choice("pattern", "Options.PatternFill", [["", "Options.NoPattern"], ...PATTERNS], path.pattern ?? "");
     }
     html += action("stroke", "Options.Stroke", path.stroke !== null);
@@ -1647,7 +1660,7 @@ class NodesTool {
     bindActions(element, (name, button) => this.perform(name, button));
   }
 
-  perform(name, button) {
+  async perform(name, button) {
     const color = hexToColor(this.tools.color);
     switch (name) {
       case "fill":
@@ -1661,6 +1674,10 @@ class NodesTool {
       case "gradient": {
         const on = this.styled.gradient === null;
         return this.restyle(on ? { gradient: "linear", stops: this.tools.tools.gradient.stops } : { gradient: null });
+      }
+      case "gradientWell": {
+        const stops = await editGradient(this.window, this.styled.gradient.stops, hexToColor(this.tools.color));
+        return stops ? this.restyle({ stops: flatStops(stops) }) : undefined;
       }
       case "strokeStyle":
         return openMenu(this.strokeStyleItems(), button);

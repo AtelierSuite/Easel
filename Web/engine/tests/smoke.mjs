@@ -352,7 +352,10 @@ await test("paths take gradients, patterns, stroke styles and text, grow, outlin
   const layer = call({ op: "vector", doc, action: "add", paths: both }).response.added;
   const paths = () => call({ op: "paths", doc, layer }).response.paths;
   call({ op: "vector", doc, layer, action: "style", path: 0, gradient: "radial", angle: 30 });
-  assert.deepEqual(paths()[0].gradient, { kind: "radial", angle: 30 });
+  assert.equal(paths()[0].gradient.kind, "radial");
+  assert.equal(paths()[0].gradient.angle, 30);
+  call({ op: "vector", doc, layer, action: "style", path: 0, stops: [0, 1, 0, 0, 1, 0.5, 0, 1, 0, 1, 1, 0, 0, 1, 1] });
+  assert.equal(paths()[0].gradient.stops.length, 3);
   assert.equal(paths()[1].gradient, null);
   call({ op: "vector", doc, layer, action: "style", pattern: "dots" });
   assert.equal(paths()[0].pattern, "dots");

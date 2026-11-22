@@ -15,7 +15,12 @@ enum Vectors {
                 "fill": path.fill.map(components) ?? NSNull(), "stroke": path.stroke.map(components) ?? NSNull(),
                 "strokeWidth": Double(path.strokeWidth * scale), "text": path.text.map { text(of: $0, scale: scale) } ?? NSNull(),
                 "live": path.liveShape.map(live) ?? NSNull(), "strokeStyle": style(of: path.strokeStyleOrDefault),
-                "gradient": path.fillGradient.map { ["kind": $0.kind.rawValue, "angle": path.gradientAngle ?? 0] } ?? NSNull(),
+                "gradient": path.fillGradient.map { gradient -> [String: Any] in
+                    [
+                        "kind": gradient.kind.rawValue, "angle": path.gradientAngle ?? 0,
+                        "stops": gradient.stops.map { ["location": $0.location, "color": components($0.color)] },
+                    ]
+                } ?? NSNull(),
                 "pattern": path.fillPattern?.preset?.rawValue ?? (path.fillPattern == nil ? NSNull() : "document"),
                 "nodes": path.nodes.map { node -> [String: Any] in
                     let mapped = node.mapped(toCanvas)
@@ -172,6 +177,12 @@ enum Vectors {
             }
         }
         if let angle = request["angle"] as? Double { path.gradientAngle = angle }
+        if path.fillGradient != nil, !request.keys.contains("gradient") || request["gradient"] is String, let flat = request["stops"] as? [Double] {
+            let stops = stride(from: 0, to: max(0, flat.count - 4), by: 5).map {
+                PaintGradient.Stop(location: flat[$0], color: RGBAColor(red: flat[$0 + 1], green: flat[$0 + 2], blue: flat[$0 + 3], alpha: flat[$0 + 4]))
+            }
+            if stops.count >= 2 { path.fillGradient?.stops = stops }
+        }
         if request.keys.contains("pattern") {
             if let preset = (request["pattern"] as? String).flatMap(PatternChoice.Preset.init(rawValue:)) {
                 path.fillPattern = PatternChoice(preset: preset, color: path.fill ?? color)

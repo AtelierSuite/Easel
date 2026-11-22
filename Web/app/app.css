@@ -671,3 +671,72 @@ body {
 .app__draft-face.is-picked {
   fill: color-mix(in srgb, var(--ds-accent) 45%, transparent);
 }
+
+.app__gradient-well {
+  inline-size: 48px;
+  block-size: 24px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: var(--ds-radius);
+  background: repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 8px 8px;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.15);
+  overflow: hidden;
+}
+
+.app__gradient-well > span {
+  display: block;
+  block-size: 100%;
+}
+
+.app__gradient-editor {
+  inline-size: min(26rem, 90vw);
+}
+
+.app__gradient-bar {
+  position: relative;
+  margin-block: var(--ds-spacing-05) var(--ds-spacing-07);
+  margin-inline: var(--ds-spacing-04);
+  block-size: 28px;
+  background: repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 12px 12px;
+  touch-action: none;
+}
+
+.app__gradient-fill {
+  position: absolute;
+  inset: 0;
+}
+
+.app__gradient-stops {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 100%;
+}
+
+.app__gradient-knob {
+  position: absolute;
+  inset-block-start: 4px;
+  inline-size: 20px;
+  block-size: 20px;
+  margin-inline-start: -10px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: var(--ds-radius);
+  background: var(--stop);
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.25);
+  touch-action: none;
+}
+
+.app__gradient-knob[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--ds-accent);
+}
+
+.app__gradient-stop {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-03);
+  margin-block-end: var(--ds-spacing-03);
+}
+
+.app__gradient-alpha {
+  flex: 1;
+}
