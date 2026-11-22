@@ -41,6 +41,35 @@ enum RawPixels {
     }
 }
 
+/// Pictures inside a document the browser decoded before the engine opened
+/// it, found again by their bytes: HEIC and the rest that Swift doesn't read.
+public enum DecodedPictures {
+    nonisolated(unsafe) private static var table: [String: [UInt8]] = [:]
+
+    /// The bytes' length and FNV-1a hash, as the page works it out.
+    public static func key(_ bytes: [UInt8]) -> String {
+        var hash: UInt32 = 0x811C_9DC5
+        for byte in bytes {
+            hash ^= UInt32(byte)
+            hash = hash &* 0x0100_0193
+        }
+        return "\(bytes.count)-\(String(hash, radix: 16))"
+    }
+
+    public static func add(_ raw: [UInt8], for key: String) {
+        guard RawPixels.info(raw) != nil else { return }
+        table[key] = raw
+    }
+
+    public static func removeAll() {
+        table = [:]
+    }
+
+    static func lookup(_ bytes: [UInt8]) -> [UInt8]? {
+        table.isEmpty ? nil : table[key(bytes)]
+    }
+}
+
 public final class CGImageSource: @unchecked Sendable {
     enum Kind { case png, jpeg, gif, raw, unknown }
 
@@ -48,7 +77,8 @@ public final class CGImageSource: @unchecked Sendable {
     let kind: Kind
     private var decoded: (width: Int, height: Int, rgba: [UInt8], orientation: Int)??
 
-    init(bytes: [UInt8]) {
+    init(bytes original: [UInt8]) {
+        let bytes = DecodedPictures.lookup(original) ?? original
         self.bytes = bytes
         if PNG.info(bytes) != nil {
             kind = .png

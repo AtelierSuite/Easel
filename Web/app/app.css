@@ -20,6 +20,9 @@ body {
   height: 100dvh;
   border: 0;
   position: relative;
+  /* viewport-fit=cover lays the page under the status bar, notch and home indicator. */
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+  background: var(--ds-layer-01);
 }
 
 .app[hidden] {
@@ -94,6 +97,14 @@ body {
 .app__zoom {
   min-width: 56px;
   justify-content: center;
+}
+
+.app__rotation {
+  gap: var(--ds-spacing-02);
+}
+
+.app__rotation[hidden] {
+  display: none;
 }
 
 /* MARK: - Start */
@@ -183,11 +194,77 @@ body {
 }
 
 .app__stage {
+  position: relative;
   width: max-content;
   height: max-content;
 }
 
+.app__overlay {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.app__overlay * {
+  vector-effect: non-scaling-stroke;
+}
+
+.app__ants-light {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1px;
+}
+
+.app__ants-dark {
+  fill: none;
+  stroke: #000;
+  stroke-width: 1px;
+  stroke-dasharray: 4 4;
+  animation: app-ants 0.6s linear infinite;
+}
+
+@keyframes app-ants {
+  to { stroke-dashoffset: -8; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app__ants-dark { animation: none; }
+}
+
+.app__draft-line {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5px;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.8));
+}
+
+.app__draft-shade {
+  fill: rgb(0 0 0 / 0.45);
+  fill-rule: evenodd;
+}
+
+.app__draft-handle {
+  fill: #fff;
+  stroke: #000;
+  stroke-width: 1px;
+}
+
+.app__draft-mark {
+  fill: none;
+  stroke: rgb(255 255 255 / 0.35);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: none;
+}
+
+.app__text-input {
+  inline-size: min(28rem, 80vw);
+  resize: vertical;
+  font: inherit;
+}
+
 .app__canvas {
+  position: absolute;
   display: block;
   background-color: var(--ds-layer-01);
   background-image: conic-gradient(var(--ds-layer-accent-01) 25%, transparent 25% 50%, var(--ds-layer-accent-01) 50% 75%, transparent 75%);
@@ -243,7 +320,6 @@ body {
   min-height: 56px;
 }
 
-.app__layer.is-hidden .app__layer-name,
 .app__layer.is-hidden .app__thumbnail {
   opacity: 0.45;
 }
@@ -266,17 +342,67 @@ body {
   transform: rotate(90deg);
 }
 
-.app__layer-name {
+.app__layer-text {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.app__layer-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.app__layer-kind {
-  flex: none;
+.app__layer-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--ds-text-secondary);
+}
+
+.app__layer-kind,
+.app__layer-state,
+.app__layer-folder {
+  flex: none;
+  display: inline-flex;
+  color: var(--ds-text-secondary);
+}
+
+.app__layer-folder {
+  color: var(--ds-link-primary);
+}
+
+.app__layer.is-hidden .app__layer-text {
+  opacity: 0.45;
+}
+
+/* What painting goes into: the layer's pixels or its mask. */
+.app__thumbnail.is-target,
+.app__mask-button.is-target {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: -1px;
+}
+
+.app__mask-button.is-off {
+  opacity: 0.4;
+}
+
+.app__layer.is-dragging {
+  opacity: 0.5;
+}
+
+.app__layers {
+  position: relative;
+}
+
+.app__drop {
+  position: absolute;
+  inset-inline: var(--ds-spacing-03);
+  height: 2px;
+  background: var(--ds-focus);
+  pointer-events: none;
 }
 
 .app__layer-settings {
@@ -284,22 +410,52 @@ body {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--ds-spacing-03) var(--ds-spacing-04);
-  padding: var(--ds-spacing-05);
+  padding: var(--ds-spacing-03) var(--ds-spacing-05) var(--ds-spacing-05);
   border-block-start: 1px solid var(--ds-border-subtle-01);
 }
 
 .app__layer-settings .ds-slider,
-.app__layer-settings .ds-popup {
-  min-width: 0;
-}
-
+.app__layer-settings .ds-popup,
+.app__layer-settings .ds-text-input,
 .app__layer-settings input[type="range"] {
   min-width: 0;
 }
 
-.app__opacity-value {
+.app__setting-heading {
+  grid-column: 1 / -1;
+  margin-block-start: var(--ds-spacing-04);
+  color: var(--ds-text-secondary);
+}
+
+.app__setting-wide {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.app__setting-footer {
+  color: var(--ds-text-secondary);
+}
+
+.app__setting-destructive {
+  color: var(--ds-text-error);
+}
+
+.app__setting-value {
   min-width: 40px;
   text-align: end;
+}
+
+.app__layer-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-02);
+  padding: var(--ds-spacing-02) var(--ds-spacing-03);
+  border-block-start: 1px solid var(--ds-border-subtle-01);
+}
+
+.app__layer-actions-spacer {
+  flex: 1;
 }
 
 /* MARK: - New image */
@@ -328,21 +484,246 @@ body {
   height: 48px;
 }
 
-/* MARK: - Status bar */
+/* MARK: - Tools */
 
-.app__status-note {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ds-text-secondary);
+.app__viewport {
+  touch-action: none;
 }
 
+.app > .app__tools {
+  grid-area: sidebar;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-spacing-02);
+  padding: var(--ds-spacing-03);
+  overflow-y: auto;
+  background: var(--ds-layer-01);
+  border-inline-end: 1px solid var(--ds-border-subtle-01);
+}
+
+.app > .app__tools[hidden],
+.app > .app__options[hidden] {
+  display: none;
+}
+
+.app__tool {
+  flex: none;
+}
+
+.app__tools-separator {
+  flex: none;
+  width: 24px;
+  height: 1px;
+  margin: var(--ds-spacing-02) 0;
+  background: var(--ds-border-subtle-01);
+}
+
+.app > .app__options {
+  grid-area: accessory;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-04);
+  min-height: var(--ds-control-md);
+  padding: 0 var(--ds-spacing-04);
+  background: var(--ds-layer-01);
+  border-bottom: 1px solid var(--ds-border-subtle-01);
+}
+
+.app__options-tools {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-06);
+}
+
+.app__option input[type="range"] {
+  flex: none;
+  width: 112px;
+}
+
+.app__option-label {
+  color: var(--ds-text-secondary);
+  white-space: nowrap;
+}
+
+.app__option-value {
+  min-width: 36px;
+  text-align: end;
+}
+
+.app__layers-toggle {
+  display: none;
+}
+
+/* MARK: - Phones */
+
 @media (max-width: 720px) {
+  /* As on iPhone: the tool's options and the tools along the bottom, Layers under the canvas. */
+  .app {
+    grid-template-rows: auto var(--ds-toolbar-height) minmax(0, 1fr) auto auto auto auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "menubar"
+      "toolbar"
+      "content"
+      "inspector"
+      "status"
+      "accessory"
+      "sidebar";
+  }
+
+  .app__toolbar > [data-action="zoomIn"],
+  .app__toolbar > [data-action="zoomOut"] {
+    display: none;
+  }
+
+  .app > .app__tools {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-inline-end: 0;
+    border-top: 1px solid var(--ds-border-subtle-01);
+  }
+
+  .app__tools-separator {
+    width: 1px;
+    height: 24px;
+    margin: 0 var(--ds-spacing-02);
+  }
+
+  .app > .app__options {
+    border-bottom: 0;
+    border-top: 1px solid var(--ds-border-subtle-01);
+  }
+
+  .app__options-tools {
+    gap: var(--ds-spacing-04);
+    align-self: stretch;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .app__option {
+    flex: none;
+    gap: var(--ds-spacing-02);
+  }
+
+  .ds-slider.app__option {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .app__option input[type="range"] {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  .app__option-label {
+    display: none;
+  }
+
+  .app__layers-toggle {
+    display: inline-flex;
+  }
+
   .app__inspector {
     display: none;
   }
 
-  .app__status-note {
-    display: none;
+  .app.is-showing-layers .app__inspector:not([hidden]) {
+    display: flex;
+    width: auto;
+    max-height: 45vh;
+    border-inline-start: 0;
+    border-top: 1px solid var(--ds-border-subtle-01);
   }
+}
+
+.app__draft-handle.is-picked {
+  fill: var(--ds-accent);
+}
+
+.app__draft-face {
+  fill: rgb(255 255 255 / 0.08);
+  fill-rule: evenodd;
+  stroke: #fff;
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.8));
+}
+
+.app__draft-face.is-picked {
+  fill: color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+
+.app__gradient-well {
+  inline-size: 48px;
+  block-size: 24px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: var(--ds-radius);
+  background: repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 8px 8px;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.15);
+  overflow: hidden;
+}
+
+.app__gradient-well > span {
+  display: block;
+  block-size: 100%;
+}
+
+.app__gradient-editor {
+  inline-size: min(26rem, 90vw);
+}
+
+.app__gradient-bar {
+  position: relative;
+  margin-block: var(--ds-spacing-05) var(--ds-spacing-07);
+  margin-inline: var(--ds-spacing-04);
+  block-size: 28px;
+  background: repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 12px 12px;
+  touch-action: none;
+}
+
+.app__gradient-fill {
+  position: absolute;
+  inset: 0;
+}
+
+.app__gradient-stops {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 100%;
+}
+
+.app__gradient-knob {
+  position: absolute;
+  inset-block-start: 4px;
+  inline-size: 20px;
+  block-size: 20px;
+  margin-inline-start: -10px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: var(--ds-radius);
+  background: var(--stop);
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.25);
+  touch-action: none;
+}
+
+.app__gradient-knob[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--ds-accent);
+}
+
+.app__gradient-stop {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-spacing-03);
+  margin-block-end: var(--ds-spacing-03);
+}
+
+.app__gradient-alpha {
+  flex: 1;
 }

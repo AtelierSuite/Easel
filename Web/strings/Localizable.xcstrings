@@ -281,6 +281,41 @@
         }
       }
     },
+    "Web.Error.PaintAdjustment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adjustment layers can’t be painted on in the web app yet."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web版では、調整レイヤーにはまだ描けません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "웹 앱에서는 아직 조정 레이어에 그릴 수 없습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网页版暂时还不能在调整图层上绘画。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網頁版暫時還不能在調整圖層上繪畫。"
+          }
+        }
+      }
+    },
     "Web.Error.Picture" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -736,6 +771,41 @@
         }
       }
     },
+    "Web.Options.PenPressure" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pen Pressure"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ペンの筆圧"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "펜 압력"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "笔压"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "筆壓"
+          }
+        }
+      }
+    },
     "Web.Start.Intro" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -911,41 +981,6 @@
         }
       }
     },
-    "Web.Status.Preview" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Easel for the web opens, shows and exports images. Painting and editing are on the way."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Web 版 Easel では画像を開いて表示し、書き出すことができます。ペイントと編集は今後対応予定です。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "웹용 Easel에서는 이미지를 열고, 보고, 내보낼 수 있습니다. 그리기와 편집은 곧 지원됩니다."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "网页版 Easel 可以打开、查看和导出图像。绘画和编辑功能即将推出。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "網頁版 Easel 可以打開、檢視和輸出影像。繪圖和編輯功能即將推出。"
-          }
-        }
-      }
-    },
     "Web.Status.Size %lld %lld" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -977,6 +1012,41 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld × %2$lld 像素"
+          }
+        }
+      }
+    },
+    "Web.Tools.Title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tools"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ツール"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "도구"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工具"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工具"
           }
         }
       }

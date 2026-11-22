@@ -22,6 +22,7 @@ async function start() {
   // For looking at the window from the console or a test, on this machine only.
   if (isLocal()) window.easel = app;
   app.showStart();
+  refreshTopEdge();
   registerServiceWorker(app);
 }
 
@@ -61,6 +62,15 @@ function showEngineProgress(engine) {
     latest = event.detail;
     render();
   });
+}
+
+// iOS Safari tints the strip under the status bar with the colour it saw while
+// loading and keeps it over the menu bar until the bar's colour changes.
+function refreshTopEdge() {
+  const bar = root.querySelector(".ds-menu-bar");
+  if (!bar) return;
+  bar.style.backgroundColor = "transparent";
+  requestAnimationFrame(() => requestAnimationFrame(() => bar.style.removeProperty("background-color")));
 }
 
 const isLocal = () => ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
