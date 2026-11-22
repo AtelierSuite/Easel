@@ -405,6 +405,18 @@ await test("shapes combine exactly", () => {
   near(pixel(grown, 60, 57, 30), [255, 255, 255, 255]);
 });
 
+await test("brush tips paint, and symmetry mirrors the stroke", () => {
+  const { response } = call({ op: "new", width: 40, height: 40, fill: [0, 0, 0, 0] });
+  const doc = response.doc, layer = response.rows[0].id;
+  call({ op: "stroke", doc, layer, kind: "paint", points: [5, 5, 1, 12, 12, 1], times: [0, 0.05], size: 6, color: [1, 0, 0, 1], tip: "chalk", symmetry: "both", dynamics: { taper: 0.2 } });
+  const { payload } = call({ op: "render", doc });
+  for (const [x, y] of [[8, 8], [31, 8], [8, 31], [31, 31]]) {
+    const around = [-1, 0, 1].flatMap((dx) => [-1, 0, 1].map((dy) => pixel(payload, 40, x + dx, y + dy)[3]));
+    assert.ok(Math.max(...around) > 0, `nothing painted near ${x}, ${y}`);
+  }
+  near(pixel(payload, 40, 20, 20), [0, 0, 0, 0]);
+});
+
 await test("transform bends a layer by its corners", () => {
   const { response } = call({ op: "new", width: 40, height: 40, fill: [1, 0, 0, 1] });
   const doc = response.doc, layer = response.rows[0].id;

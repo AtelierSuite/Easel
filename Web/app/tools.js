@@ -124,31 +124,62 @@ function bindOptions(element, change) {
 
 // ------------------------------------------------------------ Tools
 
+/** The brushes that come with the app, as the Apple apps' library has them: [name, tip, size, opacity, softness, pressure, dynamics]. */
+const BRUSHES = [
+  ["Ink", "round", 8], ["DipPen", "round", 10, 1, 0, true, { taper: 0.5, speed: 0.6 }], ["Sketch", "pencil", 6, 0.9],
+  ["BrushPen", "calligraphy", 28], ["SoftAirbrush", "airbrush", 160, 0.6, 0, false], ["Pastel", "chalk", 48],
+  ["Marker", "marker", 30, 0.75, 0.1], ["Charcoal", "charcoal", 26], ["Crayon", "crayon", 22], ["Stipple", "stipple", 24],
+  ["Pixel", "pixel", 1, 1, 0, false], ["Bristle", "bristle", 40], ["DryBrush", "dryBrush", 50], ["Flat", "flat", 44, 1, 0, false],
+  ["Spatter", "spatter", 60, 1, 0, false], ["Sponge", "sponge", 70, 1, 0, false], ["Foliage", "foliage", 50, 1, 0, false],
+  ["Stars", "stars", 36, 1, 0, false], ["Confetti", "confetti", 40, 1, 0, false], ["Neon", "neon", 20, 1, 0, false],
+  ["Watercolor", "watercolor", 60, 0.8, 0.3], ["Oil", "oil", 40],
+].map(([name, tip, size, opacity = 1, softness = 0, usesPressure = true, dynamics = {}]) => ({ name, tip, size, opacity, softness, usesPressure, dynamics }));
+
+const SYMMETRIES = [["off", "Symmetry.Off"], ["vertical", "Symmetry.Vertical"], ["horizontal", "Symmetry.Horizontal"], ["both", "Symmetry.Both"]];
+
 /** Brush and Eraser: the stroke shows in its layer as it's drawn, and the engine paints it when it lifts. */
 class BrushTool {
   constructor(tools, { erases, size, softness }) {
     this.tools = tools;
     this.erases = erases;
-    this.settings = { size, opacity: 1, softness };
+    this.settings = { size, opacity: 1, softness, tip: "round", usesPressure: true, dynamics: {} };
+    this.brush = erases ? "" : "Ink";
   }
 
   options() {
-    const { size, opacity, softness } = this.settings;
+    const { size, opacity, softness, usesPressure } = this.settings;
+    const brushes = [...(this.brush ? [] : [["", "Brush.Tip.Round"]]), ...BRUSHES.map((b) => [b.name, `Brush.Preset.${b.name}`])];
     return (this.erases ? "" : colorWell(this.tools.color))
+      + choice("brush", "Brush.Library", brushes, this.brush)
       + slider("size", "Options.Size", 1, 400, size)
       + slider("opacity", "Options.Opacity", 1, 100, Math.round(opacity * 100), "%")
-      + slider("softness", "Options.Softness", 0, 100, Math.round(softness * 100), "%");
+      + slider("softness", "Options.Softness", 0, 100, Math.round(softness * 100), "%")
+      + toggle("usesPressure", "Web.Options.PenPressure", usesPressure)
+      + choice("symmetry", "Symmetry.Title", SYMMETRIES, this.tools.symmetry);
   }
 
   bind(element) {
     bindOptions(element, (key, value) => {
       if (key === "color") this.tools.color = value;
+      else if (key === "brush") this.choose(value);
+      else if (key === "symmetry") this.tools.symmetry = value;
+      else if (key === "usesPressure") this.settings.usesPressure = value;
       else this.settings[key] = key === "size" ? value : value / 100;
     });
   }
 
+  /** Takes a brush's tip, size, opacity, softness and dynamics; the colour stays. */
+  choose(name) {
+    const brush = BRUSHES.find((b) => b.name === name);
+    if (!brush) return;
+    this.brush = name;
+    const { tip, size, opacity, softness, usesPressure, dynamics } = brush;
+    Object.assign(this.settings, { tip, size, opacity, softness, usesPressure, dynamics });
+    this.tools.renderOptions();
+  }
+
   begin(point) {
-    this.stroke = { ...this.settings, color: this.tools.color, points: [point] };
+    this.stroke = { ...this.settings, color: this.tools.color, points: [point], mirrors: mirrors(this.tools) };
     // On a mask the brush hides the layer, shown as it goes; what the eraser brings back shows once painted.
     const mask = this.tools.window.paintsMask();
     const opacity = mask && (this.erases || this.tools.window.selectedRow()?.type === "adjustment") ? 0 : this.settings.opacity;
@@ -171,7 +202,13 @@ class BrushTool {
         context.setTransform(scale, 0, 0, scale, 0, 0);
         context.clip(new Path2D(selection), "evenodd");
       }
-      drawStroke(context, stroke, scale);
+      for (const [a, b, c, d, e, f] of stroke.mirrors) {
+        context.save();
+        context.setTransform(scale, 0, 0, scale, 0, 0);
+        context.transform(a, b, c, d, e, f);
+        drawStroke(context, stroke, scale, false);
+        context.restore();
+      }
       if (selection) context.restore();
     });
   }
@@ -183,11 +220,15 @@ class BrushTool {
     this.tools.window.canvasView.endStroke();
     this.tools.window.edit("stroke", {
       kind: this.erases ? "erase" : "paint",
-      points: stroke.points.flatMap((p) => [p.x, p.y, p.pressure]),
+      ...strokePoints(stroke.points),
       size: stroke.size,
       opacity: stroke.opacity,
       softness: stroke.softness,
       color: hexToColor(stroke.color),
+      tip: stroke.tip,
+      usesPressure: stroke.usesPressure,
+      dynamics: stroke.dynamics,
+      symmetry: this.tools.symmetry,
     });
   }
 
@@ -198,18 +239,18 @@ class BrushTool {
 }
 
 /** The stroke's shape, near enough to what the engine paints: pressure thins it as Stroke.width(at:) does. */
-function drawStroke(context, stroke, scale) {
+function drawStroke(context, stroke, scale, reset = true) {
   const { points, size, softness } = stroke;
-  context.setTransform(scale, 0, 0, scale, 0, 0);
+  if (reset) context.setTransform(scale, 0, 0, scale, 0, 0);
   context.strokeStyle = context.fillStyle = stroke.color;
   context.lineCap = context.lineJoin = "round";
   if (softness > 0) context.filter = `blur(${size * softness * 0.25 * scale}px)`;
-  const width = (p) => size * (0.2 + 0.8 * Math.min(Math.max(p.pressure, 0), 1));
+  const width = (p) => (stroke.usesPressure === false ? size : size * (0.2 + 0.8 * Math.min(Math.max(p.pressure, 0), 1)));
   if (points.length === 1) {
     context.beginPath();
     context.arc(points[0].x, points[0].y, width(points[0]) / 2, 0, Math.PI * 2);
     context.fill();
-  } else if (points.every((p) => p.pressure >= 1)) {
+  } else if (stroke.usesPressure === false || points.every((p) => p.pressure >= 1)) {
     context.lineWidth = size;
     context.beginPath();
     context.moveTo(points[0].x, points[0].y);
@@ -225,6 +266,24 @@ function drawStroke(context, stroke, scale) {
     }
   }
   context.filter = "none";
+}
+
+/** The points as the engine takes them: x, y and pressure, when each came, and a pen's lean. */
+function strokePoints(points) {
+  const tilted = points.some((p) => p.altitude !== undefined);
+  return {
+    points: points.flatMap((p) => [p.x, p.y, p.pressure]),
+    times: points.map((p) => p.time / 1000),
+    ...(tilted ? { tilts: points.flatMap((p) => [p.azimuth ?? 0, p.altitude ?? Math.PI / 2]) } : {}),
+  };
+}
+
+/** The reflections the symmetry setting draws a stroke with, as canvas transforms, the stroke itself first. */
+function mirrors(tools) {
+  const { width, height } = tools.window.info;
+  const flipX = [-1, 0, 0, 1, width, 0], flipY = [1, 0, 0, -1, 0, height], both = [-1, 0, 0, -1, width, height];
+  const identity = [1, 0, 0, 1, 0, 0];
+  return { vertical: [identity, flipX], horizontal: [identity, flipY], both: [identity, flipX, flipY, both] }[tools.symmetry] ?? [identity];
 }
 
 /** Fills lay down the colour or a pattern: a built-in tile in the colour, or one of the picture's own, at a scale. */
@@ -2195,6 +2254,7 @@ export class Tools {
     this.color = "#000000";
     this.pattern = null;
     this.patternScale = 1;
+    this.symmetry = "off";
     this.tools = {
       brush: new BrushTool(this, { erases: false, size: 12, softness: 0 }),
       eraser: new BrushTool(this, { erases: true, size: 60, softness: 0.3 }),
@@ -2304,7 +2364,9 @@ export class Tools {
 
   point(event) {
     const point = this.window.pictureAt(event.clientX, event.clientY);
-    return { ...point, pressure: event.pointerType === "pen" && event.pressure > 0 ? event.pressure : 1 };
+    const pen = event.pointerType === "pen";
+    const lean = pen && event.altitudeAngle !== undefined ? { azimuth: event.azimuthAngle - this.window.rotation, altitude: event.altitudeAngle } : {};
+    return { ...point, pressure: pen && event.pressure > 0 ? event.pressure : 1, time: event.timeStamp, ...lean };
   }
 
   down(event) {

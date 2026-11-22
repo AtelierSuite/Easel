@@ -8,22 +8,58 @@ enum Painting {
         let onMask = editsMask(request, in: composition)
         let layerID = try paintableLayer(request, in: composition, onMask: onMask)
         let flat = request["points"] as? [Double] ?? []
-        let points = stride(from: 0, to: flat.count - 2, by: 3).map {
-            StrokePoint(location: CGPoint(x: flat[$0], y: flat[$0 + 1]), pressure: flat[$0 + 2])
+        let times = request["times"] as? [Double] ?? []
+        let tilts = request["tilts"] as? [Double] ?? []
+        let points = stride(from: 0, to: flat.count - 2, by: 3).map { index -> StrokePoint in
+            let n = index / 3
+            var point = StrokePoint(location: CGPoint(x: flat[index], y: flat[index + 1]), pressure: flat[index + 2])
+            if n < times.count { point.time = times[n] }
+            if n * 2 + 1 < tilts.count, tilts[n * 2 + 1] < .pi / 2 - 0.001 {
+                point.azimuth = tilts[n * 2]
+                point.altitude = tilts[n * 2 + 1]
+            }
+            return point
         }
         guard let first = points.first else { return }
         var settings = BrushSettings(size: min(max(request["size"] as? Double ?? 24, BrushSettings.sizeRange.lowerBound), BrushSettings.sizeRange.upperBound))
         settings.opacity = min(max(request["opacity"] as? Double ?? 1, 0), 1)
         settings.softness = min(max(request["softness"] as? Double ?? 0, 0), 1)
         settings.color = color(request["color"])
+        if let tip = (request["tip"] as? String).flatMap(BrushTip.init(rawValue:)) { settings.tip = tip }
+        if let pressure = request["usesPressure"] as? Bool { settings.usesPressure = pressure }
+        if let dynamics = request["dynamics"] as? [String: Any] {
+            settings.dynamics.taper = dynamics["taper"] as? Double ?? 0
+            settings.dynamics.speed = dynamics["speed"] as? Double ?? 0
+            settings.dynamics.followsStroke = dynamics["followsStroke"] as? Bool ?? false
+            settings.dynamics.scatter = dynamics["scatter"] as? Double ?? 0
+            settings.dynamics.sizeJitter = dynamics["sizeJitter"] as? Double ?? 0
+            settings.dynamics.colorJitter = dynamics["colorJitter"] as? Double ?? 0
+        }
+        let size = composition.size
+        let mirrors = reflections(request["symmetry"] as? String, in: size)
+        func mirrored(_ stroke: Stroke) -> [Stroke] {
+            mirrors.map { reflection in
+                guard !reflection.isIdentity else { return stroke }
+                var copy = stroke
+                copy.points = stroke.points.map { point in
+                    var reflected = point
+                    reflected.location = point.location.applying(reflection)
+                    reflected.azimuth = point.azimuth.map { atan2(sin($0) * reflection.d, cos($0) * reflection.a) }
+                    return reflected
+                }
+                return copy
+            }
+        }
         let name = request["kind"] as? String ?? "paint"
         if onMask {
             guard name == "paint" || name == "erase" else { throw Bridge.Failure(message: String(localized: "Error.MaskTool")) }
             // On a mask the brush hides and the eraser reveals.
             settings.color = .white
-            let stroke = Stroke(points: points, settings: settings, kind: .paint, clip: selection)
+            let strokes = mirrored(Stroke(points: points, settings: settings, kind: .paint, clip: selection))
             editMask(of: layerID, in: &composition, hides: name == "paint") { size in
-                Bitmap.render(size: size) { context in stroke.paint(in: context, canvasSize: size) }
+                Bitmap.render(size: size) { context in
+                    for stroke in strokes { stroke.paint(in: context, canvasSize: size) }
+                }
             }
             return
         }
@@ -49,12 +85,14 @@ enum Painting {
         case "tone": kind = .tone(ToneKind(rawValue: request["tone"] as? String ?? "") ?? .dodge)
         default: kind = .paint
         }
-        let stroke = Stroke(points: points, settings: settings, kind: kind, clip: selection)
+        let strokes = mirrored(Stroke(points: points, settings: settings, kind: kind, clip: selection))
         editPixels(of: layerID, in: &composition) { image in
-            switch kind {
-            case .paint, .erase: return Painter.paint(stroke, onto: image)
-            case .heal: return Healer.heal(image, with: stroke)
-            default: return Painter.apply(RetouchEffect.image(kind, settings: settings, of: image), onto: image, through: stroke)
+            strokes.reduce(image) { image, stroke in
+                switch kind {
+                case .paint, .erase: return Painter.paint(stroke, onto: image)
+                case .heal: return Healer.heal(image, with: stroke)
+                default: return Painter.apply(RetouchEffect.image(kind, settings: settings, of: image), onto: image, through: stroke)
+                }
             }
         }
     }
@@ -188,6 +226,18 @@ enum Painting {
     static func clear(_ request: [String: Any], in composition: inout Composition, selection: Selection) throws {
         let layerID = try paintableLayer(request, in: composition)
         editPixels(of: layerID, in: &composition) { image in Painter.clear(selection, in: image) }
+    }
+
+    /// The mirror images a symmetric stroke is drawn with, the stroke itself first.
+    private static func reflections(_ symmetry: String?, in size: CGSize) -> [CGAffineTransform] {
+        let flipX = CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: size.width, ty: 0)
+        let flipY = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: size.height)
+        switch symmetry {
+        case "vertical": return [.identity, flipX]
+        case "horizontal": return [.identity, flipY]
+        case "both": return [.identity, flipX, flipY, flipX.concatenating(flipY)]
+        default: return [.identity]
+        }
     }
 
     static func color(_ value: Any?) -> RGBAColor {
