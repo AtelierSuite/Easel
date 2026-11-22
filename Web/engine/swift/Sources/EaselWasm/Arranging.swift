@@ -13,6 +13,64 @@ enum Arranging {
         composition[id]?.transform.position.y += request["dy"] as? Double ?? 0
     }
 
+    /// The Move tool's placing: flips, quarter turns, scale and angle, fit,
+    /// reset, and lining layers up. A group named arranges its layers.
+    static func place(_ request: [String: Any], in composition: inout Composition) throws {
+        let ids: [Layer.ID]
+        if let group = (request["group"] as? String).flatMap(UUID.init(uuidString:)) {
+            ids = composition.layers(in: group).filter { !composition.isLocked($0) }.map(\.id)
+        } else {
+            guard let id = layerID(request), let layer = composition[id] else {
+                throw Bridge.Failure(message: String(localized: "Error.NoLayer"))
+            }
+            if composition.isLocked(layer) { throw Bridge.Failure(message: String(localized: "Error.LayerLocked")) }
+            ids = [id]
+        }
+        guard !ids.isEmpty else { return }
+        let size = composition.size
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        func change(_ body: (inout LayerTransform, Layer) -> Void) {
+            for id in ids {
+                guard let layer = composition[id] else { continue }
+                body(&composition[id]!.transform, layer)
+            }
+        }
+        switch request["action"] as? String {
+        case "flipHorizontal": change { t, _ in t.scaleX = -t.scaleX; t.rotation = -t.rotation }
+        case "flipVertical": change { t, _ in t.scaleY = -t.scaleY; t.rotation = -t.rotation }
+        case "rotate": change { t, _ in t.rotation = normalized(t.rotation + .pi / 2) }
+        case "scale":
+            let value = max(0.01, request["value"] as? Double ?? 1)
+            change { t, _ in t.uniformScale = value }
+        case "rotation":
+            let value = (request["value"] as? Double ?? 0) * .pi / 180
+            change { t, _ in t.rotation = normalized(value) }
+        case "reset": change { t, _ in t = LayerTransform(position: center) }
+        case "fit":
+            change { t, layer in
+                t.position = center
+                t.uniformScale = min(size.width / layer.image.size.width, size.height / layer.image.size.height)
+            }
+        case "align":
+            guard let edge = AlignEdge(rawValue: request["edge"] as? String ?? "") else { return }
+            let target = ids.count > 1
+                ? ids.compactMap { composition[$0]?.bounds }.reduce(CGRect.null) { $0.union($1) }
+                : composition.canvasRect
+            composition.align(ids, edge, to: target)
+        case "distribute":
+            composition.distribute(ids, horizontally: request["horizontal"] as? Bool ?? true)
+        default:
+            throw Bridge.Failure(message: "Unknown placing")
+        }
+    }
+
+    private static func normalized(_ angle: Double) -> Double {
+        var value = angle.truncatingRemainder(dividingBy: 2 * .pi)
+        if value > .pi { value -= 2 * .pi }
+        if value < -.pi { value += 2 * .pi }
+        return value
+    }
+
     /// The topmost visible layer under a point, as tapping with Move picks it.
     /// Adjustments and clear pixels are passed over, so a tap lands on what's seen there.
     static func layer(at point: CGPoint, in composition: Composition, text: Bool = false) -> Layer? {
@@ -44,7 +102,8 @@ enum Arranging {
             kind: kind, start: CGPoint(x: line[0], y: line[1]), end: CGPoint(x: line[2], y: line[3]),
             isFilled: kind.canFill && (request["filled"] as? Bool ?? true),
             lineWidth: max(1, request["lineWidth"] as? Double ?? 8), color: Painting.color(request["color"]),
-            cornerRadius: request["cornerRadius"] as? Double ?? 24, sides: request["sides"] as? Int ?? 6
+            cornerRadius: request["cornerRadius"] as? Double ?? 24, sides: request["sides"] as? Int ?? 6,
+            innerRatio: request["innerRatio"] as? Double ?? 0.45
         )
         let layer = Layer.vector(VectorPath.shape(spec), name: kind.label)
         composition.insert(layer, above: layerID(request))
@@ -84,7 +143,21 @@ enum Arranging {
         return layer.id
     }
 
+    /// Crops to a rectangle, or turns the picture level along a line, or
+    /// flattens what four corners hold square-on.
     static func crop(_ request: [String: Any], in composition: inout Composition, selection: inout Selection?) {
+        if let line = request["straighten"] as? [Double], line.count == 4 {
+            let angle = Composition.straighteningAngle(from: CGPoint(x: line[0], y: line[1]), to: CGPoint(x: line[2], y: line[3]))
+            guard abs(angle) > 0.0001 else { return }
+            composition.straighten(by: angle)
+            selection = nil
+            return
+        }
+        if let flat = request["quad"] as? [Double], flat.count == 8 {
+            composition.perspectiveCrop(to: stride(from: 0, to: 8, by: 2).map { CGPoint(x: flat[$0], y: flat[$0 + 1]) })
+            selection = nil
+            return
+        }
         let r = request["rect"] as? [Double] ?? []
         guard r.count == 4 else { return }
         let rect = CGRect(x: r[0], y: r[1], width: r[2], height: r[3]).standardized.integral

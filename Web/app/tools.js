@@ -316,12 +316,12 @@ function handle(window, point) {
 }
 
 /** The points of a regular polygon or a star inside `rect`, as ShapeSpec draws them. */
-function shapePoints(rect, sides, star) {
+function shapePoints(rect, sides, star, inner = 0.45) {
   const cx = rect.x + rect.width / 2, cy = rect.y + rect.height / 2;
   const count = star ? sides * 2 : sides;
   return Array.from({ length: count }, (_, i) => {
     const angle = -Math.PI / 2 + (i * Math.PI * 2) / count;
-    const r = star && i % 2 ? 0.45 : 1;
+    const r = star && i % 2 ? inner : 1;
     return { x: cx + Math.cos(angle) * (rect.width / 2) * r, y: cy + Math.sin(angle) * (rect.height / 2) * r };
   });
 }
@@ -329,16 +329,57 @@ function shapePoints(rect, sides, star) {
 // ------------------------------------------------------------ Arranging
 
 /** Move: drags the selected layer; a tap picks the layer under it. */
+const ALIGN_EDGES = [["left", "Align.Left"], ["centerX", "Align.CenterX"], ["right", "Align.Right"], ["top", "Align.Top"], ["centerY", "Align.CenterY"], ["bottom", "Align.Bottom"]];
+
 class MoveTool {
   constructor(tools) {
     this.tools = tools;
   }
 
   options() {
-    return "";
+    const row = this.tools.window.selectedRow();
+    if (!row) return "";
+    const layer = row.kind === "layer";
+    return action("flipHorizontal", "Options.FlipHorizontal") + action("flipVertical", "Options.FlipVertical") + action("rotate", "Options.RotateLayer")
+      + (layer
+        ? slider("scale", "Options.Scale", 1, 400, Math.round((row.scale ?? 1) * 100), "%")
+          + slider("rotation", "Options.Rotation", -180, 180, Math.round(row.rotation ?? 0), "°")
+          + action("fit", "Options.FitToCanvas") + action("reset", "Options.ResetTransform")
+        : "")
+      + action("align", "Align.Title");
   }
 
-  bind() {}
+  bind(element) {
+    bindOptions(element, (key, value) => {
+      clearTimeout(this.placing);
+      this.placing = setTimeout(() => this.place({ action: key, value: key === "scale" ? value / 100 : value }), 150);
+    });
+    bindActions(element, (name, button) => {
+      if (name !== "align") return this.place({ action: name });
+      const group = this.tools.window.selectedRow()?.kind === "group";
+      openMenu([
+        { header: t(group ? "Align.ToEachOther" : "Align.ToCanvas") },
+        ...ALIGN_EDGES.map(([edge, label]) => ({ label: t(label), action: () => this.place({ action: "align", edge }) })),
+        ...(group ? [
+          { separator: true },
+          { label: t("Align.DistributeAcross"), action: () => this.place({ action: "distribute", horizontal: true }) },
+          { label: t("Align.DistributeDown"), action: () => this.place({ action: "distribute", horizontal: false }) },
+        ] : []),
+      ], button);
+    });
+  }
+
+  changed() {
+    if (!this.start && !this.tools.options.contains(document.activeElement)) this.tools.renderOptions();
+  }
+
+  /** Places the selected layer, or a selected group's layers. */
+  place(request) {
+    const window = this.tools.window, row = window.selectedRow();
+    if (!row) return;
+    const target = row.kind === "group" ? { group: row.id } : {};
+    return window.edit("place", { ...target, ...request }, { all: row.kind === "group" });
+  }
 
   begin(point) {
     this.start = point;
@@ -443,33 +484,109 @@ class SelectTool {
   }
 }
 
-/** Crop: drags out the part to keep, or moves it from inside; Apply or Return crops to it. */
+const CROP_MODES = [["frame", "Crop.Mode.Frame"], ["straighten", "Crop.Mode.Straighten"], ["perspective", "Crop.Mode.Perspective"]];
+const CROP_ASPECTS = [
+  ["free", "Crop.Aspect.Free", null], ["original", "Crop.Aspect.Original", 0], ["square", "Crop.Aspect.Square", 1],
+  ["fourThree", "Crop.Aspect.FourThree", 4 / 3], ["threeTwo", "Crop.Aspect.ThreeTwo", 3 / 2], ["sixteenNine", "Crop.Aspect.SixteenNine", 16 / 9],
+];
+
+/** Crop: a frame to keep, moved and sized by its edges; or a line to level the picture along; or four corners to flatten square-on. */
 class CropTool {
   constructor(tools) {
     this.tools = tools;
+    this.mode = "frame";
+    this.aspect = "free";
     this.rect = null;
+    this.quad = null;
+    this.line = null;
   }
 
-  options() {
-    return action("apply", "Options.CropApply") + action("reset", "Options.CropReset");
-  }
-
-  bind(element) {
-    bindActions(element, (name) => (name === "apply" ? this.apply() : this.reset()));
-  }
-
-  enter() {
-    this.show();
-  }
-
-  leave() {
-    this.rect = null;
-    this.tools.window.draft();
+  get window() {
+    return this.tools.window;
   }
 
   get canvas() {
-    const { width, height } = this.tools.window.info;
+    const { width, height } = this.window.info;
     return { x: 0, y: 0, width, height };
+  }
+
+  /** Width over height, landscape or portrait as the canvas is; null when any shape goes. */
+  get ratio() {
+    const [, , base] = CROP_ASPECTS.find(([id]) => id === this.aspect);
+    if (base === null) return null;
+    const c = this.canvas;
+    if (base === 0) return c.width / c.height;
+    return c.width >= c.height ? base : 1 / base;
+  }
+
+  get isChanged() {
+    if (this.mode === "perspective") return Boolean(this.quad);
+    const r = this.rect, c = this.canvas;
+    return Boolean(r) && (Math.round(r.x) !== 0 || Math.round(r.y) !== 0 || Math.round(r.width) !== c.width || Math.round(r.height) !== c.height);
+  }
+
+  options() {
+    const off = (button) => (this.isChanged ? button : button.replace("<button", "<button disabled"));
+    return choice("mode", "Crop.Mode", CROP_MODES, this.mode)
+      + (this.mode === "frame" ? choice("aspect", "Options.AspectRatio", CROP_ASPECTS.map(([id, label]) => [id, label]), this.aspect) : "")
+      + action("rotateLeft", "Canvas.RotateLeft") + action("rotateRight", "Canvas.RotateRight") + action("flip", "Canvas.FlipHorizontal")
+      + (this.mode === "straighten" ? "" : action("reset", "Options.CropReset") + off(action("apply", "Options.CropApply")));
+  }
+
+  bind(element) {
+    bindOptions(element, (key, value) => {
+      this[key] = value;
+      if (key === "aspect") this.constrain();
+      this.reset({ keepRect: key === "aspect" });
+      this.tools.renderOptions();
+    });
+    bindActions(element, (name) => {
+      if (name === "apply") return this.apply();
+      if (name === "reset") return this.reset();
+      const turn = { rotateLeft: { clockwise: false }, rotateRight: { clockwise: true }, flip: { horizontal: true } }[name];
+      return this.turn(turn);
+    });
+  }
+
+  enter() {
+    this.reset();
+  }
+
+  leave() {
+    this.rect = this.quad = this.line = null;
+    this.window.draft();
+  }
+
+  changed() {
+    if (!this.drag && !this.isChanged) this.reset();
+  }
+
+  async turn(request) {
+    const done = await this.window.edit("turnCanvas", request, { all: true });
+    if (done) this.reset();
+  }
+
+  /** Back to the whole canvas, or corners a little in from its own. */
+  reset({ keepRect = false } = {}) {
+    if (!this.window.info) return;
+    const c = this.canvas;
+    if (!keepRect) this.rect = { ...c };
+    this.line = null;
+    this.quad = this.mode === "perspective"
+      ? [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]].map(([u, v]) => ({ x: c.width * u, y: c.height * v }))
+      : null;
+    this.show();
+    this.tools.renderOptions();
+  }
+
+  /** The frame fitted to the chosen proportions, centred where it was. */
+  constrain() {
+    const ratio = this.ratio, r = this.rect;
+    if (!ratio || !r) return;
+    let { width, height } = r;
+    if (width / height > ratio) width = height * ratio;
+    else height = width / ratio;
+    this.rect = this.clamp({ x: r.x + (r.width - width) / 2, y: r.y + (r.height - height) / 2, width, height });
   }
 
   clamp(r) {
@@ -479,72 +596,164 @@ class CropTool {
   }
 
   begin(point) {
-    const r = this.rect;
-    const inside = r && point.x > r.x && point.x < r.x + r.width && point.y > r.y && point.y < r.y + r.height;
-    this.drag = { start: point, moving: inside, origin: r };
+    const reach = 20 / this.window.zoom;
+    if (this.mode === "straighten") {
+      this.line = [point, point];
+      this.drag = { kind: "line" };
+      return;
+    }
+    if (this.mode === "perspective") {
+      const distance = (p) => Math.hypot(p.x - point.x, p.y - point.y);
+      const corner = this.quad.reduce((best, p, i) => (distance(p) < distance(this.quad[best]) ? i : best), 0);
+      this.drag = { kind: "corner", corner, start: point, origin: { ...this.quad[corner] } };
+      return;
+    }
+    const r = this.rect ?? this.canvas;
+    const near = (a, b) => Math.abs(a - b) <= reach;
+    const within = (v, from, to) => v >= from - reach && v <= to + reach;
+    const horizontal = within(point.y, r.y, r.y + r.height) ? (near(point.x, r.x) ? -1 : near(point.x, r.x + r.width) ? 1 : 0) : 0;
+    const vertical = within(point.x, r.x, r.x + r.width) ? (near(point.y, r.y) ? -1 : near(point.y, r.y + r.height) ? 1 : 0) : 0;
+    const inside = point.x > r.x && point.x < r.x + r.width && point.y > r.y && point.y < r.y + r.height;
+    this.drag = horizontal || vertical
+      ? { kind: "edge", horizontal, vertical, start: point, origin: r }
+      : { kind: inside ? "move" : "new", start: point, origin: r };
   }
 
   update(points) {
-    if (!this.drag) return;
-    const p = points.at(-1), { start, moving, origin } = this.drag;
-    if (moving) {
+    const drag = this.drag;
+    if (!drag) return;
+    const p = points.at(-1);
+    if (drag.kind === "line") {
+      this.line[1] = p;
+    } else if (drag.kind === "corner") {
       const c = this.canvas;
-      const x = Math.max(0, Math.min(origin.x + p.x - start.x, c.width - origin.width));
-      const y = Math.max(0, Math.min(origin.y + p.y - start.y, c.height - origin.height));
-      this.rect = { ...origin, x, y };
+      this.quad[drag.corner] = {
+        x: Math.max(0, Math.min(c.width, drag.origin.x + p.x - drag.start.x)),
+        y: Math.max(0, Math.min(c.height, drag.origin.y + p.y - drag.start.y)),
+      };
+    } else if (drag.kind === "move") {
+      const c = this.canvas, o = drag.origin;
+      this.rect = {
+        ...o,
+        x: Math.max(0, Math.min(o.x + p.x - drag.start.x, c.width - o.width)),
+        y: Math.max(0, Math.min(o.y + p.y - drag.start.y, c.height - o.height)),
+      };
+    } else if (drag.kind === "new") {
+      const rect = rectOf(drag.start, p);
+      this.rect = this.fit(this.clamp(rect), { horizontal: p.x < drag.start.x ? -1 : 1, vertical: p.y < drag.start.y ? -1 : 1 });
     } else {
-      this.rect = this.clamp(rectOf(start, p));
+      const o = drag.origin, dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+      let { x, y, width, height } = o;
+      if (drag.horizontal < 0) [x, width] = [Math.min(o.x + dx, o.x + o.width - 1), Math.max(o.width - dx, 1)];
+      if (drag.horizontal > 0) width = Math.max(o.width + dx, 1);
+      if (drag.vertical < 0) [y, height] = [Math.min(o.y + dy, o.y + o.height - 1), Math.max(o.height - dy, 1)];
+      if (drag.vertical > 0) height = Math.max(o.height + dy, 1);
+      this.rect = this.fit(this.clamp({ x, y, width, height }), drag);
     }
     this.show();
+  }
+
+  /** A dragged frame bent to the chosen proportions, keeping the corner or edge opposite the one dragged. */
+  fit(rect, drag) {
+    const ratio = this.ratio;
+    if (!ratio || rect.width < 1 || rect.height < 1) return rect;
+    let { width, height } = rect;
+    if (drag.vertical === 0 || (drag.horizontal !== 0 && width / height > ratio)) height = width / ratio;
+    else width = height * ratio;
+    const anchorX = drag.horizontal < 0 ? rect.x + rect.width : rect.x;
+    const anchorY = drag.vertical < 0 ? rect.y + rect.height : rect.y;
+    const c = this.canvas;
+    const room = Math.min(1, (drag.horizontal < 0 ? anchorX : c.width - anchorX) / width, (drag.vertical < 0 ? anchorY : c.height - anchorY) / height);
+    width *= room;
+    height *= room;
+    return { x: drag.horizontal < 0 ? anchorX - width : anchorX, y: drag.vertical < 0 ? anchorY - height : anchorY, width, height };
   }
 
   end() {
     const drag = this.drag;
     this.drag = null;
-    if (drag && !drag.moving && (!this.rect || this.rect.width < 1 || this.rect.height < 1)) this.reset();
+    if (!drag) return;
+    if (drag.kind === "line") {
+      const [a, b] = this.line;
+      this.line = null;
+      this.show();
+      if (Math.hypot(b.x - a.x, b.y - a.y) * this.window.zoom > 4) this.straighten(a, b);
+      return;
+    }
+    if (drag.kind === "new" && (!this.rect || this.rect.width < 1 || this.rect.height < 1)) this.rect = drag.origin;
+    this.show();
+    this.tools.renderOptions();
   }
 
   cancel() {
-    if (this.drag) this.rect = this.drag.origin;
+    const drag = this.drag;
     this.drag = null;
+    if (drag?.kind === "corner") this.quad[drag.corner] = drag.origin;
+    else if (drag?.origin) this.rect = drag.origin;
+    this.line = null;
     this.show();
   }
 
   show() {
-    const r = this.rect, c = this.canvas;
-    if (!r || !this.tools.window.info) {
-      this.tools.window.draft();
-      return;
+    const window = this.window;
+    if (!window.info) return window.draft();
+    const c = this.canvas;
+    if (this.mode === "straighten") {
+      const line = this.line;
+      return window.draft(line ? `<path class="app__draft-line" d="${polyline(line)}"/>` + handle(window, line[0]) + handle(window, line[1]) : "");
     }
+    if (this.mode === "perspective") {
+      const quad = this.quad ?? [];
+      return window.draft(
+        `<path class="app__draft-shade" d="M0 0H${c.width}V${c.height}H0Z ${polyline(quad)}Z"/>`
+        + `<path class="app__draft-line" d="${polyline(quad)}Z"/>` + quad.map((p) => handle(window, p)).join(""),
+      );
+    }
+    const r = this.rect;
+    if (!r) return window.draft();
     const thirds = [1, 2].map((n) => `M${number(r.x + (r.width * n) / 3)} ${number(r.y)}v${number(r.height)}M${number(r.x)} ${number(r.y + (r.height * n) / 3)}h${number(r.width)}`).join("");
-    const corners = [[r.x, r.y], [r.x + r.width, r.y], [r.x + r.width, r.y + r.height], [r.x, r.y + r.height]];
-    this.tools.window.draft(
+    const points = [0, 0.5, 1].flatMap((u) => [0, 0.5, 1].map((v) => ({ x: r.x + r.width * u, y: r.y + r.height * v }))).filter((_, i) => i !== 4);
+    window.draft(
       `<path class="app__draft-shade" d="M0 0H${c.width}V${c.height}H0Z M${number(r.x)} ${number(r.y)}h${number(r.width)}v${number(r.height)}h${number(-r.width)}Z"/>`
       + `<path class="app__draft-line" d="${thirds}" opacity="0.5"/>`
       + `<rect class="app__draft-line" x="${number(r.x)}" y="${number(r.y)}" width="${number(r.width)}" height="${number(r.height)}"/>`
-      + corners.map(([x, y]) => handle(this.tools.window, { x, y })).join(""),
+      + points.map((p) => handle(window, p)).join(""),
     );
   }
 
   async apply() {
+    if (!this.isChanged) return;
+    if (this.mode === "perspective") {
+      const quad = this.quad;
+      const done = await this.window.edit("crop", { quad: quad.flatMap((p) => [p.x, p.y]) }, { all: true });
+      if (done) {
+        this.mode = "frame";
+        this.reset();
+      }
+      return;
+    }
     const r = this.rect;
-    if (!r || r.width < 1 || r.height < 1) return;
-    this.rect = null;
-    this.tools.window.draft();
-    await this.tools.window.edit("crop", { rect: [r.x, r.y, r.width, r.height] }, { all: true });
+    const done = await this.window.edit("crop", { rect: [r.x, r.y, r.width, r.height] }, { all: true });
+    if (done) {
+      this.aspect = "free";
+      this.reset();
+    }
   }
 
-  reset() {
-    this.rect = null;
-    this.show();
+  async straighten(a, b) {
+    const done = await this.window.edit("crop", { straighten: [a.x, a.y, b.x, b.y] }, { all: true });
+    if (done) {
+      this.mode = "frame";
+      this.reset();
+    }
   }
 
   key(event) {
-    if (event.key === "Enter" && this.rect) {
+    if (event.key === "Enter" && this.isChanged) {
       this.apply();
       return true;
     }
-    if (event.key === "Escape" && this.rect) {
+    if (event.key === "Escape" && this.isChanged) {
       this.reset();
       return true;
     }
@@ -950,10 +1159,22 @@ class ShapeTool {
     this.kind = "rectangle";
     this.filled = true;
     this.lineWidth = 8;
+    this.cornerRadius = 24;
+    this.polygonSides = 6;
+    this.starPoints = 5;
+    this.innerRatio = 0.45;
   }
 
   get sides() {
-    return this.kind === "star" ? 5 : 6;
+    return this.kind === "star" ? this.starPoints : this.polygonSides;
+  }
+
+  /** The settings the shape keeps afterwards, as a live shape. */
+  liveOptions() {
+    if (this.kind === "roundedRectangle") return slider("cornerRadius", "Shape.CornerRadius", 0, 400, this.cornerRadius, " px");
+    if (this.kind === "polygon") return slider("polygonSides", "Shape.Sides", 3, 16, this.polygonSides);
+    if (this.kind === "star") return slider("starPoints", "Shape.Points", 3, 16, this.starPoints) + slider("innerRatio", "Shape.InnerRadius", 10, 95, Math.round(this.innerRatio * 100), "%");
+    return "";
   }
 
   get isLine() {
@@ -963,6 +1184,7 @@ class ShapeTool {
   options() {
     return colorWell(this.tools.color)
       + choice("kind", "Shape.Kind", SHAPES, this.kind)
+      + this.liveOptions()
       + (this.isLine ? "" : toggle("filled", "Options.ShapeFilled", this.filled))
       + (this.isLine || !this.filled ? slider("lineWidth", "Options.LineWidth", 1, 200, this.lineWidth) : "");
   }
@@ -970,6 +1192,7 @@ class ShapeTool {
   bind(element) {
     bindOptions(element, (key, value) => {
       if (key === "color") this.tools.color = value;
+      else if (key === "innerRatio") this.innerRatio = value / 100;
       else this[key] = value;
       if (key === "kind" || key === "filled") this.tools.renderOptions();
     });
@@ -996,7 +1219,7 @@ class ShapeTool {
         break;
       case "polygon":
       case "star":
-        shape = `<path d="${polyline(shapePoints(r, this.sides, this.kind === "star"))}Z" ${paint}/>`;
+        shape = `<path d="${polyline(shapePoints(r, this.sides, this.kind === "star", this.innerRatio))}Z" ${paint}/>`;
         break;
       case "line":
       case "arrow": {
@@ -1007,7 +1230,7 @@ class ShapeTool {
         break;
       }
       default: {
-        const radius = this.kind === "roundedRectangle" ? Math.min(24, r.width / 2, r.height / 2) : 0;
+        const radius = this.kind === "roundedRectangle" ? Math.min(this.cornerRadius, r.width / 2, r.height / 2) : 0;
         shape = `<rect x="${number(r.x)}" y="${number(r.y)}" width="${number(r.width)}" height="${number(r.height)}" rx="${number(radius)}" ${paint}/>`;
       }
     }
@@ -1025,6 +1248,7 @@ class ShapeTool {
     await window.edit("shape", {
       shape: this.kind, line: [line[0].x, line[0].y, line[1].x, line[1].y], filled: this.filled,
       lineWidth: this.lineWidth, color: hexToColor(this.tools.color), sides: this.sides,
+      cornerRadius: this.cornerRadius, innerRatio: this.innerRatio,
     }, { all: true });
     window.draft();
   }

@@ -130,6 +130,22 @@ final class Bridge {
         case "move":
             return try edit(request) { try Arranging.move(request, in: &$0) }
 
+        case "place":
+            return try edit(request) { try Arranging.place(request, in: &$0) }
+
+        case "turnCanvas":
+            let documentID = try id(request)
+            var selection = selections[documentID]
+            let clockwise = request["clockwise"] as? Bool
+            let horizontal = request["horizontal"] as? Bool ?? true
+            let result = try edit(request) { composition in
+                let transform = clockwise.map { composition.rotationTransform(clockwise: $0) } ?? composition.flipTransform(horizontal: horizontal)
+                if let clockwise { composition.rotate(clockwise: clockwise) } else { composition.flip(horizontal: horizontal) }
+                selection = selection.map { $0.applying(transform, canvasSize: composition.size) }
+            }
+            selections[documentID] = selection
+            return describe(documentID).merging(result) { mine, _ in mine }
+
         case "hit":
             let composition = try document(request)
             let point = CGPoint(x: request["x"] as? Double ?? 0, y: request["y"] as? Double ?? 0)
@@ -267,6 +283,7 @@ final class Bridge {
                     "canClip": composition.canClip(layer.id), "canMergeDown": composition.canMergeDown(layer.id),
                     "groupID": layer.groupID?.uuidString ?? NSNull(), "groupLocked": composition.isLocked(layer),
                     "adjustment": layer.adjustment.map(LayerActions.describe) ?? NSNull(),
+                    "scale": layer.transform.uniformScale, "rotation": layer.transform.rotation * 180 / .pi,
                 ]
             }
         }
