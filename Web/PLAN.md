@@ -46,7 +46,8 @@ Constraints, as for Tables, Libretto and Dazzle: **no Node packages**, and **Pai
 - [x] Exact boolean operations on paths (`CGPath.union`, `intersection`, `subtracting`, `normalized`, `componentsSeparated`), on outlines flattened to lines (`PathBoolean.swift`); results come back as straight segments where Core Graphics keeps curves.
 - [ ] Colour management: Display P3 and sRGB pictures keep their numbers; Core Graphics would convert.
 - [ ] Compare renders against the Apple apps' for a set of Photoshop and Pixelmator Pro documents, and tune the Core Image stand-ins (highlights and shadows, noise reduction, bokeh, photo effects are approximations).
-- [ ] Open real Pixelmator Pro documents in the browser (SQLite over the in-memory file system is built but not yet tried on one).
+- [x] Open real Pixelmator Pro documents in the browser. Pictures inside a document that Swift doesn't decode (HEIC, WebP, AVIF, TIFF, BMP) are decoded by the page first and handed over (`DecodedPictures`), Where the browser can't decode one (HEIC outside Safari), that layer is left out.
+- [ ] Pixelmator Pro's text and shape layers (Paintbrush skips them on every platform).
 - [ ] Audit Paintbrush's `Int(…)` conversions of 32-bit file fields for values over 2 GB on wasm32.
 
 ### Engine quality

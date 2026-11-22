@@ -417,6 +417,18 @@ await test("brush tips paint, and symmetry mirrors the stroke", () => {
   near(pixel(payload, 40, 20, 20), [0, 0, 0, 0]);
 });
 
+await test("a picture the page decoded stands in for its bytes", () => {
+  const heic = new Uint8Array([0, 0, 0, 24, ...new TextEncoder().encode("ftypheic"), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  let hash = 0x811c9dc5;
+  for (const byte of heic) hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
+  call({ op: "picture", key: `${heic.length}-${hash.toString(16)}` }, rawPixels(3, 2, () => [0, 0, 255, 255]));
+  const { response } = call({ op: "open", name: "photo.heic" }, heic);
+  assert.equal(response.width, 3);
+  const { payload } = call({ op: "render", doc: response.doc });
+  near(pixel(payload, 3, 1, 1), [0, 0, 255, 255]);
+  assert.equal(engine.call({ op: "open", name: "photo.heic" }, heic).response.ok, false);
+});
+
 await test("transform bends a layer by its corners", () => {
   const { response } = call({ op: "new", width: 40, height: 40, fill: [1, 0, 0, 1] });
   const doc = response.doc, layer = response.rows[0].id;

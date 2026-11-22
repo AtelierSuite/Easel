@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import Paintbrush
 
 /// Turns the page's requests into Paintbrush calls. Every request is a JSON
@@ -40,7 +41,13 @@ final class Bridge {
             LocalizedStrings.table = request["table"] as? [String: String] ?? [:]
             return [:]
 
+        case "picture":
+            guard let payload, let key = request["key"] as? String else { throw Failure(message: "No picture") }
+            DecodedPictures.add([UInt8](payload), for: key)
+            return [:]
+
         case "open":
+            defer { DecodedPictures.removeAll() }
             guard let payload else { throw Failure(message: "Nothing to open") }
             let name = request["name"] as? String ?? ""
             let composition = try Documents.open(payload, name: name, isPackage: request["package"] as? Bool ?? false)

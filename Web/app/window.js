@@ -4,7 +4,7 @@
 import { attachMenuBar, attachToolbarOverflow, openMenu } from "../design/menus.js";
 import { dismissSheet } from "../design/sheets.js";
 import { t, language } from "./i18n.js";
-import { chooseFile, choosePackage, droppedDocument, bytesForEngine, readHandle, saveFile } from "./files.js";
+import { chooseFile, choosePackage, droppedDocument, bytesForEngine, picturesInside, readHandle, saveFile } from "./files.js";
 import * as storage from "./storage.js";
 import { Tools } from "./tools.js";
 import { GPUCanvas } from "./canvas.js";
@@ -331,7 +331,7 @@ export class EaselWindow {
   }
 
   async openPackageBytes(name, bytes, record = null) {
-    await this.load(() => this.engine.call("open", { name, package: true }, bytes.slice()), name, { bytes: record ? null : bytes, isPackage: true, record });
+    await this.load(() => this.openInEngine({ name, package: true }, bytes.slice()), name, { bytes: record ? null : bytes, isPackage: true, record });
   }
 
   /** Opens a file, remembering it in Open Recent by its handle, or else by a copy of it. */
@@ -344,8 +344,14 @@ export class EaselWindow {
       } catch {
         throw new Error(t("Web.Error.Picture"));
       }
-      return this.engine.call("open", { name: file.name }, bytes);
+      return this.openInEngine({ name: file.name }, bytes);
     }, file.name, { handle, bytes: copy, record });
+  }
+
+  /** Opens a document in the engine, first handing it the pictures inside that only the browser decodes. */
+  async openInEngine(params, bytes) {
+    for (const picture of await picturesInside(bytes)) await this.engine.call("picture", { key: picture.key }, picture.bytes);
+    return this.engine.call("open", params, bytes);
   }
 
   async openRecord(record) {

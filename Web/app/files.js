@@ -142,6 +142,67 @@ export async function bytesForEngine(file) {
   return decodePicture(file);
 }
 
+/** The key the engine finds a picture by: its length and FNV-1a hash, as DecodedPictures works it out. */
+export function pictureKey(bytes) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i++) hash = Math.imul(hash ^ bytes[i], 0x01000193) >>> 0;
+  return `${bytes.length}-${hash.toString(16)}`;
+}
+
+/** Whether the engine needs the browser to decode a picture: HEIC, WebP, AVIF, TIFF or BMP. */
+function needsBrowser(bytes) {
+  const text = (from, to) => String.fromCharCode(...bytes.subarray(from, to));
+  if (bytes.length < 12) return false;
+  if (text(4, 8) === "ftyp") return true;
+  if (text(0, 4) === "RIFF" && text(8, 12) === "WEBP") return true;
+  if ((bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a) || (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[3] === 0x2a)) return true;
+  return text(0, 2) === "BM";
+}
+
+/**
+ * The pictures inside a zipped document (a Pixelmator Pro file, or a package
+ * zipped up) that only the browser can decode, decoded: { key, bytes } each.
+ * Pictures it can't decode either are left out.
+ */
+export async function picturesInside(bytes) {
+  if (bytes.length < 22 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) return [];
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let end = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) {
+      end = i;
+      break;
+    }
+  }
+  if (end < 0) return [];
+  let entry = view.getUint32(end + 16, true);
+  const count = view.getUint16(end + 10, true);
+  const found = [];
+  for (let n = 0; n < count && entry + 46 <= bytes.length && view.getUint32(entry, true) === 0x02014b50; n++) {
+    const method = view.getUint16(entry + 10, true);
+    const size = view.getUint32(entry + 20, true);
+    const nameLength = view.getUint16(entry + 28, true), extraLength = view.getUint16(entry + 30, true), commentLength = view.getUint16(entry + 32, true);
+    const local = view.getUint32(entry + 42, true);
+    entry += 46 + nameLength + extraLength + commentLength;
+    if (local + 30 > bytes.length || view.getUint32(local, true) !== 0x04034b50) continue;
+    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+    const stored = bytes.subarray(start, start + size);
+    let data;
+    if (method === 0) data = stored;
+    else if (method === 8) data = new Uint8Array(await new Response(new Blob([stored]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer());
+    else continue;
+    if (!needsBrowser(data)) continue;
+    const key = pictureKey(data);
+    if (found.some((picture) => picture.key === key)) continue;
+    try {
+      found.push({ key, bytes: await decodePicture(new Blob([data])) });
+    } catch {
+      // The browser can't read it either: the engine leaves that layer out, as before.
+    }
+  }
+  return found;
+}
+
 /** A picture decoded by the browser, behind the header the engine reads as raw pixels. */
 export async function decodePicture(blob) {
   const bitmap = await createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "default" });
