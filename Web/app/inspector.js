@@ -51,6 +51,24 @@ function button(key, label, { disabled = false, destructive = false } = {}) {
   return `<button type="button" class="ds-button ds-button--bordered ds-button--xs app__setting-wide${destructive ? " app__setting-destructive" : ""}" data-command="${key}"${disabled ? " disabled" : ""}>${escapeHTML(label)}</button>`;
 }
 
+function colorWell(key, label, color) {
+  const hex = `#${color.slice(0, 3).map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("")}`;
+  return `<label class="ds-form__label" for="inspector-${key}">${escapeHTML(label)}</label><input type="color" class="ds-color-well" id="inspector-${key}" data-setting="${key}" value="${hex}">`;
+}
+
+const hexToColor = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).concat(1);
+
+/** How each of the Text section's sliders shows its value, from the slider's own number. */
+const TEXT_VALUES = {
+  "text-fontSize": (v) => `${v} px`,
+  "text-tracking": (v) => String(v),
+  "text-lineSpacing": (v) => `${(v / 100).toFixed(2)}×`,
+  "text-boxWidth": (v) => `${v} px`,
+  "text-outlineWidth": (v) => `${v}%`,
+  "text-padding": (v) => `${v}%`,
+  "text-corners": (v) => `${v}%`,
+};
+
 const heading = (text) => `<h3 class="ds-heading-compact app__setting-heading">${escapeHTML(text)}</h3>`;
 const percent = (value) => `${Math.round(value * 100)}%`;
 
@@ -241,6 +259,7 @@ export class LayersInspector {
       + toggle("locked", t("Layers.Lock"), row.locked)
       + toggle("clipped", t("Layers.ClipToBelow"), row.clipped, locked || (!row.clipped && !row.canClip));
     if (row.adjustment) html += this.adjustmentSettings(row.adjustment);
+    if (row.text) html += this.textSettings(row.text, locked);
     html += heading(t("Mask.Title"));
     if (row.masked) {
       if (row.type !== "adjustment") html += toggle("editingMask", t("Mask.Edit"), this.window.editingMask);
@@ -271,6 +290,70 @@ export class LayersInspector {
     return html;
   }
 
+  /** A text layer's words and look, as the Text panel has them; styles on parts of the words stay as they are. */
+  textSettings(text, locked) {
+    const designs = [["standard", "Default"], ["serif", "Serif"], ["rounded", "Rounded"], ["monospaced", "Monospaced"]] // design-lint-allow: a text layer's design, not the UI's font
+      .map(([id, name]) => [id, t(`Text.Design.${name}`)]);
+    const alignments = ["leading", "center", "trailing"].map((id) => [id, t(`Text.Alignment.${id[0].toUpperCase() + id.slice(1)}`)]);
+    const width = this.window.info.width;
+    let html = heading(t("Panel.Text.Title"))
+      + button("editText", t("Options.EditText"), { disabled: locked })
+      + `<label class="ds-form__label" for="inspector-text-fontName">${escapeHTML(t("Text.Font"))}</label><input class="ds-text-input ds-text-input--xs" id="inspector-text-fontName" data-setting="text-fontName" placeholder="${escapeHTML(t("Text.Font.System"))}" value="${escapeHTML(text.fontName ?? "")}">`
+      + popup("text-design", t("Text.Design"), designs, text.design)
+      + toggle("text-bold", t("Text.Bold"), text.bold) + toggle("text-italic", t("Text.Italic"), text.italic)
+      + popup("text-alignment", t("Text.Alignment"), alignments, text.alignment)
+      + slider("text-fontSize", t("Text.Size"), 4, 1500, Math.round(text.fontSize), TEXT_VALUES["text-fontSize"](Math.round(text.fontSize)))
+      + slider("text-tracking", t("Text.Tracking"), -200, 1000, Math.round(text.tracking * 1000), String(Math.round(text.tracking * 1000)), 10)
+      + slider("text-lineSpacing", t("Text.LineSpacing"), 60, 300, Math.round(text.lineSpacing * 100), TEXT_VALUES["text-lineSpacing"](Math.round(text.lineSpacing * 100)), 5)
+      + toggle("text-kerning", t("Text.Kerning"), text.kerning)
+      + colorWell("text-color", t("Text.Color"), text.color)
+      + toggle("text-box", t("Text.Box"), text.boxWidth !== null);
+    if (text.boxWidth !== null) {
+      const box = Math.round(text.boxWidth), low = Math.round(Math.max(text.fontSize, 10)), high = Math.round(Math.max(width * 1.5, text.fontSize * 2));
+      html += slider("text-boxWidth", t("Text.Box.Width"), low, high, box, `${box} px`);
+    }
+    html += `<p class="ds-caption app__setting-wide app__setting-footer">${escapeHTML(t("Text.Box.Footer"))}</p>`
+      + heading(t("Text.Outline")) + toggle("text-outline", t("Text.Outline.Show"), text.outline !== null);
+    if (text.outline) {
+      const w = Math.round(text.outline.width * 100);
+      html += colorWell("text-outlineColor", t("Text.Color"), text.outline.color) + slider("text-outlineWidth", t("Text.Outline.Width"), 1, 30, w, `${w}%`);
+    }
+    html += heading(t("Text.Background")) + toggle("text-background", t("Text.Background.Show"), text.background !== null);
+    if (text.background) {
+      const padding = Math.round(text.background.padding * 100), corners = Math.round(text.background.cornerRadius * 100);
+      html += colorWell("text-backgroundColor", t("Text.Color"), text.background.color)
+        + slider("text-padding", t("Text.Background.Padding"), 0, 100, padding, `${padding}%`)
+        + slider("text-corners", t("Text.Background.Corners"), 0, 100, corners, `${corners}%`);
+    }
+    return html;
+  }
+
+  /** What a Text setting asks the engine to change. */
+  textChange(key, value, text) {
+    switch (key) {
+      case "text-fontName": return { fontName: value.trim() };
+      case "text-design": return { design: value };
+      case "text-bold": return { bold: value };
+      case "text-italic": return { italic: value };
+      case "text-alignment": return { alignment: value };
+      case "text-fontSize": return { fontSize: Number(value) };
+      case "text-tracking": return { tracking: Number(value) / 1000 };
+      case "text-lineSpacing": return { lineSpacing: Number(value) / 100 };
+      case "text-kerning": return { kerning: value };
+      case "text-color": return { color: hexToColor(value) };
+      case "text-box": return { boxWidth: value ? Math.max(text.naturalWidth, text.fontSize * 4) : null };
+      case "text-boxWidth": return { boxWidth: Number(value) };
+      case "text-outline": return { outline: value ? {} : null };
+      case "text-outlineColor": return { outline: { color: hexToColor(value) } };
+      case "text-outlineWidth": return { outline: { width: Number(value) / 100 } };
+      case "text-background": return { background: value ? {} : null };
+      case "text-backgroundColor": return { background: { color: hexToColor(value) } };
+      case "text-padding": return { background: { padding: Number(value) / 100 } };
+      case "text-corners": return { background: { cornerRadius: Number(value) / 100 } };
+      default: return null;
+    }
+  }
+
   groupSettings(row) {
     const modes = [["passThrough", t("Web.Layers.PassThrough")], ...this.info.blendModes.map((mode) => [mode.id, mode.label])];
     return heading(t("Groups.Section"))
@@ -281,6 +364,11 @@ export class LayersInspector {
       + button("ungroup", t("Groups.Ungroup"))
       + button("mergeGroup", t("Groups.Merge"))
       + button("deleteGroup", t("Groups.Delete"), { disabled: this.layerCount() <= this.layersIn(row.id).length, destructive: true });
+  }
+
+  async editText() {
+    const row = this.row(), string = await this.window.askText(row.text.string);
+    if (string?.trim() && string !== row.text.string) this.window.update({ text: { string } });
   }
 
   layerCount() {
@@ -308,7 +396,9 @@ export class LayersInspector {
     if (!shows) return;
     const key = input.dataset.setting;
     const value = Number(input.value);
-    if (key.startsWith("parameter-")) {
+    if (TEXT_VALUES[key]) {
+      shows.textContent = TEXT_VALUES[key](value);
+    } else if (key.startsWith("parameter-")) {
       const parameter = this.row().adjustment.parameters[Number(key.slice(10))];
       const scale = parameter.style === "percent" || parameter.style === "decimal" ? 100 : 1;
       shows.textContent = parameterText(parameter, value / scale);
@@ -337,6 +427,10 @@ export class LayersInspector {
         return undefined;
       case "amount": return this.window.update({ amount: Number(value) / 100 });
       default: {
+        if (key.startsWith("text-")) {
+          const change = this.textChange(key, value, row.text);
+          return change ? this.window.update({ text: change }) : undefined;
+        }
         if (!key.startsWith("parameter-")) return undefined;
         const index = Number(key.slice(10));
         const parameter = row.adjustment.parameters[index];
@@ -353,6 +447,7 @@ export class LayersInspector {
         this.window.editingMask = true;
         return this.layers({ action: "addMask" });
       case "maskActions": return openMenu(this.maskItems(), target);
+      case "editText": return this.editText();
       case "ungroup":
       case "mergeGroup":
       case "deleteGroup": return this.layers({ action: name, group: this.window.selected });

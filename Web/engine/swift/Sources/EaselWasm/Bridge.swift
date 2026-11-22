@@ -299,6 +299,7 @@ final class Bridge {
                     "groupID": layer.groupID?.uuidString ?? NSNull(), "groupLocked": composition.isLocked(layer),
                     "adjustment": layer.adjustment.map(LayerActions.describe) ?? NSNull(),
                     "scale": layer.transform.uniformScale, "rotation": layer.transform.rotation * 180 / .pi,
+                    "text": layer.text.map(TextSettings.describe) ?? NSNull(),
                 ]
             }
         }

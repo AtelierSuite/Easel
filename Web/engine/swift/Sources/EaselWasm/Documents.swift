@@ -131,6 +131,12 @@ enum Edits {
                 if let enabled = request["adjustmentEnabled"] as? Bool { adjustment.isEnabled = enabled }
                 layer.adjustment = adjustment
             }
+            if let changes = request["text"] as? [String: Any], var text = layer.text, !composition.isLocked(layer) {
+                TextSettings.apply(changes, to: &text)
+                layer.text = text
+                layer.image = LayerImage(TextRenderer.render(text))
+                if let firstLine = text.string.split(separator: "\n").first, changes["string"] != nil { layer.name = String(firstLine.prefix(40)) }
+            }
             composition.layers[index] = layer
         } else if let index = composition.groups.firstIndex(where: { $0.id == id }) {
             var group = composition.groups[index]
@@ -142,5 +148,62 @@ enum Edits {
             if let locked = request["locked"] as? Bool { group.isLocked = locked }
             composition.groups[index] = group
         }
+    }
+}
+
+/// A text layer's settings, as the Text panel shows and changes them.
+enum TextSettings {
+    static func describe(_ text: TextContent) -> [String: Any] {
+        func components(_ color: RGBAColor) -> [Double] { [color.red, color.green, color.blue, color.alpha] }
+        return [
+            "string": text.string, "design": text.design.rawValue, "fontName": text.fontName ?? NSNull(),
+            "bold": text.isBold, "italic": text.isItalic, "fontSize": text.fontSize, "color": components(text.color),
+            "alignment": text.alignment.rawValue, "tracking": text.tracking ?? 0, "lineSpacing": text.lineSpacing ?? 1,
+            "kerning": text.usesKerning ?? true, "boxWidth": text.boxWidth ?? NSNull(),
+            "naturalWidth": Double(TextRenderer.attributedString(for: text).size().width),
+            "outline": text.outline.map { ["color": components($0.color), "width": $0.width] } ?? NSNull(),
+            "background": text.background.map { ["color": components($0.color), "padding": $0.padding, "cornerRadius": $0.cornerRadius] } ?? NSNull(),
+            "styled": !(text.runs?.isEmpty ?? true),
+        ]
+    }
+
+    static func apply(_ changes: [String: Any], to text: inout TextContent) {
+        if let string = changes["string"] as? String, !string.isEmpty { text.setString(string) }
+        if let design = (changes["design"] as? String).flatMap(TextContent.Design.init(rawValue:)) { text.design = design }
+        if changes.keys.contains("fontName") { text.fontName = (changes["fontName"] as? String).flatMap { $0.isEmpty ? nil : $0 } }
+        if let bold = changes["bold"] as? Bool { text.isBold = bold }
+        if let italic = changes["italic"] as? Bool { text.isItalic = italic }
+        if let size = changes["fontSize"] as? Double { text.fontSize = max(4, size) }
+        if changes["color"] != nil { text.color = Painting.color(changes["color"]) }
+        if let alignment = (changes["alignment"] as? String).flatMap(TextContent.Alignment.init(rawValue:)) { text.alignment = alignment }
+        if let tracking = changes["tracking"] as? Double { text.tracking = abs(tracking) < 0.005 ? nil : min(max(tracking, -0.2), 1) }
+        if let spacing = changes["lineSpacing"] as? Double { text.lineSpacing = abs(spacing - 1) < 0.01 ? nil : min(max(spacing, 0.6), 3) }
+        if let kerning = changes["kerning"] as? Bool { text.usesKerning = kerning ? nil : false }
+        if changes.keys.contains("boxWidth") { text.boxWidth = (changes["boxWidth"] as? Double).map { max(10, $0.rounded()) } }
+        if changes.keys.contains("outline") {
+            if let outline = changes["outline"] as? [String: Any] {
+                var value = text.outline ?? TextContent.Outline(color: contrasting(text.color))
+                if outline["color"] != nil { value.color = Painting.color(outline["color"]) }
+                if let width = outline["width"] as? Double { value.width = min(max(width, 0.01), 0.3) }
+                text.outline = value
+            } else {
+                text.outline = nil
+            }
+        }
+        if changes.keys.contains("background") {
+            if let background = changes["background"] as? [String: Any] {
+                var value = text.background ?? TextContent.Background(color: contrasting(text.color))
+                if background["color"] != nil { value.color = Painting.color(background["color"]) }
+                if let padding = background["padding"] as? Double { value.padding = min(max(padding, 0), 1) }
+                if let corners = background["cornerRadius"] as? Double { value.cornerRadius = min(max(corners, 0), 1) }
+                text.background = value
+            } else {
+                text.background = nil
+            }
+        }
+    }
+
+    private static func contrasting(_ color: RGBAColor) -> RGBAColor {
+        0.2126 * color.red + 0.7152 * color.green + 0.0722 * color.blue > 0.5 ? .black : .white
     }
 }
