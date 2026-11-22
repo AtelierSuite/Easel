@@ -4,6 +4,8 @@
 // browser and handed over as pixels. Package folders (.easel, .pxd) are
 // zipped on the way in, since the engine takes one run of bytes.
 
+import { decodeHEIC, isHEIF } from "./heic.js";
+
 const DOCUMENT_TYPES = {
   "image/vnd.adobe.photoshop": [".psd", ".psb"],
   "application/octet-stream": [".pxd", ".easel"],
@@ -205,18 +207,26 @@ export async function picturesInside(bytes) {
 
 /** A picture decoded by the browser, behind the header the engine reads as raw pixels. */
 export async function decodePicture(blob) {
-  const bitmap = await createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "default" });
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const context = canvas.getContext("2d");
-  context.drawImage(bitmap, 0, 0);
-  const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data;
-  const bytes = new Uint8Array(17 + pixels.length);
+  let picture;
+  try {
+    const bitmap = await createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "default" });
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext("2d");
+    context.drawImage(bitmap, 0, 0);
+    picture = { width: bitmap.width, height: bitmap.height, data: context.getImageData(0, 0, bitmap.width, bitmap.height).data };
+    bitmap.close();
+  } catch (error) {
+    // Browsers that don't read HEIC as a picture may still decode its HEVC as video.
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (!isHEIF(bytes)) throw error;
+    picture = await decodeHEIC(bytes);
+  }
+  const bytes = new Uint8Array(17 + picture.data.length);
   bytes.set(new TextEncoder().encode("EaselRGBA"));
   const view = new DataView(bytes.buffer);
-  view.setUint32(9, bitmap.width, true);
-  view.setUint32(13, bitmap.height, true);
-  bytes.set(pixels, 17);
-  bitmap.close();
+  view.setUint32(9, picture.width, true);
+  view.setUint32(13, picture.height, true);
+  bytes.set(picture.data, 17);
   return bytes;
 }
 
