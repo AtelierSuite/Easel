@@ -197,6 +197,21 @@ final class Bridge {
             selections[documentID] = selection
             return describe(documentID).merging(result) { mine, _ in mine }
 
+        case "withSelection":
+            let documentID = try id(request)
+            guard let selection = selections[documentID] else { return describe(documentID) }
+            if request["action"] as? String == "crop" {
+                let bounds = selection.bounds(in: try document(request).size).integral
+                guard bounds.width >= 1, bounds.height >= 1 else { return describe(documentID) }
+                let result = try edit(request) { $0.crop(to: bounds.intersection($0.canvasRect)) }
+                selections[documentID] = nil
+                return describe(documentID).merging(result) { mine, _ in mine }
+            }
+            var picked: Layer.ID?
+            var result = try edit(request) { picked = try Painting.withSelection(request, in: &$0, selection: selection) }
+            result["added"] = picked?.uuidString
+            return result
+
         case "select":
             let documentID = try id(request)
             let composition = try document(request)
@@ -293,6 +308,7 @@ final class Bridge {
             "blendModes": LayerBlendMode.allCases.map { ["id": $0.rawValue, "label": $0.label] },
             "adjustmentKinds": LayerActions.adjustmentKinds,
             "groups": composition.groups.map { ["id": $0.id.uuidString, "name": $0.name] },
+            "patterns": composition.patterns.map { ["id": $0.id.uuidString, "name": $0.name] },
             "losses": composition.writeBackLosses.map { String(describing: $0) },
         ]
     }

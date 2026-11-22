@@ -186,17 +186,47 @@ enum Arranging {
             guard r.count == 4 else { return current }
             let rect = CGRect(x: r[0], y: r[1], width: r[2], height: r[3]).standardized
             made = Selection(shape: request["shape"] as? String == "ellipse" ? .ellipse(rect) : .rectangle(rect))
-        case "lasso":
+        case "lasso", "magnetic":
             let flat = request["points"] as? [Double] ?? []
-            made = Selection(shape: .lasso(stride(from: 0, to: flat.count - 1, by: 2).map { CGPoint(x: flat[$0], y: flat[$0 + 1]) }))
+            var points = stride(from: 0, to: flat.count - 1, by: 2).map { CGPoint(x: flat[$0], y: flat[$0 + 1]) }
+            // Pulled onto the strongest edges near where the finger went.
+            if request["shape"] as? String == "magnetic", let edges = EdgeMap(composition: composition) {
+                let radius = max(4, request["radius"] as? Double ?? 16)
+                var snapped: [CGPoint] = []
+                for point in points.map({ edges.snap($0, radius: radius) }) {
+                    if let last = snapped.last, hypot(point.x - last.x, point.y - last.y) < edges.scale { continue }
+                    snapped.append(point)
+                }
+                if snapped.count > 2 { points = snapped }
+            }
+            made = Selection(shape: .lasso(points))
         case "magic":
             let point = CGPoint(x: request["x"] as? Double ?? 0, y: request["y"] as? Double ?? 0)
             guard composition.canvasRect.contains(point),
                   let pixels = Bitmap.pixels(of: CompositionRenderer.render(composition)) else { return nil }
             let x = min(max(Int(point.x), 0), pixels.width - 1), y = min(max(Int(point.y), 0), pixels.height - 1)
             let tolerance = min(max(request["tolerance"] as? Double ?? 0.12, 0), 1)
-            let region = Painter.floodRegion(in: pixels, seedX: x, seedY: y, tolerance: tolerance)
+            let region: [UInt8]
+            if request["contiguous"] as? Bool ?? true {
+                region = Painter.floodRegion(in: pixels, seedX: x, seedY: y, tolerance: tolerance)
+            } else {
+                let offset = (y * pixels.width + x) * 4
+                let target = (red: Double(pixels.bytes[offset]), green: Double(pixels.bytes[offset + 1]),
+                              blue: Double(pixels.bytes[offset + 2]), alpha: Double(pixels.bytes[offset + 3]))
+                region = Painter.colorRange(in: pixels, target: target, tolerance: tolerance)
+            }
             made = SelectionMask(bytes: region, width: pixels.width, height: pixels.height).map { Selection(shape: .mask($0)) }
+        case "colorRange":
+            guard let pixels = Bitmap.pixels(of: CompositionRenderer.render(composition)) else { return current }
+            let tolerance = min(max(request["tolerance"] as? Double ?? 0.12, 0), 1)
+            let region = Painter.colorRange(in: pixels, target: Painter.premultipliedBytes(of: Painting.color(request["color"])), tolerance: tolerance)
+            made = SelectionMask(bytes: region, width: pixels.width, height: pixels.height).map { Selection(shape: .mask($0)) }
+        case "modify":
+            guard let current, let modification = SelectionModification(rawValue: request["modification"] as? String ?? "") else { return current }
+            return current.modified(modification, radius: max(0.5, request["radius"] as? Double ?? 2), canvasSize: size)
+        case "refine":
+            guard let current else { return nil }
+            return current.refined(along: CompositionRenderer.render(composition), radius: max(1, request["radius"] as? Double ?? 4))
         default:
             return current
         }

@@ -65,9 +65,92 @@ enum Painting {
         let seed = CGPoint(x: request["x"] as? Double ?? 0, y: request["y"] as? Double ?? 0)
         let color = color(request["color"])
         let tolerance = min(max(request["tolerance"] as? Double ?? 0.1, 0), 1)
+        let swatches = composition.patterns
+        if let pattern = pattern(request, color: color) {
+            editPixels(of: layerID, in: &composition) { image in
+                Painter.floodFill(image, at: seed, with: pattern, swatches: swatches, tolerance: tolerance, clip: selection)
+            }
+            return
+        }
         editPixels(of: layerID, in: &composition) { image in
             Painter.floodFill(image, at: seed, with: color, tolerance: tolerance, clip: selection)
         }
+    }
+
+    /// The pattern a fill asks for: { preset } or { swatch }, with its scale, drawn in `color` if built in.
+    static func pattern(_ request: [String: Any], color: RGBAColor) -> PatternChoice? {
+        guard let entry = request["pattern"] as? [String: Any] else { return nil }
+        let scale = min(max(entry["scale"] as? Double ?? 1, 0.1), 10)
+        if let preset = (entry["preset"] as? String).flatMap(PatternChoice.Preset.init(rawValue:)) {
+            return PatternChoice(preset: preset, color: color, scale: scale)
+        }
+        guard let swatch = (entry["swatch"] as? String).flatMap(UUID.init(uuidString:)) else { return nil }
+        return PatternChoice(preset: nil, swatchID: swatch, color: color, scale: scale)
+    }
+
+    /// What the selection menu does to the picked layer with the selection:
+    /// a line along its edge, a fill, a fill from around it, a copy or cut
+    /// onto a new layer, a pattern tile from it. Answers the layer to pick.
+    static func withSelection(
+        _ request: [String: Any], in composition: inout Composition, selection: Selection
+    ) throws -> Layer.ID? {
+        let size = composition.size
+        switch request["action"] as? String {
+        case "stroke":
+            let layerID = try paintableLayer(request, in: composition)
+            let width = max(1, request["width"] as? Double ?? 2)
+            let color = color(request["color"])
+            editPixels(of: layerID, in: &composition) { image in
+                let band = selection.edgeBand(width: width, canvasSize: size)
+                guard let line = SelectionMask(bytes: band, width: image.width, height: image.height) else { return nil }
+                return Painter.fill(Selection(shape: .mask(line)), with: color, onto: image)
+            }
+        case "fill":
+            let layerID = try paintableLayer(request, in: composition)
+            let color = color(request["color"])
+            let swatches = composition.patterns
+            let pattern = pattern(request, color: color)
+            editPixels(of: layerID, in: &composition) { image in
+                pattern.map { Painter.fill(selection, with: $0, swatches: swatches, onto: image) }
+                    ?? Painter.fill(selection, with: color, onto: image)
+            }
+        case "surroundings":
+            let layerID = try paintableLayer(request, in: composition)
+            editPixels(of: layerID, in: &composition) { image in Healer.fill(image, selection: selection) }
+        case "copy", "cut":
+            let cut = request["action"] as? String == "cut"
+            let layerID = cut ? try paintableLayer(request, in: composition) : (request["layer"] as? String).flatMap(UUID.init(uuidString:))
+            guard let layerID, let layer = composition[layerID] else { throw Bridge.Failure(message: String(localized: "Error.NoLayer")) }
+            let aligned = layer.aligned(in: size)
+            var copy = Layer(name: composition.nextLayerName(), image: LayerImage(Painter.extract(selection, from: aligned.image.cgImage)), canvasSize: size)
+            copy.blendMode = layer.blendMode
+            copy.opacity = layer.opacity
+            copy.filters = layer.filters.map { var filter = $0; filter.id = UUID(); return filter }
+            if cut {
+                var source = aligned
+                source.image = LayerImage(Painter.clear(selection, in: aligned.image.cgImage))
+                composition[layerID] = source
+            }
+            composition.insert(copy, above: layerID)
+            return copy.id
+        case "definePattern":
+            guard let layerID = (request["layer"] as? String).flatMap(UUID.init(uuidString:)), let layer = composition[layerID] else {
+                throw Bridge.Failure(message: String(localized: "Error.NoLayer"))
+            }
+            let image = layer.rasterized(in: size).image.cgImage
+            let bounds = selection.bounds(in: size).integral.intersection(CGRect(origin: .zero, size: size))
+            guard bounds.width > 1, bounds.height > 1 else { return nil }
+            let tile = Bitmap.render(size: bounds.size) { context in
+                context.translateBy(x: -bounds.minX, y: -bounds.minY)
+                selection.clip(context, canvasSize: size)
+                Bitmap.draw(image, in: CGRect(origin: .zero, size: size), context: context)
+            }
+            let name = String(localized: "Pattern.CustomName \(composition.patterns.count + 1)")
+            composition.patterns.append(PatternSwatch(name: name, image: LayerImage(tile)))
+        default:
+            throw Bridge.Failure(message: "Unknown selection action")
+        }
+        return nil
     }
 
     static func gradient(_ request: [String: Any], in composition: inout Composition, selection: Selection?) throws {

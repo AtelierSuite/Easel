@@ -78,7 +78,7 @@ function choice(key, label, options, value) {
   return `
     <span class="ds-popup ds-popup--xs app__option" title="${name}">
       <select class="ds-popup__select" data-option="${key}" aria-label="${name}">
-        ${options.map(([id, text]) => `<option value="${id}"${id === value ? " selected" : ""}>${escapeHTML(t(text))}</option>`).join("")}
+        ${options.map(([id, text, raw]) => `<option value="${id}"${id === value ? " selected" : ""}>${escapeHTML(raw ? text : t(text))}</option>`).join("")}
       </select>
       <svg class="ds-icon ds-popup__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
     </span>`;
@@ -226,6 +226,30 @@ function drawStroke(context, stroke, scale) {
   context.filter = "none";
 }
 
+/** Fills lay down the colour or a pattern: a built-in tile in the colour, or one of the picture's own, at a scale. */
+function patternOptions(tools) {
+  const own = (tools.window.info?.patterns ?? []).map((pattern) => [`swatch:${pattern.id}`, pattern.name, true]);
+  const value = tools.pattern ? `${tools.pattern.kind}:${tools.pattern.id}` : "";
+  return choice("pattern", "Pattern.Fill", [["", "Options.NoPattern"], ...PATTERNS.map(([id, label]) => [`preset:${id}`, label]), ...own], value)
+    + (tools.pattern ? slider("patternScale", "Pattern.Scale", 10, 400, Math.round(tools.patternScale * 100), "%") : "");
+}
+
+function changePattern(tools, key, value) {
+  if (key === "patternScale") {
+    tools.patternScale = value / 100;
+    return;
+  }
+  const [kind, id] = value.split(":");
+  tools.pattern = value ? { kind, id } : null;
+  tools.renderOptions();
+}
+
+function patternRequest(tools) {
+  const pattern = tools.pattern;
+  if (!pattern || (pattern.kind === "swatch" && !tools.window.info?.patterns?.some((p) => p.id === pattern.id))) return {};
+  return { pattern: { [pattern.kind]: pattern.id, scale: tools.patternScale } };
+}
+
 /** Fill: a tap fills the run of similar colour around it. */
 class FillTool {
   constructor(tools) {
@@ -234,13 +258,15 @@ class FillTool {
   }
 
   options() {
-    return colorWell(this.tools.color) + slider("tolerance", "Options.Tolerance", 0, 100, Math.round(this.tolerance * 100), "%");
+    return colorWell(this.tools.color) + slider("tolerance", "Options.Tolerance", 0, 100, Math.round(this.tolerance * 100), "%")
+      + patternOptions(this.tools);
   }
 
   bind(element) {
     bindOptions(element, (key, value) => {
       if (key === "color") this.tools.color = value;
-      else this.tolerance = value / 100;
+      else if (key === "tolerance") this.tolerance = value / 100;
+      else changePattern(this.tools, key, value);
     });
   }
 
@@ -252,7 +278,7 @@ class FillTool {
 
   end() {
     if (!this.point) return;
-    this.tools.window.edit("fill", { x: this.point.x, y: this.point.y, color: hexToColor(this.tools.color), tolerance: this.tolerance });
+    this.tools.window.edit("fill", { x: this.point.x, y: this.point.y, color: hexToColor(this.tools.color), tolerance: this.tolerance, ...patternRequest(this.tools) });
     this.point = null;
   }
 
@@ -419,13 +445,16 @@ class SelectTool {
     this.kind = "rectangle";
     this.mode = "replace";
     this.tolerance = 0.12;
+    this.contiguous = true;
   }
 
   options() {
-    return choice("kind", "Tool.Select", [["rectangle", "Select.Rectangle"], ["ellipse", "Select.Ellipse"], ["lasso", "Select.Lasso"], ["magic", "Select.Magic"]], this.kind)
+    return choice("kind", "Tool.Select", [["rectangle", "Select.Rectangle"], ["ellipse", "Select.Ellipse"], ["lasso", "Select.Lasso"], ["magnetic", "Select.Magnetic"], ["magic", "Select.Magic"]], this.kind)
       + choice("mode", "Select.Mode", [["replace", "Select.Mode.Replace"], ["add", "Select.Mode.Add"], ["subtract", "Select.Mode.Subtract"], ["intersect", "Select.Mode.Intersect"]], this.mode)
-      + (this.kind === "magic" ? slider("tolerance", "Options.Tolerance", 0, 100, Math.round(this.tolerance * 100), "%") : "")
-      + action("all", "Select.All") + action("none", "Select.Deselect") + action("invert", "Select.Invert");
+      + (this.kind === "magic"
+        ? slider("tolerance", "Options.Tolerance", 0, 100, Math.round(this.tolerance * 100), "%") + toggle("contiguous", "Select.Contiguous", this.contiguous)
+        : "")
+      + action("menu", "Options.SelectionActions");
   }
 
   bind(element) {
@@ -434,7 +463,45 @@ class SelectTool {
       else this[key] = value;
       if (key === "kind") this.tools.renderOptions();
     });
-    bindActions(element, (name) => this.tools.window.selectArea({ shape: name }));
+    bindActions(element, (name, button) => openMenu(this.menuItems(), button));
+  }
+
+  /** The selection menu, as the Apple apps have it; what needs a selection is off without one. */
+  menuItems() {
+    const window = this.tools.window, has = Boolean(window.info?.selection);
+    const act = (action, params = {}) => () => window.edit("withSelection", { action, ...params }, { all: action === "copy" || action === "cut" || action === "definePattern" });
+    const ask = (title, label, size, run) => async () => {
+      const answer = await window.ask({ title: t(title), message: t(label), placeholder: t(label), value: String(size), type: "number" });
+      const value = Number(answer?.replace(",", "."));
+      if (answer !== null && value > 0) run(value);
+    };
+    const longest = Math.max(window.info?.width ?? 0, window.info?.height ?? 0);
+    const modifications = [["feather", "Select.Feather"], ["expand", "Select.Expand"], ["contract", "Select.Contract"], ["smooth", "Select.Smooth"], ["border", "Select.Border"]];
+    return [
+      { label: t("Select.All"), action: () => window.selectArea({ shape: "all" }) },
+      { label: t("Select.ColorRange"), action: () => window.selectArea({ shape: "colorRange", color: hexToColor(this.tools.color), tolerance: this.tolerance, mode: this.mode }) },
+      { label: t("Select.Deselect"), disabled: !has, action: () => window.selectArea({ shape: "none" }) },
+      { label: t("Select.Invert"), disabled: !has, action: () => window.selectArea({ shape: "invert" }) },
+      { separator: true },
+      { label: t("Select.CopyToLayer"), disabled: !has, action: act("copy") },
+      { label: t("Select.CutToLayer"), disabled: !has, action: act("cut") },
+      { label: t("Select.Fill"), disabled: !has, action: act("fill", { color: hexToColor(this.tools.color), ...patternRequest(this.tools) }) },
+      { label: t("Pattern.Define"), disabled: !has, action: act("definePattern") },
+      { label: t("Select.FillFromSurroundings"), disabled: !has, action: act("surroundings") },
+      { label: t("Select.Clear"), disabled: !has, action: () => window.edit("clear", {}) },
+      { separator: true },
+      {
+        label: t("Select.Modify"), disabled: !has,
+        submenu: modifications.map(([id, label]) => ({
+          label: t(label),
+          action: ask(label, "Select.Radius", Math.max(2, Math.round(longest / 200)), (radius) => window.selectArea({ shape: "modify", modification: id, radius })),
+        })),
+      },
+      { label: t("Select.RefineEdge"), disabled: !has, action: ask("Select.RefineEdge", "Select.Radius", Math.max(4, Math.round(longest / 150)), (radius) => window.selectArea({ shape: "refine", radius })) },
+      { label: t("Select.Stroke"), disabled: !has, action: ask("Select.Stroke", "Select.Width", Math.max(2, Math.round(longest / 400)), (width) => act("stroke", { width, color: hexToColor(this.tools.color) })()) },
+      { separator: true },
+      { label: t("Select.CropToSelection"), disabled: !has, action: () => window.edit("withSelection", { action: "crop" }, { all: true }) },
+    ];
   }
 
   begin(point, event) {
@@ -445,7 +512,7 @@ class SelectTool {
 
   update(points) {
     if (!this.points) return;
-    if (this.kind === "lasso") this.points.push(...points);
+    if (this.kind === "lasso" || this.kind === "magnetic") this.points.push(...points);
     else this.points[1] = points.at(-1);
     this.show();
   }
@@ -453,7 +520,7 @@ class SelectTool {
   show() {
     const [a, b = a] = this.points;
     const r = rectOf(a, b);
-    const outline = this.kind === "lasso" ? `<path d="${polyline(this.points)}Z" class="app__ants-dark"/>`
+    const outline = this.kind === "lasso" || this.kind === "magnetic" ? `<path d="${polyline(this.points)}Z" class="app__ants-dark"/>`
       : this.kind === "ellipse" ? `<ellipse cx="${number(r.x + r.width / 2)}" cy="${number(r.y + r.height / 2)}" rx="${number(r.width / 2)}" ry="${number(r.height / 2)}" class="app__ants-dark"/>`
       : `<rect x="${number(r.x)}" y="${number(r.y)}" width="${number(r.width)}" height="${number(r.height)}" class="app__ants-dark"/>`;
     this.tools.window.draft(outline.replace("app__ants-dark", "app__ants-light") + outline);
@@ -465,13 +532,13 @@ class SelectTool {
     if (!points) return;
     const window = this.tools.window;
     window.draft();
-    const a = points[0], b = points.at(-1);
+    const a = points[0], b = points.at(-1), lasso = this.kind === "lasso" || this.kind === "magnetic";
     if (this.kind === "magic") {
-      window.selectArea({ shape: "magic", x: a.x, y: a.y, tolerance: this.tolerance, mode: this.drawMode });
-    } else if (isTap(window, a, b) && this.kind !== "lasso" || points.length < 3 && this.kind === "lasso") {
+      window.selectArea({ shape: "magic", x: a.x, y: a.y, tolerance: this.tolerance, contiguous: this.contiguous, mode: this.drawMode });
+    } else if (isTap(window, a, b) && !lasso || points.length < 3 && lasso) {
       if (this.drawMode === "replace") window.selectArea({ shape: "none" });
-    } else if (this.kind === "lasso") {
-      window.selectArea({ shape: "lasso", points: points.flatMap((p) => [p.x, p.y]), mode: this.drawMode });
+    } else if (lasso) {
+      window.selectArea({ shape: this.kind, points: points.flatMap((p) => [p.x, p.y]), mode: this.drawMode, radius: 16 / window.zoom });
     } else {
       const r = rectOf(a, b);
       window.selectArea({ shape: this.kind, rect: [r.x, r.y, r.width, r.height], mode: this.drawMode });
@@ -2109,6 +2176,8 @@ export class Tools {
   constructor(window) {
     this.window = window;
     this.color = "#000000";
+    this.pattern = null;
+    this.patternScale = 1;
     this.tools = {
       brush: new BrushTool(this, { erases: false, size: 12, softness: 0 }),
       eraser: new BrushTool(this, { erases: true, size: 60, softness: 0.3 }),
