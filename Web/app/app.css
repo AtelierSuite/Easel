@@ -484,15 +484,6 @@ body {
   height: 48px;
 }
 
-/* MARK: - Status bar */
-
-.app__status-note {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ds-text-secondary);
-}
-
 /* MARK: - Tools */
 
 .app__viewport {
@@ -648,10 +639,6 @@ body {
     max-height: 45vh;
     border-inline-start: 0;
     border-top: 1px solid var(--ds-border-subtle-01);
-  }
-
-  .app__status-note {
-    display: none;
   }
 }
 

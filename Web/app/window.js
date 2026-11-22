@@ -98,7 +98,6 @@ export class EaselWindow {
       <aside class="ds-inspector app__inspector" aria-label="${escapeHTML(t("Web.Layers.Title"))}" hidden></aside>
       <div class="ds-status-bar app__status" hidden>
         <span class="app__status-size ds-numeric"></span><span class="app__status-layers ds-numeric"></span>
-        <span class="ds-status-bar__spacer"></span><span class="app__status-note">${escapeHTML(t("Web.Status.Preview"))}</span>
       </div>`;
     const $ = (selector) => this.root.querySelector(selector);
     this.toolbar = $(".app__toolbar");
