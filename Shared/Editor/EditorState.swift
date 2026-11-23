@@ -1114,7 +1114,13 @@ final class EditorState {
                 if selectionKind == .object { selectObject(at: point) } else { magicSelect(at: point) }
             } else if isTap {
                 if selectionMode == .replace { selection = nil }
-            } else if let draft = draftSelection, draft.isMeaningful {
+            } else if var draft = draftSelection, draft.isMeaningful {
+                if selectionKind == .magnetic, case .lasso(let points) = draft.shape, let first = points.first,
+                   let last = points.last, let edgeMap {
+                    // Closed along the edge too, when the ends are near.
+                    let radius = max(4, 16 / max(viewport.scale, 0.0001))
+                    draft.shape = .lasso(points + edgeMap.trace(from: last, to: first, margin: radius).dropLast())
+                }
                 select(draft)
             }
         case .pen:
@@ -1221,21 +1227,12 @@ final class EditorState {
         }
     }
 
-    /// The finger's path pulled onto the nearest strong edge, with points
-    /// too close together left out so the outline stays smooth.
+    /// The finger's path laid along the picture's edges.
     private func magneticPoints(_ points: [CGPoint], after previous: CGPoint?) -> [CGPoint] {
         guard let edgeMap else { return points }
         // About a fingertip's reach on screen.
         let radius = max(4, 16 / max(viewport.scale, 0.0001))
-        var result: [CGPoint] = []
-        var last = previous
-        for point in points {
-            let snapped = edgeMap.snap(point, radius: radius)
-            if let last, hypot(snapped.x - last.x, snapped.y - last.y) < edgeMap.scale { continue }
-            result.append(snapped)
-            last = snapped
-        }
-        return result
+        return edgeMap.magnetic(points, after: previous, radius: radius)
     }
 
     // MARK: - Simple tool actions

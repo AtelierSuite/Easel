@@ -192,11 +192,7 @@ enum Arranging {
             // Pulled onto the strongest edges near where the finger went.
             if request["shape"] as? String == "magnetic", let edges = EdgeMap(composition: composition) {
                 let radius = max(4, request["radius"] as? Double ?? 16)
-                var snapped: [CGPoint] = []
-                for point in points.map({ edges.snap($0, radius: radius) }) {
-                    if let last = snapped.last, hypot(point.x - last.x, point.y - last.y) < edges.scale { continue }
-                    snapped.append(point)
-                }
+                let snapped = edges.magnetic(points, after: nil, radius: radius)
                 if snapped.count > 2 { points = snapped }
             }
             made = Selection(shape: .lasso(points))
