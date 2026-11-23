@@ -151,7 +151,9 @@ final class EditorState {
 
     // MARK: Selection and drafts
 
-    var selection: Selection?
+    var selection: Selection? {
+        didSet { if selection == nil, selectionEditDraft != nil { closeSelectionEditDraft() } }
+    }
     /// A stroke still under the finger.
     var activeStroke: Stroke?
     /// Strokes lifted but not yet painted into their layer, drawn over it
@@ -201,6 +203,11 @@ final class EditorState {
     /// Whether the selection's handles bend it as a grid rather than
     /// resizing its box.
     var selectionWarps = false
+    /// A feather, grow or shrink being tried, with a slider for its size.
+    var selectionEditDraft: SelectionEditDraft?
+    /// What the selection edit being tried would make, small.
+    var selectionEditPreview: SelectionEditPreview?
+    @ObservationIgnored var selectionEditPreviewTask: Task<Void, Never>?
     var draftShape: ShapeSpec?
     var draftGradient: (start: CGPoint, end: CGPoint)?
     /// The crop tool's frame, in canvas pixels; nil until the tool is picked.

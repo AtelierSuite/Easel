@@ -33,7 +33,17 @@ struct CanvasOverlay: View {
             context.stroke(outline, with: .color(.accentColor), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
         }
 
-        let selectionOutline = state.selectionOutlinePreview ?? state.selection?.path(in: composition.size)
+        if let preview = state.selectionEditPreview, state.selectionEditDraft != nil {
+            var shaded = context
+            shaded.concatenate(transform)
+            shaded.draw(Image(decorative: preview.shade, scale: 1), in: CGRect(origin: .zero, size: composition.size))
+        }
+
+        let selectionOutline: CGPath? = if state.selectionEditDraft != nil, let preview = state.selectionEditPreview {
+            preview.outline
+        } else {
+            state.selectionOutlinePreview ?? state.selection?.path(in: composition.size)
+        }
         for outline in [selectionOutline, state.draftSelection?.path(in: composition.size)].compactMap({ $0 }) {
             let path = Path(outline).applying(transform)
             context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 1))

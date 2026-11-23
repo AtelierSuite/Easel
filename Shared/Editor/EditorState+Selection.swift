@@ -119,6 +119,12 @@ private struct SelectionEditAlert: ViewModifier {
         content
             .onChange(of: state.pendingSelectionEdit) { _, edit in
                 guard let edit else { return }
+                if case .modify(let modification) = edit {
+                    // Tried on a slider over the canvas, to see it as it changes.
+                    state.pendingSelectionEdit = nil
+                    state.beginSelectionEditDraft(modification)
+                    return
+                }
                 text = "\(Int(state.defaultSize(for: edit)))"
                 shown = edit
             }

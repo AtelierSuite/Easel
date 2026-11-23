@@ -58,7 +58,7 @@ extension EditorState {
     /// The grid the selection's handles sit on, while the Select tool is in
     /// hand and nothing else is being drawn.
     var selectionHandleGrid: [CGPoint]? {
-        guard tool == .select, draftSelection == nil, let selection else { return nil }
+        guard tool == .select, draftSelection == nil, selectionEditDraft == nil, let selection else { return nil }
         if let session = selectionTransform, session.result == selection { return session.points }
         let box = selection.shapeBounds
         guard !box.isNull, box.width >= 1, box.height >= 1 else { return nil }
@@ -213,4 +213,105 @@ extension EditorState {
 /// A selection bent off the main thread, or nothing left selected.
 private struct PickedWarp: Sendable {
     var selection: Selection?
+}
+
+// MARK: - Trying a feather, grow or shrink
+
+/// A change to the whole selection being tried at a size picked on a
+/// slider, before it is applied.
+struct SelectionEditDraft: Equatable {
+    var modification: SelectionModification
+    var size: Double
+    /// The largest size the slider goes to.
+    var limit: Double
+}
+
+/// A selection edit as it would come out, worked out small: the picture
+/// shaded where it would not be selected, and the new outline.
+struct SelectionEditPreview: @unchecked Sendable {
+    // Unchecked: `CGImage` and `CGPath` are immutable once made.
+    var shade: CGImage
+    var outline: CGPath
+    var draft: SelectionEditDraft
+}
+
+extension EditorState {
+    func beginSelectionEditDraft(_ modification: SelectionModification) {
+        guard selection != nil else { return }
+        let longest = max(composition.size.width, composition.size.height)
+        let limit = min(250, max(10, (longest / 8).rounded()))
+        selectionEditDraft = SelectionEditDraft(
+            modification: modification, size: min(defaultSize(for: .modify(modification)), limit), limit: limit
+        )
+        updateSelectionEditPreview()
+    }
+
+    func setSelectionEditSize(_ size: Double) {
+        guard var draft = selectionEditDraft else { return }
+        draft.size = min(max(size, 0), draft.limit)
+        guard draft != selectionEditDraft else { return }
+        selectionEditDraft = draft
+        updateSelectionEditPreview()
+    }
+
+    /// Works out how the edit would look, small and off the main thread;
+    /// only the newest is kept.
+    func updateSelectionEditPreview() {
+        guard let draft = selectionEditDraft, let selection else {
+            selectionEditPreview = nil
+            return
+        }
+        let size = composition.size
+        selectionEditPreviewTask?.cancel()
+        selectionEditPreviewTask = Task { @MainActor in
+            let preview = await Task.detached(priority: .userInitiated) { () -> SelectionEditPreview? in
+                guard !Task.isCancelled else { return nil }
+                return Self.selectionEditPreview(of: selection, draft: draft, canvasSize: size)
+            }.value
+            guard !Task.isCancelled, let preview, selectionEditDraft == draft else { return }
+            selectionEditPreview = preview
+        }
+    }
+
+    nonisolated static func selectionEditPreview(
+        of selection: Selection, draft: SelectionEditDraft, canvasSize: CGSize
+    ) -> SelectionEditPreview? {
+        let scale = min(1, 1024 / max(canvasSize.width, canvasSize.height, 1))
+        let small = CGSize(width: max(1, (canvasSize.width * scale).rounded()), height: max(1, (canvasSize.height * scale).rounded()))
+        let shrunk = selection.applying(CGAffineTransform(scaleX: small.width / canvasSize.width, y: small.height / canvasSize.height), canvasSize: small)
+        let edited = draft.size > 0
+            ? shrunk.modified(draft.modification, radius: draft.size * scale, canvasSize: small)
+            : shrunk
+        let width = Int(small.width), height = Int(small.height)
+        let coverage = edited?.coverage(width: width, height: height) ?? [UInt8](repeating: 0, count: width * height)
+        // Darkened where unselected, partly where partly selected.
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        for index in coverage.indices {
+            rgba[index * 4 + 3] = UInt8((Double(255 - coverage[index]) * 0.55).rounded())
+        }
+        guard let provider = CGDataProvider(data: Data(rgba) as CFData),
+              let shade = CGImage(
+                  width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
+                  space: CGColorSpaceCreateDeviceRGB(),
+                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+                  provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent
+              )
+        else { return nil }
+        var back = CGAffineTransform(scaleX: canvasSize.width / small.width, y: canvasSize.height / small.height)
+        let outline = edited.flatMap { $0.path(in: small).copy(using: &back) } ?? CGMutablePath()
+        return SelectionEditPreview(shade: shade, outline: outline, draft: draft)
+    }
+
+    func applySelectionEditDraft() {
+        guard let draft = selectionEditDraft else { return }
+        closeSelectionEditDraft()
+        guard draft.size > 0 else { return }
+        perform(.modify(draft.modification), size: draft.size)
+    }
+
+    func closeSelectionEditDraft() {
+        selectionEditPreviewTask?.cancel()
+        selectionEditDraft = nil
+        selectionEditPreview = nil
+    }
 }
