@@ -192,6 +192,15 @@ final class EditorState {
     /// The mode a held Shift or Option key picks for the selection being
     /// made, over `selectionMode`.
     @ObservationIgnored var heldSelectionMode: SelectionMode?
+    /// The selection being resized, moved or bent by its handles.
+    var selectionTransform: SelectionTransformSession?
+    @ObservationIgnored var selectionHandleDrag: SelectionHandleDrag?
+    /// The selection's outline while its handles are dragged, in place of
+    /// the selection's own.
+    var selectionOutlinePreview: CGPath?
+    /// Whether the selection's handles bend it as a grid rather than
+    /// resizing its box.
+    var selectionWarps = false
     var draftShape: ShapeSpec?
     var draftGradient: (start: CGPoint, end: CGPoint)?
     /// The crop tool's frame, in canvas pixels; nil until the tool is picked.
@@ -916,6 +925,7 @@ final class EditorState {
             moveOrigin = MoveOrigin(layerID: layer.id, start: point, transform: layer.transform)
         case .select:
             heldSelectionMode = SelectionMode(modifiers: modifiers)
+            if heldSelectionMode == nil, beginSelectionHandleDrag(at: point) { return }
             guard selectionKind.isDrawn else { return }
             if selectionKind == .magnetic { prepareEdgeMap() }
             draftSelection = Selection(shape: shape(for: selectionKind, from: point, to: point))
@@ -1021,6 +1031,10 @@ final class EditorState {
             }
             update { $0[origin.layerID]?.transform = transform }
         case .select:
+            if selectionHandleDrag != nil {
+                continueSelectionHandleDrag(to: last.location)
+                return
+            }
             guard let draft = draftSelection else { return }
             switch draft.shape {
             case .lasso(let existing) where selectionKind == .magnetic:
@@ -1117,6 +1131,14 @@ final class EditorState {
                 draftSelection = nil
                 heldSelectionMode = nil
             }
+            if selectionHandleDrag != nil {
+                // A tap inside the selection is a tap, not a move.
+                guard isTap else {
+                    endSelectionHandleDrag()
+                    return
+                }
+                cancelSelectionHandleDrag()
+            }
             if !selectionKind.isDrawn {
                 guard isTap else { return }
                 if selectionKind == .object { selectObject(at: point) } else { magicSelect(at: point) }
@@ -1181,6 +1203,7 @@ final class EditorState {
         smudge = nil
         draftSelection = nil
         heldSelectionMode = nil
+        cancelSelectionHandleDrag()
         draftShape = nil
         draftGradient = nil
         cropDrag = nil

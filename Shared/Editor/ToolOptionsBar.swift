@@ -281,10 +281,16 @@ struct ToolOptionsBar: View {
                 }
             }
             GlassGroup(scrollsHorizontally: true) {
+                GlassIconButton(symbol: "perspective", label: "Select.Warp", isOn: state.selectionWarps) {
+                    state.selectionWarps.toggle()
+                }
+                .disabled(state.selection == nil)
+                .accessibilityIdentifier("selectionWarp")
                 SelectionMenu(state: state)
             }
         }
     }
+
 
     private var cropOptions: some View {
         Group {
