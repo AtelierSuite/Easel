@@ -189,6 +189,9 @@ final class EditorState {
     /// the drag is called off.
     @ObservationIgnored var vectorDragOrigin: Layer?
     var draftSelection: Selection?
+    /// The mode a held Shift or Option key picks for the selection being
+    /// made, over `selectionMode`.
+    @ObservationIgnored var heldSelectionMode: SelectionMode?
     var draftShape: ShapeSpec?
     var draftGradient: (start: CGPoint, end: CGPoint)?
     /// The crop tool's frame, in canvas pixels; nil until the tool is picked.
@@ -842,7 +845,8 @@ final class EditorState {
 
     /// A finger or pencil came down on the canvas.
     func toolBegan(
-        at point: CGPoint, pressure: Double, azimuth: Double? = nil, altitude: Double? = nil, time: TimeInterval? = nil
+        at point: CGPoint, pressure: Double, azimuth: Double? = nil, altitude: Double? = nil, time: TimeInterval? = nil,
+        modifiers: EventModifiers = []
     ) {
         // Touching down ends a hover.
         hoverPoint = nil
@@ -911,6 +915,7 @@ final class EditorState {
             guard let layer = activeLayer, !composition.isLocked(layer) else { return }
             moveOrigin = MoveOrigin(layerID: layer.id, start: point, transform: layer.transform)
         case .select:
+            heldSelectionMode = SelectionMode(modifiers: modifiers)
             guard selectionKind.isDrawn else { return }
             if selectionKind == .magnetic { prepareEdgeMap() }
             draftSelection = Selection(shape: shape(for: selectionKind, from: point, to: point))
@@ -1108,12 +1113,15 @@ final class EditorState {
             snapLines = []
             if isTap { selectLayer(at: point) }
         case .select:
-            defer { draftSelection = nil }
+            defer {
+                draftSelection = nil
+                heldSelectionMode = nil
+            }
             if !selectionKind.isDrawn {
                 guard isTap else { return }
                 if selectionKind == .object { selectObject(at: point) } else { magicSelect(at: point) }
             } else if isTap {
-                if selectionMode == .replace { selection = nil }
+                if (heldSelectionMode ?? selectionMode) == .replace { selection = nil }
             } else if var draft = draftSelection, draft.isMeaningful {
                 if selectionKind == .magnetic, case .lasso(let points) = draft.shape, let first = points.first,
                    let last = points.last, let edgeMap {
@@ -1172,6 +1180,7 @@ final class EditorState {
         dockedEdge = nil
         smudge = nil
         draftSelection = nil
+        heldSelectionMode = nil
         draftShape = nil
         draftGradient = nil
         cropDrag = nil

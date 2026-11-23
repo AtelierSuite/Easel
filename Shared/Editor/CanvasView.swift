@@ -27,7 +27,8 @@ struct CanvasView: View {
                 began: { sample in
                     state.toolBegan(
                         at: state.viewport.canvasPoint(sample.location), pressure: sample.pressure,
-                        azimuth: sample.azimuth, altitude: sample.altitude, time: sample.time
+                        azimuth: sample.azimuth, altitude: sample.altitude, time: sample.time,
+                        modifiers: sample.modifiers
                     )
                 },
                 moved: { samples in

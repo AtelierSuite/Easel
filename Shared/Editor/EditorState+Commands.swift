@@ -785,10 +785,11 @@ extension EditorState {
         }
         let tolerance = selectionTolerance
         let contiguous = selectsContiguously
+        let mode = heldSelectionMode ?? selectionMode
         enqueue({ () -> SelectionMask? in
             Self.colourRegion(in: composition, at: point, tolerance: tolerance, contiguous: contiguous)
         }, apply: { [weak self] mask in
-            self?.select(Selection(shape: .mask(mask)))
+            self?.select(Selection(shape: .mask(mask)), mode: mode)
         })
     }
 
@@ -837,6 +838,7 @@ extension EditorState {
             selection = nil
             return
         }
+        let mode = heldSelectionMode ?? selectionMode
         enqueue({ () -> Result<SelectionMask, ObjectSelectionError> in
             do {
                 return .success(try ObjectSelector.select(in: composition, at: point))
@@ -845,7 +847,7 @@ extension EditorState {
             }
         }, apply: { [weak self] result in
             switch result {
-            case .success(let mask): self?.select(Selection(shape: .mask(mask)))
+            case .success(let mask): self?.select(Selection(shape: .mask(mask)), mode: mode)
             case .failure(let error): self?.errorMessage = error.message
             }
         })
