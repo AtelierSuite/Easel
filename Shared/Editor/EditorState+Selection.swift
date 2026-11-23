@@ -23,14 +23,28 @@ enum SelectionEdit: Identifiable, Hashable, Sendable {
     }
 }
 
+extension SelectionMode {
+    /// The mode held keys pick, as in desktop editors: Shift adds, Option
+    /// takes away, both keep only the overlap. Nil when neither is held.
+    init?(modifiers: EventModifiers) {
+        switch (modifiers.contains(.shift), modifiers.contains(.option)) {
+        case (true, true): self = .intersect
+        case (true, false): self = .add
+        case (false, true): self = .subtract
+        case (false, false): return nil
+        }
+    }
+}
+
 extension EditorState {
-    /// Takes a newly made selection in, the way the selection mode says.
-    func select(_ new: Selection) {
-        guard let current = selection, selectionMode != .replace else {
+    /// Takes a newly made selection in, the way `mode` says: by default a
+    /// held modifier key's, or else the selection mode's.
+    func select(_ new: Selection, mode: SelectionMode? = nil) {
+        let mode = mode ?? heldSelectionMode ?? selectionMode
+        guard let current = selection, mode != .replace else {
             selection = new
             return
         }
-        let mode = selectionMode
         let size = composition.size
         replaceSelection { current.combined(with: new, mode: mode, canvasSize: size) }
     }
@@ -105,6 +119,12 @@ private struct SelectionEditAlert: ViewModifier {
         content
             .onChange(of: state.pendingSelectionEdit) { _, edit in
                 guard let edit else { return }
+                if case .modify(let modification) = edit {
+                    // Tried on a slider over the canvas, to see it as it changes.
+                    state.pendingSelectionEdit = nil
+                    state.beginSelectionEditDraft(modification)
+                    return
+                }
                 text = "\(Int(state.defaultSize(for: edit)))"
                 shown = edit
             }

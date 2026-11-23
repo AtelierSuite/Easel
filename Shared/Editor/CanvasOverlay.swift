@@ -33,10 +33,25 @@ struct CanvasOverlay: View {
             context.stroke(outline, with: .color(.accentColor), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
         }
 
-        for selection in [state.selection, state.draftSelection].compactMap({ $0 }) {
-            let path = Path(selection.path(in: composition.size)).applying(transform)
+        if let preview = state.selectionEditPreview, state.selectionEditDraft != nil {
+            var shaded = context
+            shaded.concatenate(transform)
+            shaded.draw(Image(decorative: preview.shade, scale: 1), in: CGRect(origin: .zero, size: composition.size))
+        }
+
+        let selectionOutline: CGPath? = if state.selectionEditDraft != nil, let preview = state.selectionEditPreview {
+            preview.outline
+        } else {
+            state.selectionOutlinePreview ?? state.selection?.path(in: composition.size)
+        }
+        for outline in [selectionOutline, state.draftSelection?.path(in: composition.size)].compactMap({ $0 }) {
+            let path = Path(outline).applying(transform)
             context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 1))
             context.stroke(path, with: .color(.black), style: StrokeStyle(lineWidth: 1, dash: [5, 5], dashPhase: antsPhase))
+        }
+
+        if let grid = state.selectionHandleGrid {
+            drawSelectionHandles(grid, in: &context, transform: transform)
         }
 
         if let shape = state.draftShape {
@@ -267,6 +282,44 @@ struct CanvasOverlay: View {
             let knob = Path(ellipseIn: CGRect(x: center.x - 7, y: center.y - 7, width: 14, height: 14))
             context.fill(knob, with: .color(.white))
             context.stroke(knob, with: .color(.accentColor), lineWidth: 2)
+        }
+    }
+
+    /// The selection's handles: a box with eight to resize it by, or when
+    /// warping, the grid that bends it.
+    private func drawSelectionHandles(_ grid: [CGPoint], in context: inout GraphicsContext, transform: CGAffineTransform) {
+        if state.selectionWarps {
+            let shape = WarpShape.warp(grid)
+            var lines = Path()
+            let steps = 24
+            for fraction in [0, 1.0 / 3, 2.0 / 3, 1] {
+                lines.move(to: shape.point(0, fraction).applying(transform))
+                for step in 1...steps { lines.addLine(to: shape.point(Double(step) / Double(steps), fraction).applying(transform)) }
+                lines.move(to: shape.point(fraction, 0).applying(transform))
+                for step in 1...steps { lines.addLine(to: shape.point(fraction, Double(step) / Double(steps)).applying(transform)) }
+            }
+            context.stroke(lines, with: .color(.black.opacity(0.4)), lineWidth: 2.5)
+            context.stroke(lines, with: .color(.accentColor), lineWidth: 1.25)
+        }
+        let handles = state.selectionResizeHandles(for: grid)
+        var box = Path()
+        box.addLines(handles.map { $0.location.applying(transform) })
+        box.closeSubpath()
+        context.stroke(box, with: .color(.black.opacity(0.4)), lineWidth: 2)
+        context.stroke(box, with: .color(.accentColor), style: StrokeStyle(lineWidth: 1, dash: state.selectionWarps ? [4, 3] : []))
+        for handle in handles {
+            let center = handle.location.applying(transform)
+            let square = Path(CGRect(x: center.x - 5, y: center.y - 5, width: 10, height: 10))
+            context.fill(square, with: .color(.white))
+            context.stroke(square, with: .color(.accentColor), lineWidth: 1.5)
+        }
+        if state.selectionWarps {
+            for point in grid {
+                let center = point.applying(transform)
+                let knob = Path(ellipseIn: CGRect(x: center.x - 6, y: center.y - 6, width: 12, height: 12))
+                context.fill(knob, with: .color(.white))
+                context.stroke(knob, with: .color(.accentColor), lineWidth: 2)
+            }
         }
     }
 

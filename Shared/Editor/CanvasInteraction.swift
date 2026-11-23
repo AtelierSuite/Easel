@@ -13,6 +13,8 @@ struct StrokeSample {
     var altitude: Double?
     /// When the pen was here, in seconds.
     var time: TimeInterval
+    /// The keys held as the stroke began.
+    var modifiers: EventModifiers = []
 }
 
 #if os(iOS)
@@ -304,7 +306,9 @@ final class StrokeGestureRecognizer: UIGestureRecognizer {
         startTime = touch.timestamp
         travelled = 0
         isTap = false
-        samples = [sample(touch)]
+        var first = sample(touch)
+        first.modifiers = Self.modifiers(event.modifierFlags)
+        samples = [first]
         state = .began
     }
 
@@ -336,6 +340,16 @@ final class StrokeGestureRecognizer: UIGestureRecognizer {
         trackedTouch = nil
         samples = []
         isTap = false
+    }
+
+    /// A hardware keyboard's held keys.
+    private static func modifiers(_ flags: UIKeyModifierFlags) -> EventModifiers {
+        var modifiers: EventModifiers = []
+        if flags.contains(.shift) { modifiers.insert(.shift) }
+        if flags.contains(.alternate) { modifiers.insert(.option) }
+        if flags.contains(.command) { modifiers.insert(.command) }
+        if flags.contains(.control) { modifiers.insert(.control) }
+        return modifiers
     }
 
     private func sample(_ touch: UITouch) -> Sample {

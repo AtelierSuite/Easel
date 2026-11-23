@@ -215,7 +215,12 @@ final class CanvasInputView: NSView {
             drag = .ruler(last: point)
         } else {
             drag = .stroke(start: point, startTime: event.timestamp, travelled: 0, last: point)
-            interaction.began(sample(event))
+            var first = sample(event)
+            let flags = event.modifierFlags
+            if flags.contains(.shift) { first.modifiers.insert(.shift) }
+            if flags.contains(.option) { first.modifiers.insert(.option) }
+            if flags.contains(.command) { first.modifiers.insert(.command) }
+            interaction.began(first)
         }
     }
 

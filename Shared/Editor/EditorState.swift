@@ -151,7 +151,9 @@ final class EditorState {
 
     // MARK: Selection and drafts
 
-    var selection: Selection?
+    var selection: Selection? {
+        didSet { if selection == nil, selectionEditDraft != nil { closeSelectionEditDraft() } }
+    }
     /// A stroke still under the finger.
     var activeStroke: Stroke?
     /// Strokes lifted but not yet painted into their layer, drawn over it
@@ -189,6 +191,23 @@ final class EditorState {
     /// the drag is called off.
     @ObservationIgnored var vectorDragOrigin: Layer?
     var draftSelection: Selection?
+    /// The mode a held Shift or Option key picks for the selection being
+    /// made, over `selectionMode`.
+    @ObservationIgnored var heldSelectionMode: SelectionMode?
+    /// The selection being resized, moved or bent by its handles.
+    var selectionTransform: SelectionTransformSession?
+    @ObservationIgnored var selectionHandleDrag: SelectionHandleDrag?
+    /// The selection's outline while its handles are dragged, in place of
+    /// the selection's own.
+    var selectionOutlinePreview: CGPath?
+    /// Whether the selection's handles bend it as a grid rather than
+    /// resizing its box.
+    var selectionWarps = false
+    /// A feather, grow or shrink being tried, with a slider for its size.
+    var selectionEditDraft: SelectionEditDraft?
+    /// What the selection edit being tried would make, small.
+    var selectionEditPreview: SelectionEditPreview?
+    @ObservationIgnored var selectionEditPreviewTask: Task<Void, Never>?
     var draftShape: ShapeSpec?
     var draftGradient: (start: CGPoint, end: CGPoint)?
     /// The crop tool's frame, in canvas pixels; nil until the tool is picked.
@@ -842,7 +861,8 @@ final class EditorState {
 
     /// A finger or pencil came down on the canvas.
     func toolBegan(
-        at point: CGPoint, pressure: Double, azimuth: Double? = nil, altitude: Double? = nil, time: TimeInterval? = nil
+        at point: CGPoint, pressure: Double, azimuth: Double? = nil, altitude: Double? = nil, time: TimeInterval? = nil,
+        modifiers: EventModifiers = []
     ) {
         // Touching down ends a hover.
         hoverPoint = nil
@@ -911,6 +931,8 @@ final class EditorState {
             guard let layer = activeLayer, !composition.isLocked(layer) else { return }
             moveOrigin = MoveOrigin(layerID: layer.id, start: point, transform: layer.transform)
         case .select:
+            heldSelectionMode = SelectionMode(modifiers: modifiers)
+            if heldSelectionMode == nil, beginSelectionHandleDrag(at: point) { return }
             guard selectionKind.isDrawn else { return }
             if selectionKind == .magnetic { prepareEdgeMap() }
             draftSelection = Selection(shape: shape(for: selectionKind, from: point, to: point))
@@ -1016,6 +1038,10 @@ final class EditorState {
             }
             update { $0[origin.layerID]?.transform = transform }
         case .select:
+            if selectionHandleDrag != nil {
+                continueSelectionHandleDrag(to: last.location)
+                return
+            }
             guard let draft = draftSelection else { return }
             switch draft.shape {
             case .lasso(let existing) where selectionKind == .magnetic:
@@ -1108,13 +1134,30 @@ final class EditorState {
             snapLines = []
             if isTap { selectLayer(at: point) }
         case .select:
-            defer { draftSelection = nil }
+            defer {
+                draftSelection = nil
+                heldSelectionMode = nil
+            }
+            if selectionHandleDrag != nil {
+                // A tap inside the selection is a tap, not a move.
+                guard isTap else {
+                    endSelectionHandleDrag()
+                    return
+                }
+                cancelSelectionHandleDrag()
+            }
             if !selectionKind.isDrawn {
                 guard isTap else { return }
                 if selectionKind == .object { selectObject(at: point) } else { magicSelect(at: point) }
             } else if isTap {
-                if selectionMode == .replace { selection = nil }
-            } else if let draft = draftSelection, draft.isMeaningful {
+                if (heldSelectionMode ?? selectionMode) == .replace { selection = nil }
+            } else if var draft = draftSelection, draft.isMeaningful {
+                if selectionKind == .magnetic, case .lasso(let points) = draft.shape, let first = points.first,
+                   let last = points.last, let edgeMap {
+                    // Closed along the edge too, when the ends are near.
+                    let radius = max(4, 16 / max(viewport.scale, 0.0001))
+                    draft.shape = .lasso(points + edgeMap.trace(from: last, to: first, margin: radius).dropLast())
+                }
                 select(draft)
             }
         case .pen:
@@ -1166,6 +1209,8 @@ final class EditorState {
         dockedEdge = nil
         smudge = nil
         draftSelection = nil
+        heldSelectionMode = nil
+        cancelSelectionHandleDrag()
         draftShape = nil
         draftGradient = nil
         cropDrag = nil
@@ -1221,21 +1266,12 @@ final class EditorState {
         }
     }
 
-    /// The finger's path pulled onto the nearest strong edge, with points
-    /// too close together left out so the outline stays smooth.
+    /// The finger's path laid along the picture's edges.
     private func magneticPoints(_ points: [CGPoint], after previous: CGPoint?) -> [CGPoint] {
         guard let edgeMap else { return points }
         // About a fingertip's reach on screen.
         let radius = max(4, 16 / max(viewport.scale, 0.0001))
-        var result: [CGPoint] = []
-        var last = previous
-        for point in points {
-            let snapped = edgeMap.snap(point, radius: radius)
-            if let last, hypot(snapped.x - last.x, snapped.y - last.y) < edgeMap.scale { continue }
-            result.append(snapped)
-            last = snapped
-        }
-        return result
+        return edgeMap.magnetic(points, after: previous, radius: radius)
     }
 
     // MARK: - Simple tool actions

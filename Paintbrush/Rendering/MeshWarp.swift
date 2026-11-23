@@ -212,6 +212,17 @@ package enum MeshWarp {
         return pixels.makeImage() ?? bent
     }
 
+    /// A selection mask bent into `shape`; nothing is selected off it.
+    package static func renderSelection(_ mask: CGImage, shape: WarpShape, size: CGSize, divisions: Int = 32) -> CGImage {
+        let rect = CGRect(x: 0, y: 0, width: mask.width, height: mask.height)
+        let grey = Bitmap.render(size: rect.size) { context in
+            context.setFillColor(RGBAColor.black.cgColor)
+            context.fill(rect)
+            Bitmap.draw(mask, in: rect, context: context)
+        }
+        return render(grey, point: shape.point, size: size, scale: 1, divisions: divisions, background: .black)
+    }
+
     private static func render(
         _ image: CGImage, point: (Double, Double) -> CGPoint, size: CGSize, scale: Double, divisions: Int,
         background: RGBAColor?

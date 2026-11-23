@@ -20,6 +20,15 @@ struct ToolOptionsBar: View {
 
     @ViewBuilder
     private var options: some View {
+        if let draft = state.selectionEditDraft {
+            selectionEditOptions(draft)
+        } else {
+            toolOptions
+        }
+    }
+
+    @ViewBuilder
+    private var toolOptions: some View {
         switch state.tool {
         case .brush, .eraser, .liquify, .heal: brushOptions
         case .censor:
@@ -281,7 +290,50 @@ struct ToolOptionsBar: View {
                 }
             }
             GlassGroup(scrollsHorizontally: true) {
+                GlassIconButton(symbol: "perspective", label: "Select.Warp", isOn: state.selectionWarps) {
+                    state.selectionWarps.toggle()
+                }
+                .disabled(state.selection == nil)
+                .accessibilityIdentifier("selectionWarp")
+                GlassIconButton(symbol: SelectionModification.feather.symbolName, label: "Select.Feather") {
+                    state.beginSelectionEditDraft(.feather)
+                }
+                .disabled(state.selection == nil)
+                .accessibilityIdentifier("selectionFeather")
                 SelectionMenu(state: state)
+            }
+        }
+    }
+
+    /// A feather, grow or shrink being tried: its size on a slider, the
+    /// canvas showing the result as it changes.
+    private func selectionEditOptions(_ draft: SelectionEditDraft) -> some View {
+        Group {
+            GlassGroup(scrollsHorizontally: true) {
+                Label(draft.modification.label, systemImage: draft.modification.symbolName)
+                    .labelStyle(.iconOnly)
+                    .frame(width: EditorToolbarMetrics.controlSize, height: EditorToolbarMetrics.controlSize)
+                    .help(Text(draft.modification.label))
+                OptionSlider(
+                    value: Binding(get: { draft.size }, set: { state.setSelectionEditSize($0.rounded()) }),
+                    range: 0...draft.limit, label: "Select.Radius",
+                    valueText: "\(Int(draft.size.rounded())) px",
+                    entry: (
+                        value: Binding(get: { draft.size }, set: { state.setSelectionEditSize($0) }),
+                        range: 0...draft.limit, suffix: "px"
+                    )
+                )
+                .accessibilityIdentifier("selectionEditSize")
+            }
+            GlassGroup(scrollsHorizontally: true) {
+                GlassIconButton(symbol: "xmark", label: "Common.Cancel") {
+                    state.closeSelectionEditDraft()
+                }
+                .accessibilityIdentifier("selectionEditCancel")
+                GlassIconButton(symbol: "checkmark", label: "Select.Apply", isOn: true) {
+                    state.applySelectionEditDraft()
+                }
+                .accessibilityIdentifier("selectionEditApply")
             }
         }
     }
